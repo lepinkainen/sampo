@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+cache:
+  dir: ".cache"
+
+roots:
+  - name: "Sample"
+    path: "./testdata"

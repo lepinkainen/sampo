@@ -1,0 +1,56 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build artifacts
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+coverage.out
+coverage.html
+
+# Go workspace
+go.work
+
+# Frontend
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
+# Cache
+.cache/
+
+# Config (copy config.example.yaml to config.yaml)
+config.yaml
+
+# Task
+.task/

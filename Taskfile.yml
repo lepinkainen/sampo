@@ -1,0 +1,119 @@
+version: '3'
+
+vars:
+  BUILD_DIR: build
+  PROJECT_NAME: filemanager
+  VERSION:
+    sh: |
+      tag=$(git describe --tags 2>/dev/null || echo "dev")
+      commit=$(git log -n 1 --format=%h 2>/dev/null || echo "none")
+      if [ "$tag" = "dev" ]; then
+        echo "dev-$(date '+%Y-%m-%d_%H:%M:%S')"
+      else
+        echo "$tag-$commit"
+      fi
+
+tasks:
+  build:
+    desc: Build the project
+    deps: [test, lint]
+    cmds:
+      - task: build-frontend
+      - task: build-go
+
+  build-linux:
+    desc: Build for Linux
+    deps: [test, lint]
+    env:
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - task: build-frontend
+      - task: build-go
+
+  build-ci:
+    desc: Build for CI/CD (build only)
+    cmds:
+      - task: build-frontend
+      - task: build-go
+
+  test:
+    desc: Run tests
+    cmds:
+      - task: test-go
+
+  test-ci:
+    desc: Run tests with coverage for CI
+    cmds:
+      - task: test-go-ci
+
+  lint:
+    desc: Lint code
+    cmds:
+      - task: lint-go
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -rf frontend/build
+      - mkdir -p {{.BUILD_DIR}}
+
+  # Go tasks
+  build-go:
+    desc: Build Go project
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -v -ldflags="-X main.version={{.VERSION}}" -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} ./cmd/filemanager
+    sources:
+      - ./**/*.go
+
+  test-go:
+    desc: Run Go tests
+    cmds:
+      - go test $(go list ./... | grep -v llm-shared)
+
+  test-go-ci:
+    desc: Run Go tests with coverage for CI
+    cmds:
+      - go test -tags=ci -cover -v $(go list ./... | grep -v llm-shared)
+
+  lint-go:
+    desc: Lint Go code
+    cmds:
+      - fd -e go --exclude llm-shared -x goimports -w {}
+      - go vet $(go list ./... | grep -v llm-shared)
+      - golangci-lint run
+
+  # Frontend tasks
+  build-frontend:
+    desc: Build SvelteKit frontend
+    dir: frontend
+    cmds:
+      - npm install
+      - npm run build
+
+  dev:
+    desc: Start development (run both frontend and backend)
+    deps: [dev-frontend, dev-go]
+
+  dev-go:
+    desc: Start Go development server
+    cmds:
+      - go run ./cmd/filemanager
+
+  dev-frontend:
+    desc: Start frontend dev server
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  docker-build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t {{.PROJECT_NAME}}:{{.VERSION}} .
+
+  docker-run:
+    desc: Run Docker container
+    cmds:
+      - docker run -p 8080:8080 {{.PROJECT_NAME}}:{{.VERSION}}
