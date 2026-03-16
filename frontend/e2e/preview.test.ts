@@ -5,8 +5,8 @@ test.describe('Media Preview', () => {
 		await page.goto('/');
 		// Expand "Sample" root
 		await page.getByText('Sample').click();
-		// Navigate to images directory
-		await page.getByRole('button', { name: /images/ }).click();
+		// Navigate to images directory (use tree node selector to avoid grid matches)
+		await page.locator('.select-none button', { hasText: 'images' }).click();
 		// Wait for thumbnails to load
 		await page.waitForSelector('[class*="grid"]');
 	});

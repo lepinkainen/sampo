@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/filemanager/internal/filesystem"
@@ -12,7 +13,11 @@ import (
 // ListDirectory returns the contents of a directory within a root.
 func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 	rootID := chi.URLParam(r, "rootID")
-	relPath := chi.URLParam(r, "*")
+	relPath, err := url.PathUnescape(chi.URLParam(r, "*"))
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
 
 	if relPath == "" {
 		relPath = "/"

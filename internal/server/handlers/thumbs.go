@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/go-chi/chi/v5"
@@ -12,7 +13,11 @@ import (
 // GetThumbnail returns a cached thumbnail or generates one on demand.
 func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 	rootID := chi.URLParam(r, "rootID")
-	relPath := chi.URLParam(r, "*")
+	relPath, err := url.PathUnescape(chi.URLParam(r, "*"))
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
 
 	fullPath, err := h.roots.ResolvePath(rootID, relPath)
 	if err != nil {
