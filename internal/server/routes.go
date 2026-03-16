@@ -14,6 +14,7 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Get("/api/roots", h.ListRoots)
 	s.router.Get("/api/tree/{rootID}/*", h.ListDirectory)
 	s.router.Get("/api/thumb/{rootID}/*", h.GetThumbnail)
+	s.router.Get("/api/file/{rootID}/*", h.ServeFile)
 
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))
