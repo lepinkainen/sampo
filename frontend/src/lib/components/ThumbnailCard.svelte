@@ -5,10 +5,12 @@
 	interface Props {
 		rootId: string;
 		entry: FileEntry;
+		selected?: boolean;
 		onclick?: () => void;
+		ondblclick?: () => void;
 	}
 
-	let { rootId, entry, onclick }: Props = $props();
+	let { rootId, entry, selected = false, onclick, ondblclick }: Props = $props();
 
 	let imgError = $state(false);
 
@@ -22,11 +24,23 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-	class="group flex flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-800 transition-colors hover:border-gray-500{onclick ? ' cursor-pointer' : ''}"
+	class="group flex flex-col overflow-hidden rounded-lg border transition-colors
+	{selected
+		? 'border-blue-500 bg-blue-900/30'
+		: 'border-gray-700 bg-gray-800 hover:border-gray-500'}
+	{onclick ? ' cursor-pointer' : ''}"
 	role={onclick ? 'button' : undefined}
 	tabindex={onclick ? 0 : undefined}
 	{onclick}
-	onkeydown={onclick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onclick(); } } : undefined}
+	{ondblclick}
+	onkeydown={onclick
+		? (e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					onclick();
+				}
+			}
+		: undefined}
 >
 	<div class="flex aspect-square items-center justify-center bg-gray-900">
 		{#if entry.hasThumb && !imgError}

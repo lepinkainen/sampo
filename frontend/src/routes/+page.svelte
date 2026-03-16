@@ -13,6 +13,12 @@
 			selectedPath = path;
 		}
 	}
+
+	function handleNavigate(path: string) {
+		if (selectedRootId) {
+			handleSelect(selectedRootId, path, true);
+		}
+	}
 </script>
 
 <div class="flex h-screen bg-gray-950 text-gray-100">
@@ -29,7 +35,11 @@
 	<!-- Content area -->
 	<div class="flex-1">
 		{#if selectedRootId && selectedPath}
-			<ThumbnailGrid rootId={selectedRootId} path={selectedPath} />
+			<ThumbnailGrid
+				rootId={selectedRootId}
+				path={selectedPath}
+				onNavigate={handleNavigate}
+			/>
 		{:else}
 			<div class="flex h-full items-center justify-center">
 				<p class="text-gray-600">Select a directory to browse</p>
