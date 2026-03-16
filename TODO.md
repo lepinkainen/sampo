@@ -14,9 +14,9 @@
 
 ## Enhancements
 - [ ] SQLite metadata cache
-- [ ] File detail panel (dimensions, duration, EXIF, etc.)
+- [x] File detail panel (dimensions, duration, EXIF, etc.)
 - [ ] Thumbnail pre-generation for browsed directories
-- [ ] Multiple thumbnail sizes (small grid, medium preview)
+- [x] Multiple thumbnail sizes (small grid, medium preview)
 - [ ] Keyboard navigation in tree and grid
 - [ ] Search/filter within current directory
 - [ ] Background thumbnail worker pool
