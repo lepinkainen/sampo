@@ -5,9 +5,10 @@
 	interface Props {
 		rootId: string;
 		entry: FileEntry;
+		onclick?: () => void;
 	}
 
-	let { rootId, entry }: Props = $props();
+	let { rootId, entry, onclick }: Props = $props();
 
 	let imgError = $state(false);
 
@@ -19,8 +20,13 @@
 	}
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-	class="group flex flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-800 transition-colors hover:border-gray-500"
+	class="group flex flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-800 transition-colors hover:border-gray-500{onclick ? ' cursor-pointer' : ''}"
+	role={onclick ? 'button' : undefined}
+	tabindex={onclick ? 0 : undefined}
+	{onclick}
+	onkeydown={onclick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onclick(); } } : undefined}
 >
 	<div class="flex aspect-square items-center justify-center bg-gray-900">
 		{#if entry.hasThumb && !imgError}
