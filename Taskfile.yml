@@ -51,6 +51,7 @@ tasks:
     desc: Lint code
     cmds:
       - task: lint-go
+      - task: lint-frontend
 
   clean:
     desc: Clean build artifacts
@@ -85,6 +86,12 @@ tasks:
       - go vet $(go list ./... | grep -v llm-shared)
       - golangci-lint run
 
+  lint-frontend:
+    desc: Lint and check frontend code
+    dir: frontend
+    cmds:
+      - npx @biomejs/biome check .
+
   # Frontend tasks
   build-frontend:
     desc: Build SvelteKit frontend
@@ -94,8 +101,33 @@ tasks:
       - npm run build
 
   dev:
-    desc: Start development (run both frontend and backend)
+    desc: Start development in the foreground (run backend or frontend manually in separate terminals)
     deps: [dev-frontend, dev-go]
+
+  dev-up:
+    desc: Start backend and frontend in the background
+    cmds:
+      - ./scripts/devctl start
+
+  dev-down:
+    desc: Stop background development services
+    cmds:
+      - ./scripts/devctl stop
+
+  dev-status:
+    desc: Show background development service status as prettified JSON
+    cmds:
+      - ./scripts/devctl status --json-pretty
+
+  dev-restart:
+    desc: Restart background development services
+    cmds:
+      - ./scripts/devctl restart
+
+  dev-logs:
+    desc: Show background development log locations
+    cmds:
+      - ./scripts/devctl logs
 
   dev-go:
     desc: Start Go development server
@@ -106,7 +138,7 @@ tasks:
     desc: Start frontend dev server
     dir: frontend
     cmds:
-      - npm run dev
+      - npm run dev -- --host 127.0.0.1 --port 5173
 
   docker-build:
     desc: Build Docker image

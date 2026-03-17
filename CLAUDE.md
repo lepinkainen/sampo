@@ -10,7 +10,12 @@ task test           # Run Go tests (excludes llm-shared)
 task lint           # goimports + go vet + golangci-lint
 task build-frontend # Build SvelteKit frontend only
 task build-go       # Build Go binary only (requires frontend/build to exist)
-task dev            # Start both frontend dev server and Go backend
+task dev            # Start frontend and backend in the foreground
+task dev-up         # Start frontend and backend in the background via scripts/devctl
+task dev-down       # Stop background dev services
+task dev-status     # Show background dev service status as prettified JSON
+task dev-restart    # Restart background dev services
+task dev-logs       # Show background log file locations
 task dev-frontend   # SvelteKit dev server (port 5173, proxies API to :8080)
 task dev-go         # Go backend only (port 8080)
 task clean          # Remove build artifacts
@@ -25,6 +30,22 @@ Frontend is in `frontend/` — uses npm (not pnpm):
 ```bash
 cd frontend && npm install && npm run build
 ```
+
+### Running during development
+
+Use background dev services for development and testing:
+```bash
+task dev-up         # Start both backend (:8080) and frontend (:5173) in background
+task dev-status     # Check if services are running and healthy
+task dev-down       # Stop background services when done
+task dev-restart    # Restart after code changes (rebuilds Go binary)
+task dev-logs       # Show log file paths for debugging
+```
+
+- `dev-up` builds the Go binary, starts both services, and waits for health checks to pass
+- Logs are written to `.run/backend.log` and `.run/frontend.log`
+- If startup fails, the last 20 lines of the service log are printed automatically
+- Always run `task dev-down` before exiting to avoid orphan processes
 
 ## Architecture
 

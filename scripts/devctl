@@ -1,0 +1,350 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+RUN_DIR="$ROOT_DIR/.run"
+BACKEND_NAME="backend"
+FRONTEND_NAME="frontend"
+BACKEND_PID_FILE="$RUN_DIR/$BACKEND_NAME.pid"
+FRONTEND_PID_FILE="$RUN_DIR/$FRONTEND_NAME.pid"
+BACKEND_LOG_FILE="$RUN_DIR/$BACKEND_NAME.log"
+FRONTEND_LOG_FILE="$RUN_DIR/$FRONTEND_NAME.log"
+BACKEND_BIN="$RUN_DIR/filemanager-dev"
+BACKEND_URL="http://127.0.0.1:8080/health"
+FRONTEND_URL="http://127.0.0.1:5173"
+BACKEND_MATCH="$BACKEND_BIN"
+FRONTEND_MATCH="npm run dev"
+BACKEND_CMD="cd '$ROOT_DIR' && go build -o '$BACKEND_BIN' ./cmd/filemanager && exec '$BACKEND_BIN'"
+FRONTEND_CMD="cd '$ROOT_DIR/frontend' && exec npm run dev -- --host 127.0.0.1 --port 5173"
+
+mkdir -p "$RUN_DIR"
+
+log() {
+  printf '%s\n' "$*"
+}
+
+service_pid_file() {
+  case "$1" in
+    backend) echo "$BACKEND_PID_FILE" ;;
+    frontend) echo "$FRONTEND_PID_FILE" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_log_file() {
+  case "$1" in
+    backend) echo "$BACKEND_LOG_FILE" ;;
+    frontend) echo "$FRONTEND_LOG_FILE" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_url() {
+  case "$1" in
+    backend) echo "$BACKEND_URL" ;;
+    frontend) echo "$FRONTEND_URL" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_match() {
+  case "$1" in
+    backend) echo "$BACKEND_MATCH" ;;
+    frontend) echo "$FRONTEND_MATCH" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_cmd() {
+  case "$1" in
+    backend) echo "$BACKEND_CMD" ;;
+    frontend) echo "$FRONTEND_CMD" ;;
+    *) return 1 ;;
+  esac
+}
+
+read_pid() {
+  local pid_file
+  pid_file=$(service_pid_file "$1")
+  [[ -f "$pid_file" ]] || return 1
+  tr -d '[:space:]' < "$pid_file"
+}
+
+process_command() {
+  ps -p "$1" -o command= 2>/dev/null || true
+}
+
+is_expected_process() {
+  local service="$1"
+  local pid="$2"
+  local cmd
+  cmd=$(process_command "$pid")
+  [[ -n "$cmd" ]] && [[ "$cmd" == *"$(service_match "$service")"* ]]
+}
+
+is_running() {
+  local service="$1"
+  local pid
+  pid=$(read_pid "$service" 2>/dev/null) || return 1
+  kill -0 "$pid" 2>/dev/null && is_expected_process "$service" "$pid"
+}
+
+cleanup_stale_pid() {
+  local service="$1"
+  local pid_file pid
+  pid_file=$(service_pid_file "$service")
+  [[ -f "$pid_file" ]] || return 0
+  pid=$(read_pid "$service" 2>/dev/null || true)
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null || ! is_expected_process "$service" "$pid"; then
+    rm -f "$pid_file"
+  fi
+}
+
+wait_for_http() {
+  local url="$1"
+  local timeout_secs="$2"
+  local start_ts now
+  start_ts=$(date +%s)
+  while true; do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    now=$(date +%s)
+    if (( now - start_ts >= timeout_secs )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+start_service() {
+  local service="$1"
+  local pid_file log_file cmd pid
+  cleanup_stale_pid "$service"
+  if is_running "$service"; then
+    pid=$(read_pid "$service")
+    log "$service already running (pid $pid)"
+    return 0
+  fi
+
+  pid_file=$(service_pid_file "$service")
+  log_file=$(service_log_file "$service")
+  cmd=$(service_cmd "$service")
+
+  : > "$log_file"
+  pid=$(python3 - "$log_file" "$cmd" <<'PY'
+import subprocess
+import sys
+
+log_path = sys.argv[1]
+cmd = sys.argv[2]
+with open(log_path, 'ab', buffering=0) as log_file:
+    proc = subprocess.Popen(
+        ['bash', '-lc', cmd],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+print(proc.pid)
+PY
+)
+  echo "$pid" > "$pid_file"
+
+  sleep 0.5
+  if ! kill -0 "$pid" 2>/dev/null; then
+    log "error: $service exited immediately (check $log_file)"
+    rm -f "$pid_file"
+    tail -20 "$log_file"
+    return 1
+  fi
+
+  log "started $service (pid $pid, log $log_file)"
+}
+
+stop_service() {
+  local service="$1"
+  local pid_file pid
+  cleanup_stale_pid "$service"
+  pid_file=$(service_pid_file "$service")
+  if ! [[ -f "$pid_file" ]]; then
+    log "$service already stopped"
+    return 0
+  fi
+
+  pid=$(read_pid "$service")
+  if [[ -z "$pid" ]]; then
+    rm -f "$pid_file"
+    log "$service already stopped"
+    return 0
+  fi
+
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    pkill -TERM -P "$pid" 2>/dev/null || true
+    for _ in {1..10}; do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      pkill -KILL -P "$pid" 2>/dev/null || true
+    fi
+  fi
+
+  rm -f "$pid_file"
+  log "stopped $service"
+}
+
+service_health() {
+  local service="$1"
+  local url
+  url=$(service_url "$service")
+  if ! is_running "$service"; then
+    echo "stopped"
+  elif curl -fsS "$url" >/dev/null 2>&1; then
+    echo "ready"
+  else
+    echo "starting"
+  fi
+}
+
+status_service() {
+  local service="$1"
+  local pid status health url log_file
+  cleanup_stale_pid "$service"
+  url=$(service_url "$service")
+  log_file=$(service_log_file "$service")
+  health=$(service_health "$service")
+
+  if is_running "$service"; then
+    pid=$(read_pid "$service")
+    status="running"
+    printf '%-8s %-7s pid=%-6s url=%s log=%s\n' "$service" "$status" "$pid" "$url" "$log_file"
+    printf '         health=%s\n' "$health"
+  else
+    printf '%-8s %-7s pid=-      url=%s log=%s\n' "$service" "stopped" "$url" "$log_file"
+    printf '         health=%s\n' "$health"
+  fi
+}
+
+status_json() {
+  local pretty="${1:-false}"
+  python3 - "$pretty" \
+    backend "$(service_status_value backend status)" "$(service_status_value backend pid)" "$(service_status_value backend health)" "$(service_url backend)" "$(service_log_file backend)" \
+    frontend "$(service_status_value frontend status)" "$(service_status_value frontend pid)" "$(service_status_value frontend health)" "$(service_url frontend)" "$(service_log_file frontend)" <<'PY'
+import json
+import sys
+
+pretty = sys.argv[1] == 'true'
+args = sys.argv[2:]
+services = {}
+for i in range(0, len(args), 6):
+    name, status, pid, health, url, log_file = args[i:i+6]
+    services[name] = {
+        'status': status,
+        'pid': None if pid == '-' else int(pid),
+        'health': health,
+        'url': url,
+        'log': log_file,
+    }
+
+payload = {
+    'services': services,
+}
+if pretty:
+    print(json.dumps(payload, indent=2))
+else:
+    print(json.dumps(payload, separators=(',', ':')))
+PY
+}
+
+service_status_value() {
+  local service="$1"
+  local field="$2"
+  local health status pid
+  cleanup_stale_pid "$service"
+  health=$(service_health "$service")
+  if is_running "$service"; then
+    status="running"
+    pid=$(read_pid "$service")
+  else
+    status="stopped"
+    pid="-"
+  fi
+
+  case "$field" in
+    status) echo "$status" ;;
+    pid) echo "$pid" ;;
+    health) echo "$health" ;;
+    *) return 1 ;;
+  esac
+}
+
+start_all() {
+  start_service backend
+  start_service frontend
+
+  if wait_for_http "$BACKEND_URL" 30; then
+    log "backend is ready: $BACKEND_URL"
+  else
+    log "backend did not become ready within 30s — last log output:"
+    tail -20 "$BACKEND_LOG_FILE"
+    stop_all
+    exit 1
+  fi
+
+  if wait_for_http "$FRONTEND_URL" 30; then
+    log "frontend is ready: $FRONTEND_URL"
+  else
+    log "frontend did not become ready within 30s — last log output:"
+    tail -20 "$FRONTEND_LOG_FILE"
+    stop_all
+    exit 1
+  fi
+}
+
+stop_all() {
+  stop_service frontend
+  stop_service backend
+}
+
+logs_all() {
+  log "backend log:  $BACKEND_LOG_FILE"
+  log "frontend log: $FRONTEND_LOG_FILE"
+}
+
+usage() {
+  cat <<EOF
+Usage: scripts/devctl <command> [options]
+
+Commands:
+  start                 Start backend and frontend in the background
+  stop                  Stop background services started by this script
+  restart               Restart background services
+  status [--json]       Show service status as text or compact JSON
+         [--json-pretty]
+  logs                  Show log file locations
+
+Running with no command defaults to 'status'.
+EOF
+}
+
+cmd="${1:-status}"
+shift || true
+case "$cmd" in
+  start) start_all ;;
+  stop) stop_all ;;
+  restart) stop_all; start_all ;;
+  status)
+    case "${1:-}" in
+      --json) status_json false ;;
+      --json-pretty) status_json true ;;
+      "") status_service backend; status_service frontend ;;
+      *) usage; exit 1 ;;
+    esac
+    ;;
+  logs) logs_all ;;
+  *) usage; exit 1 ;;
+esac

@@ -58,3 +58,6 @@ config.yaml
 
 # Task
 .task/
+
+# Local runtime state
+.run/
