@@ -1,52 +1,49 @@
 <script lang="ts">
-	import type { Root, FileEntry } from '$lib/types';
-	import { fetchRoots, fetchDirectory } from '$lib/api';
-	import TreeNode from './TreeNode.svelte';
-	import { onMount } from 'svelte';
+import { onMount } from 'svelte';
+import { fetchDirectory, fetchRoots } from '$lib/api';
+import type { FileEntry, Root } from '$lib/types';
+import { sortEntries } from '$lib/utils';
+import TreeNode from './TreeNode.svelte';
 
-	interface Props {
-		selectedPath: string | null;
-		onSelect: (rootId: string, path: string, isDir: boolean) => void;
+interface Props {
+	selectedPath: string | null;
+	onSelect: (rootId: string, path: string, isDir: boolean) => void;
+}
+
+let { selectedPath, onSelect }: Props = $props();
+
+let roots = $state<Root[]>([]);
+let rootChildren = $state<Record<string, FileEntry[]>>({});
+let expandedRoots = $state<Set<string>>(new Set());
+let loading = $state(true);
+
+onMount(async () => {
+	try {
+		roots = await fetchRoots();
+	} catch (e) {
+		console.error('Failed to load roots', e);
 	}
+	loading = false;
+});
 
-	let { selectedPath, onSelect }: Props = $props();
-
-	let roots = $state<Root[]>([]);
-	let rootChildren = $state<Record<string, FileEntry[]>>({});
-	let expandedRoots = $state<Set<string>>(new Set());
-	let loading = $state(true);
-
-	onMount(async () => {
-		try {
-			roots = await fetchRoots();
-		} catch (e) {
-			console.error('Failed to load roots', e);
-		}
-		loading = false;
-	});
-
-	async function toggleRoot(rootId: string) {
-		if (expandedRoots.has(rootId)) {
-			expandedRoots.delete(rootId);
-			expandedRoots = new Set(expandedRoots);
-		} else {
-			if (!rootChildren[rootId]) {
-				try {
-					const entries = await fetchDirectory(rootId, '/');
-					entries.sort((a, b) => {
-						if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-						return a.name.localeCompare(b.name);
-					});
-					rootChildren[rootId] = entries;
-				} catch (e) {
-					console.error('Failed to load root', rootId, e);
-				}
+async function toggleRoot(rootId: string) {
+	if (expandedRoots.has(rootId)) {
+		expandedRoots.delete(rootId);
+		expandedRoots = new Set(expandedRoots);
+	} else {
+		if (!rootChildren[rootId]) {
+			try {
+				const entries = sortEntries(await fetchDirectory(rootId, '/'));
+				rootChildren[rootId] = entries;
+			} catch (e) {
+				console.error('Failed to load root', rootId, e);
 			}
-			expandedRoots.add(rootId);
-			expandedRoots = new Set(expandedRoots);
-			onSelect(rootId, '/', true);
 		}
+		expandedRoots.add(rootId);
+		expandedRoots = new Set(expandedRoots);
+		onSelect(rootId, '/', true);
 	}
+}
 </script>
 
 <div class="h-full overflow-y-auto bg-gray-900 p-2">

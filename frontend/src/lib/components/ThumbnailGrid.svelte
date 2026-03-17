@@ -1,97 +1,100 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types';
-	import { fetchDirectory, thumbnailUrl } from '$lib/api';
-	import ThumbnailCard from './ThumbnailCard.svelte';
-	import MediaPreview from './MediaPreview.svelte';
+import { fetchDirectory, thumbnailUrl } from '$lib/api';
+import type { FileEntry } from '$lib/types';
+import { formatSize, sortEntries } from '$lib/utils';
+import MediaPreview from './MediaPreview.svelte';
+import ThumbnailCard from './ThumbnailCard.svelte';
 
-	interface Props {
-		rootId: string;
-		path: string;
-		onNavigate?: (path: string) => void;
+interface Props {
+	rootId: string;
+	path: string;
+	previewFile?: string | null;
+	onNavigate?: (path: string) => void;
+	onPreviewChange?: (path: string | null) => void;
+}
+
+let {
+	rootId,
+	path,
+	previewFile = null,
+	onNavigate,
+	onPreviewChange,
+}: Props = $props();
+
+let entries = $state<FileEntry[]>([]);
+let loading = $state(false);
+let error = $state<string | null>(null);
+let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
+let selectedEntry = $state<FileEntry | null>(null);
+
+let mediaEntries = $derived(
+	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
+);
+
+let previewIndex = $derived.by(() => {
+	return previewFile && mediaEntries.length > 0
+		? mediaEntries.findIndex((e) => e.path === previewFile)
+		: -1;
+});
+
+let gridClass = $derived.by(() => {
+	switch (thumbSize) {
+		case 'small':
+			return 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]';
+		case 'medium':
+			return 'grid-cols-[repeat(auto-fill,minmax(180px,1fr))]';
+		case 'large':
+			return 'grid-cols-[repeat(auto-fill,minmax(280px,1fr))]';
 	}
+});
 
-	let { rootId, path, onNavigate }: Props = $props();
+$effect(() => {
+	loadDirectory(rootId, path);
+});
 
-	let entries = $state<FileEntry[]>([]);
-	let loading = $state(false);
-	let error = $state<string | null>(null);
-	let previewIndex = $state<number | null>(null);
-	let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
-	let selectedEntry = $state<FileEntry | null>(null);
+async function loadDirectory(rid: string, p: string) {
+	selectedEntry = null;
+	loading = true;
+	error = null;
+	try {
+		const result = await fetchDirectory(rid, p);
+		entries = sortEntries(result);
+	} catch (e) {
+		error = e instanceof Error ? e.message : 'Failed to load directory';
+		entries = [];
+	}
+	loading = false;
+}
 
-	let mediaEntries = $derived(entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'));
+function handleSelect(entry: FileEntry) {
+	selectedEntry = entry;
+}
 
-	let gridClass = $derived.by(() => {
-		switch (thumbSize) {
-			case 'small': return 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]';
-			case 'medium': return 'grid-cols-[repeat(auto-fill,minmax(180px,1fr))]';
-			case 'large': return 'grid-cols-[repeat(auto-fill,minmax(280px,1fr))]';
-		}
-	});
-
-	$effect(() => {
-		loadDirectory(rootId, path);
-	});
-
-	async function loadDirectory(rid: string, p: string) {
-		previewIndex = null;
+function handleOpen(entry: FileEntry) {
+	if (entry.isDir) {
+		onNavigate?.(entry.path);
+	} else if (entry.mediaType === 'image' || entry.mediaType === 'video') {
 		selectedEntry = null;
-		loading = true;
-		error = null;
-		try {
-			const result = await fetchDirectory(rid, p);
-			// Sort: directories first, then by name
-			result.sort((a, b) => {
-				if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-				return a.name.localeCompare(b.name);
-			});
-			entries = result;
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load directory';
-			entries = [];
-		}
-		loading = false;
+		onPreviewChange?.(entry.path);
 	}
+}
 
-	function openPreview(entry: FileEntry) {
-		const idx = mediaEntries.findIndex((e) => e.path === entry.path);
-		if (idx >= 0) previewIndex = idx;
+function formatDate(dateStr: string): string {
+	try {
+		return new Date(dateStr).toLocaleString();
+	} catch {
+		return dateStr;
 	}
-
-	function handleSelect(entry: FileEntry) {
-		selectedEntry = entry;
-	}
-
-	function handleOpen(entry: FileEntry) {
-		if (entry.isDir) {
-			onNavigate?.(entry.path);
-		} else if (entry.mediaType === 'image' || entry.mediaType === 'video') {
-			openPreview(entry);
-		}
-	}
-
-	function formatSize(bytes: number): string {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-		return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-	}
-
-	function formatDate(dateStr: string): string {
-		try {
-			return new Date(dateStr).toLocaleString();
-		} catch {
-			return dateStr;
-		}
-	}
+}
 </script>
 
-{#if previewIndex !== null}
+{#if previewIndex !== -1 && previewFile}
 	<MediaPreview
 		{rootId}
 		{mediaEntries}
-		initialIndex={previewIndex}
-		onClose={() => (previewIndex = null)}
+		currentIndex={previewIndex}
+		onClose={() => onPreviewChange?.(null)}
+		onIndexChange={(idx) => onPreviewChange?.(mediaEntries[idx].path)}
 	/>
 {:else}
 	<div class="flex h-full flex-col bg-gray-950">
@@ -125,12 +128,11 @@
 		</div>
 
 		<div class="flex flex-1 overflow-hidden">
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="flex-1 overflow-y-auto p-4"
 				onclick={() => (selectedEntry = null)}
-				onkeydown={() => {}}
-				role="button"
-				tabindex="-1"
 			>
 				{#if loading}
 					<div class="flex h-full items-center justify-center">
@@ -161,9 +163,9 @@
 				{/if}
 			</div>
 
-			<!-- Details Panel -->
-			{#if selectedEntry}
-				<div class="w-80 overflow-y-auto border-l border-gray-800 bg-gray-900 p-6 shadow-xl">
+			<!-- Details Panel (always rendered to prevent grid reflow) -->
+			<div class="w-80 overflow-y-auto border-l border-gray-800 bg-gray-900 p-6 shadow-xl">
+				{#if selectedEntry}
 					<div class="flex flex-col gap-6">
 						<div class="aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
 							{#if selectedEntry.hasThumb}
@@ -214,8 +216,12 @@
 							</button>
 						</div>
 					</div>
-				</div>
-			{/if}
+				{:else}
+					<div class="flex h-full items-center justify-center">
+						<p class="text-center text-sm text-gray-600">Select a file to view details</p>
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}

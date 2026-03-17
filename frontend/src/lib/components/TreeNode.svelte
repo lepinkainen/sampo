@@ -1,48 +1,44 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types';
-	import { fetchDirectory } from '$lib/api';
-	import TreeNode from './TreeNode.svelte';
+import { fetchDirectory } from '$lib/api';
+import type { FileEntry } from '$lib/types';
+import { sortEntries } from '$lib/utils';
+import TreeNode from './TreeNode.svelte';
 
-	interface Props {
-		rootId: string;
-		entry: FileEntry;
-		depth?: number;
-		selectedPath: string | null;
-		onSelect: (rootId: string, path: string, isDir: boolean) => void;
+interface Props {
+	rootId: string;
+	entry: FileEntry;
+	depth?: number;
+	selectedPath: string | null;
+	onSelect: (rootId: string, path: string, isDir: boolean) => void;
+}
+
+let { rootId, entry, depth = 0, selectedPath, onSelect }: Props = $props();
+
+let expanded = $state(false);
+let children = $state<FileEntry[]>([]);
+let loading = $state(false);
+
+const isSelected = $derived(selectedPath === `${rootId}:${entry.path}`);
+
+async function toggle() {
+	if (!entry.isDir && !entry.isZip) {
+		onSelect(rootId, entry.path, false);
+		return;
 	}
 
-	let { rootId, entry, depth = 0, selectedPath, onSelect }: Props = $props();
-
-	let expanded = $state(false);
-	let children = $state<FileEntry[]>([]);
-	let loading = $state(false);
-
-	const isSelected = $derived(selectedPath === `${rootId}:${entry.path}`);
-
-	async function toggle() {
-		if (!entry.isDir && !entry.isZip) {
-			onSelect(rootId, entry.path, false);
-			return;
+	if (!expanded) {
+		loading = true;
+		try {
+			children = sortEntries(await fetchDirectory(rootId, entry.path));
+		} catch (e) {
+			console.error('Failed to load directory', e);
 		}
-
-		if (!expanded) {
-			loading = true;
-			try {
-				children = await fetchDirectory(rootId, entry.path);
-				// Sort: directories first, then alphabetical
-				children.sort((a, b) => {
-					if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-					return a.name.localeCompare(b.name);
-				});
-			} catch (e) {
-				console.error('Failed to load directory', e);
-			}
-			loading = false;
-		}
-
-		expanded = !expanded;
-		onSelect(rootId, entry.path, true);
+		loading = false;
 	}
+
+	expanded = !expanded;
+	onSelect(rootId, entry.path, true);
+}
 </script>
 
 <div class="select-none">

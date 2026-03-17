@@ -1,44 +1,68 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types';
-	import { fileUrl } from '$lib/api';
+import { fade } from 'svelte/transition';
+import { fileUrl } from '$lib/api';
+import type { FileEntry } from '$lib/types';
 
-	interface Props {
-		rootId: string;
-		mediaEntries: FileEntry[];
-		initialIndex: number;
-		onClose: () => void;
+interface Props {
+	rootId: string;
+	mediaEntries: FileEntry[];
+	currentIndex: number;
+	onClose: () => void;
+	onIndexChange: (index: number) => void;
+}
+
+let { rootId, mediaEntries, currentIndex, onClose, onIndexChange }: Props =
+	$props();
+
+let currentEntry = $derived(mediaEntries[currentIndex]);
+let wrapNotice = $state<string | null>(null);
+let wrapTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function showWrapNotice(msg: string) {
+	if (wrapTimeout) clearTimeout(wrapTimeout);
+	wrapNotice = msg;
+	wrapTimeout = setTimeout(() => {
+		wrapNotice = null;
+	}, 1500);
+}
+
+function prev() {
+	if (currentIndex > 0) {
+		onIndexChange(currentIndex - 1);
+	} else {
+		onIndexChange(mediaEntries.length - 1);
+		showWrapNotice('Wrapped to last');
 	}
+}
 
-	let { rootId, mediaEntries, initialIndex, onClose }: Props = $props();
-
-	// svelte-ignore state_referenced_locally
-	let currentIndex = $state(initialIndex);
-	let currentEntry = $derived(mediaEntries[currentIndex]);
-
-	function prev() {
-		if (currentIndex > 0) currentIndex--;
+function next() {
+	if (currentIndex < mediaEntries.length - 1) {
+		onIndexChange(currentIndex + 1);
+	} else {
+		onIndexChange(0);
+		showWrapNotice('Wrapped to first');
 	}
+}
 
-	function next() {
-		if (currentIndex < mediaEntries.length - 1) currentIndex++;
-	}
-
-	$effect(() => {
-		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === 'ArrowLeft') {
-				e.preventDefault();
-				prev();
-			} else if (e.key === 'ArrowRight') {
-				e.preventDefault();
-				next();
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				onClose();
-			}
+$effect(() => {
+	function onKeyDown(e: KeyboardEvent) {
+		if (e.key === 'ArrowLeft') {
+			e.preventDefault();
+			prev();
+		} else if (e.key === 'ArrowRight') {
+			e.preventDefault();
+			next();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			onClose();
 		}
-		window.addEventListener('keydown', onKeyDown);
-		return () => window.removeEventListener('keydown', onKeyDown);
-	});
+	}
+	window.addEventListener('keydown', onKeyDown);
+	return () => {
+		window.removeEventListener('keydown', onKeyDown);
+		if (wrapTimeout) clearTimeout(wrapTimeout);
+	};
+});
 </script>
 
 <div class="flex h-full flex-col bg-gray-950">
@@ -62,15 +86,13 @@
 	<!-- Media area -->
 	<div class="relative flex flex-1 items-center justify-center overflow-hidden">
 		<!-- Prev button -->
-		{#if currentIndex > 0}
-			<button
-				onclick={prev}
-				class="absolute left-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
-				aria-label="Previous"
-			>
-				&#9664;
-			</button>
-		{/if}
+		<button
+			onclick={prev}
+			class="absolute left-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
+			aria-label="Previous"
+		>
+			&#9664;
+		</button>
 
 		{#if currentEntry.mediaType === 'video'}
 			{#key currentEntry.path}
@@ -90,14 +112,22 @@
 		{/if}
 
 		<!-- Next button -->
-		{#if currentIndex < mediaEntries.length - 1}
-			<button
-				onclick={next}
-				class="absolute right-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
-				aria-label="Next"
+		<button
+			onclick={next}
+			class="absolute right-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
+			aria-label="Next"
+		>
+			&#9654;
+		</button>
+
+		<!-- Wrap notification -->
+		{#if wrapNotice}
+			<div
+				class="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-gray-800/90 px-4 py-2 text-sm text-gray-300"
+				transition:fade={{ duration: 200 }}
 			>
-				&#9654;
-			</button>
+				{wrapNotice}
+			</div>
 		{/if}
 	</div>
 </div>

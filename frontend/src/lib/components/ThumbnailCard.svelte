@@ -1,25 +1,19 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types';
-	import { thumbnailUrl } from '$lib/api';
+import { thumbnailUrl } from '$lib/api';
+import type { FileEntry } from '$lib/types';
+import { formatSize } from '$lib/utils';
 
-	interface Props {
-		rootId: string;
-		entry: FileEntry;
-		selected?: boolean;
-		onclick?: () => void;
-		ondblclick?: () => void;
-	}
+interface Props {
+	rootId: string;
+	entry: FileEntry;
+	selected?: boolean;
+	onclick?: () => void;
+	ondblclick?: () => void;
+}
 
-	let { rootId, entry, selected = false, onclick, ondblclick }: Props = $props();
+let { rootId, entry, selected = false, onclick, ondblclick }: Props = $props();
 
-	let imgError = $state(false);
-
-	function formatSize(bytes: number): string {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-		return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-	}
+let imgError = $state(false);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
