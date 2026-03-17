@@ -1,4 +1,4 @@
-import type { Root, FileEntry } from './types';
+import type { FileEntry, Root } from './types';
 
 const BASE = '';
 
@@ -12,7 +12,10 @@ export async function fetchRoots(): Promise<Root[]> {
 	return res.json();
 }
 
-export async function fetchDirectory(rootId: string, path: string): Promise<FileEntry[]> {
+export async function fetchDirectory(
+	rootId: string,
+	path: string,
+): Promise<FileEntry[]> {
 	const res = await fetch(`${BASE}/api/tree/${rootId}/${encodePath(path)}`);
 	if (!res.ok) throw new Error(`Failed to fetch directory: ${res.statusText}`);
 	return res.json();

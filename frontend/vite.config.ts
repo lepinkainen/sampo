@@ -8,7 +8,7 @@ export default defineConfig({
 		proxy: {
 			'/api': 'http://localhost:8080',
 			'/whoami': 'http://localhost:8080',
-			'/health': 'http://localhost:8080'
-		}
-	}
+			'/health': 'http://localhost:8080',
+		},
+	},
 });

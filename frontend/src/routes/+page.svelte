@@ -1,24 +1,50 @@
 <script lang="ts">
-	import TreeView from '$lib/components/TreeView.svelte';
-	import ThumbnailGrid from '$lib/components/ThumbnailGrid.svelte';
+import { goto } from '$app/navigation';
+import { page } from '$app/stores';
+import ThumbnailGrid from '$lib/components/ThumbnailGrid.svelte';
+import TreeView from '$lib/components/TreeView.svelte';
 
-	let selectedRootId = $state<string | null>(null);
-	let selectedPath = $state<string | null>(null);
-	let selectedKey = $state<string | null>(null);
+// Derived state from URL
+let selectedRootId = $derived($page.url.searchParams.get('root'));
+let selectedPath = $derived($page.url.searchParams.get('path'));
+let previewPath = $derived($page.url.searchParams.get('preview'));
 
-	function handleSelect(rootId: string, path: string, isDir: boolean) {
-		selectedKey = `${rootId}:${path}`;
-		if (isDir) {
-			selectedRootId = rootId;
-			selectedPath = path;
-		}
+// Tree selection key
+let selectedKey = $derived(
+	selectedRootId && selectedPath ? `${selectedRootId}:${selectedPath}` : null,
+);
+
+function updateUrl(
+	rootId: string | null,
+	path: string | null,
+	preview: string | null,
+) {
+	const params = new URLSearchParams();
+	if (rootId) params.set('root', rootId);
+	if (path !== null) params.set('path', path || '/');
+	if (preview) params.set('preview', preview);
+
+	goto(`?${params.toString()}`, { replaceState: false, keepFocus: true });
+}
+
+function handleSelect(rootId: string, path: string, isDir: boolean) {
+	// If directory selected, update root/path, clear preview
+	if (isDir) {
+		updateUrl(rootId, path, null);
 	}
+}
 
-	function handleNavigate(path: string) {
-		if (selectedRootId) {
-			handleSelect(selectedRootId, path, true);
-		}
+function handleNavigate(path: string) {
+	if (selectedRootId) {
+		updateUrl(selectedRootId, path, null);
 	}
+}
+
+function handlePreviewChange(path: string | null) {
+	if (selectedRootId && selectedPath) {
+		updateUrl(selectedRootId, selectedPath, path);
+	}
+}
 </script>
 
 <div class="flex h-screen bg-gray-950 text-gray-100">
@@ -34,11 +60,13 @@
 
 	<!-- Content area -->
 	<div class="flex-1">
-		{#if selectedRootId && selectedPath}
+		{#if selectedRootId && selectedPath != null}
 			<ThumbnailGrid
 				rootId={selectedRootId}
 				path={selectedPath}
+				previewFile={previewPath}
 				onNavigate={handleNavigate}
+				onPreviewChange={handlePreviewChange}
 			/>
 		{:else}
 			<div class="flex h-full items-center justify-center">
