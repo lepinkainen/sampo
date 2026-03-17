@@ -7,13 +7,14 @@ import (
 	"path/filepath"
 
 	"github.com/disintegration/imaging"
+	_ "golang.org/x/image/webp" // register WebP decoder
 )
 
 const thumbSize = 300
 
 // GenerateImageThumbnail creates a thumbnail for an image file.
 func GenerateImageThumbnail(srcPath, dstPath string) error {
-	// imaging.Open handles JPEG, PNG, GIF, BMP, TIFF natively
+	// imaging.Open handles JPEG, PNG, GIF, BMP, TIFF natively; WebP via golang.org/x/image/webp import
 	src, err := imaging.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("opening image %s: %w", srcPath, err)
