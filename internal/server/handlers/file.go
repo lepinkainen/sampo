@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -41,5 +44,28 @@ func (h *Handler) ServeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if contentType := contentTypeForFile(info.Name()); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	w.Header().Set("Content-Disposition", "inline")
+
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func contentTypeForFile(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".mkv":
+		return "video/x-matroska"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".avi":
+		return "video/x-msvideo"
+	}
+
+	return mime.TypeByExtension(ext)
 }

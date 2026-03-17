@@ -100,6 +100,24 @@ func TestServeFile_InvalidRoot(t *testing.T) {
 	}
 }
 
+func TestServeFile_MKVContentType(t *testing.T) {
+	h, dir := setupTestHandler(t)
+
+	mkvPath := filepath.Join(dir, "sample.mkv")
+	if err := os.WriteFile(mkvPath, []byte("not-a-real-video"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := serveWithChi(h, "GET", "/api/file/root-0/sample.mkv")
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); got != "video/x-matroska" {
+		t.Errorf("expected Content-Type video/x-matroska, got %q", got)
+	}
+}
+
 // setupSpecialCharHandler creates a test handler with files/dirs containing special characters.
 func setupSpecialCharHandler(t *testing.T) *handlers.Handler {
 	t.Helper()
