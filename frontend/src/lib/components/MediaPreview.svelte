@@ -2,6 +2,7 @@
 import { fade } from 'svelte/transition';
 import { fileUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
+import { X, ChevronLeft, ChevronRight } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -16,6 +17,7 @@ let { rootId, mediaEntries, currentIndex, onClose, onIndexChange }: Props =
 
 let currentEntry = $derived(mediaEntries[currentIndex]);
 let wrapNotice = $state<string | null>(null);
+let videoLoadError = $state(false);
 let wrapTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function showWrapNotice(msg: string) {
@@ -43,6 +45,11 @@ function next() {
 		showWrapNotice('Wrapped to first');
 	}
 }
+
+$effect(() => {
+	currentEntry.path;
+	videoLoadError = false;
+});
 
 $effect(() => {
 	function onKeyDown(e: KeyboardEvent) {
@@ -78,7 +85,7 @@ $effect(() => {
 				class="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
 				aria-label="Close preview"
 			>
-				&#10005;
+				<X size={18} />
 			</button>
 		</div>
 	</div>
@@ -91,17 +98,43 @@ $effect(() => {
 			class="absolute left-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
 			aria-label="Previous"
 		>
-			&#9664;
+			<ChevronLeft size={24} />
 		</button>
 
 		{#if currentEntry.mediaType === 'video'}
 			{#key currentEntry.path}
-				<!-- svelte-ignore a11y_media_has_caption -->
-				<video
-					src={fileUrl(rootId, currentEntry.path)}
-					controls
-					class="max-h-full max-w-full"
-				></video>
+				<div class="flex max-h-full max-w-full flex-col items-center justify-center gap-4 px-6 text-center">
+					<!-- svelte-ignore a11y_media_has_caption -->
+					<video
+						src={fileUrl(rootId, currentEntry.path)}
+						controls
+						onerror={() => {
+							videoLoadError = true;
+						}}
+						class:max-h-full={!videoLoadError}
+						class:max-w-full={!videoLoadError}
+						class:hidden={videoLoadError}
+					></video>
+
+					{#if videoLoadError}
+						<div class="max-w-lg rounded-xl border border-gray-800 bg-gray-900/80 p-5 text-sm text-gray-300 shadow-lg">
+							<p class="font-medium text-gray-100">Preview unavailable in this browser</p>
+							<p class="mt-2 text-gray-400">
+								This video file may use an unsupported container or codec.
+								MKV files especially are not playable in all browsers.
+							</p>
+							<p class="mt-3 text-gray-500">You can still open or download the file directly.</p>
+							<a
+								href={fileUrl(rootId, currentEntry.path)}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="mt-4 inline-flex rounded bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 hover:bg-white"
+							>
+								Open file
+							</a>
+						</div>
+					{/if}
+				</div>
 			{/key}
 		{:else}
 			<img
@@ -117,7 +150,7 @@ $effect(() => {
 			class="absolute right-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
 			aria-label="Next"
 		>
-			&#9654;
+			<ChevronRight size={24} />
 		</button>
 
 		<!-- Wrap notification -->

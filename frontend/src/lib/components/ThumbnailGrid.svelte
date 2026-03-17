@@ -2,6 +2,7 @@
 import { fetchDirectory, thumbnailUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize, sortEntries } from '$lib/utils';
+import FileIcon from './FileIcon.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 
@@ -26,6 +27,8 @@ let loading = $state(false);
 let error = $state<string | null>(null);
 let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
 let selectedEntry = $state<FileEntry | null>(null);
+let savedScrollTop = $state(0);
+let scrollContainer: HTMLDivElement | undefined = $state();
 
 let mediaEntries = $derived(
 	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
@@ -52,8 +55,22 @@ $effect(() => {
 	loadDirectory(rootId, path);
 });
 
+// Restore scroll position when returning from preview
+$effect(() => {
+	if (!previewFile && scrollContainer && savedScrollTop > 0) {
+		const scrollTarget = savedScrollTop;
+		// Use requestAnimationFrame to wait for DOM to render
+		requestAnimationFrame(() => {
+			if (scrollContainer) {
+				scrollContainer.scrollTop = scrollTarget;
+			}
+		});
+	}
+});
+
 async function loadDirectory(rid: string, p: string) {
 	selectedEntry = null;
+	savedScrollTop = 0;
 	loading = true;
 	error = null;
 	try {
@@ -74,6 +91,9 @@ function handleOpen(entry: FileEntry) {
 	if (entry.isDir) {
 		onNavigate?.(entry.path);
 	} else if (entry.mediaType === 'image' || entry.mediaType === 'video') {
+		if (scrollContainer) {
+			savedScrollTop = scrollContainer.scrollTop;
+		}
 		selectedEntry = null;
 		onPreviewChange?.(entry.path);
 	}
@@ -132,6 +152,7 @@ function formatDate(dateStr: string): string {
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="flex-1 overflow-y-auto p-4"
+				bind:this={scrollContainer}
 				onclick={() => (selectedEntry = null)}
 			>
 				{#if loading}
@@ -175,16 +196,8 @@ function formatDate(dateStr: string): string {
 									class="h-full w-full object-contain"
 								/>
 							{:else}
-								<div class="flex h-full items-center justify-center text-6xl text-gray-700">
-									{#if selectedEntry.isDir}
-										&#128193;
-									{:else if selectedEntry.mediaType === 'image'}
-										&#128444;
-									{:else if selectedEntry.mediaType === 'video'}
-										&#127909;
-									{:else}
-										&#128196;
-									{/if}
+								<div class="flex h-full items-center justify-center text-gray-700">
+									<FileIcon entry={selectedEntry} size={64} />
 								</div>
 							{/if}
 						</div>

@@ -3,6 +3,7 @@ import { onMount } from 'svelte';
 import { fetchDirectory, fetchRoots } from '$lib/api';
 import type { FileEntry, Root } from '$lib/types';
 import { sortEntries } from '$lib/utils';
+import { Folder, ChevronDown, ChevronRight } from '@lucide/svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -55,17 +56,18 @@ async function toggleRoot(rootId: string) {
 		{#each roots as root (root.id)}
 			<div class="mb-1">
 				<button
-					class="flex w-full items-center gap-1 rounded px-1 py-1 text-left text-sm font-semibold text-gray-200 hover:bg-gray-700"
+					class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-1 text-left text-sm font-semibold text-gray-200 hover:bg-gray-700"
 					onclick={() => toggleRoot(root.id)}
 				>
-					<span class="w-4 text-center text-xs text-gray-500">
+					<span class="w-4 shrink-0 text-gray-500">
 						{#if expandedRoots.has(root.id)}
-							&#9662;
+							<ChevronDown size={14} />
 						{:else}
-							&#9656;
+							<ChevronRight size={14} />
 						{/if}
 					</span>
-					&#128193; {root.name}
+					<span class="w-5 shrink-0 text-gray-400"><Folder size={16} /></span>
+					<span class="truncate">{root.name}</span>
 				</button>
 
 				{#if expandedRoots.has(root.id) && rootChildren[root.id]}

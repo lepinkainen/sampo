@@ -2,6 +2,7 @@
 import { thumbnailUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
+import FileIcon from './FileIcon.svelte';
 
 interface Props {
 	rootId: string;
@@ -46,18 +47,8 @@ let imgError = $state(false);
 				onerror={() => (imgError = true)}
 			/>
 		{:else}
-			<span class="text-4xl">
-				{#if entry.isDir}
-					&#128193;
-				{:else if entry.mediaType === 'image'}
-					&#128444;
-				{:else if entry.mediaType === 'video'}
-					&#127909;
-				{:else if entry.mediaType === 'archive'}
-					&#128230;
-				{:else}
-					&#128196;
-				{/if}
+			<span class="text-gray-500">
+				<FileIcon {entry} size={48} />
 			</span>
 		{/if}
 	</div>

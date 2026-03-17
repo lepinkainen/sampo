@@ -2,6 +2,8 @@
 import { fetchDirectory } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
+import { ChevronDown, ChevronRight, Loader } from '@lucide/svelte';
+import FileIcon from './FileIcon.svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -43,40 +45,30 @@ async function toggle() {
 
 <div class="select-none">
 	<button
-		class="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm hover:bg-gray-700 {isSelected
+		class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm hover:bg-gray-700 {isSelected
 			? 'bg-gray-700 text-white'
 			: 'text-gray-300'}"
 		style="padding-left: {depth * 16 + 4}px"
 		onclick={toggle}
 	>
 		{#if entry.isDir || entry.isZip}
-			<span class="w-4 text-center text-xs text-gray-500">
+			<span class="w-4 shrink-0 text-gray-500">
 				{#if loading}
-					...
+					<Loader size={14} class="animate-spin" />
 				{:else if expanded}
-					&#9662;
+					<ChevronDown size={14} />
 				{:else}
-					&#9656;
+					<ChevronRight size={14} />
 				{/if}
 			</span>
 		{:else}
-			<span class="w-4"></span>
+			<span class="w-4 shrink-0"></span>
 		{/if}
 
-		<span class="truncate">
-			{#if entry.isDir}
-				&#128193;
-			{:else if entry.isZip}
-				&#128230;
-			{:else if entry.mediaType === 'image'}
-				&#128444;
-			{:else if entry.mediaType === 'video'}
-				&#127909;
-			{:else}
-				&#128196;
-			{/if}
-			{entry.name}
+		<span class="w-5 shrink-0 text-gray-400">
+			<FileIcon {entry} size={16} />
 		</span>
+		<span class="truncate">{entry.name}</span>
 	</button>
 
 	{#if expanded && children.length > 0}
