@@ -13,9 +13,9 @@ BACKEND_BIN="$RUN_DIR/filemanager-dev"
 BACKEND_URL="http://127.0.0.1:8080/health"
 FRONTEND_URL="http://127.0.0.1:5173"
 BACKEND_MATCH="$BACKEND_BIN"
-FRONTEND_MATCH="npm run dev"
+FRONTEND_MATCH="pnpm run dev"
 BACKEND_CMD="cd '$ROOT_DIR' && go build -o '$BACKEND_BIN' ./cmd/filemanager && exec '$BACKEND_BIN'"
-FRONTEND_CMD="cd '$ROOT_DIR/frontend' && exec npm run dev -- --host 127.0.0.1 --port 5173"
+FRONTEND_CMD="cd '$ROOT_DIR/frontend' && exec pnpm run dev -- --host 127.0.0.1 --port 5173"
 
 mkdir -p "$RUN_DIR"
 

@@ -26,9 +26,9 @@ Run a single Go test:
 go test ./internal/filesystem/ -run TestResolvePath
 ```
 
-Frontend is in `frontend/` — uses npm (not pnpm):
+Frontend is in `frontend/` — uses pnpm:
 ```bash
-cd frontend && npm install && npm run build
+cd frontend && pnpm install && pnpm run build
 ```
 
 ### Running during development

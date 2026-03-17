@@ -90,15 +90,15 @@ tasks:
     desc: Lint and check frontend code
     dir: frontend
     cmds:
-      - npx @biomejs/biome check .
+      - pnpm exec biome check .
 
   # Frontend tasks
   build-frontend:
     desc: Build SvelteKit frontend
     dir: frontend
     cmds:
-      - npm install
-      - npm run build
+      - pnpm install
+      - pnpm run build
 
   dev:
     desc: Start development in the foreground (run backend or frontend manually in separate terminals)
@@ -138,7 +138,7 @@ tasks:
     desc: Start frontend dev server
     dir: frontend
     cmds:
-      - npm run dev -- --host 127.0.0.1 --port 5173
+      - pnpm run dev -- --host 127.0.0.1 --port 5173
 
   docker-build:
     desc: Build Docker image
