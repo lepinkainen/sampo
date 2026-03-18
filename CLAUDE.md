@@ -73,6 +73,10 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 | `GET /api/roots` | List configured roots |
 | `GET /api/tree/{rootID}/*path` | Directory listing (one level, lazy) |
 | `GET /api/thumb/{rootID}/*path` | Thumbnail (generates on first request, then cached) |
+| `GET /api/file/{rootID}/*path` | Serve original file with Content-Type and Range support |
+| `DELETE /api/files/{rootID}/*path` | Delete file or directory (`?recursive=true` for non-empty dirs) |
+| `POST /api/files/move` | Move/rename files (supports cross-root, smart dedup) |
+| `POST /api/files/copy` | Copy files (supports cross-root, smart dedup) |
 | `GET /whoami` | App version info |
 | `GET /health` | Health check |
 

@@ -16,6 +16,11 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Get("/api/thumb/{rootID}/*", h.GetThumbnail)
 	s.router.Get("/api/file/{rootID}/*", h.ServeFile)
 
+	// File operations
+	s.router.Delete("/api/files/{rootID}/*", h.DeleteFile)
+	s.router.Post("/api/files/move", h.MoveFiles)
+	s.router.Post("/api/files/copy", h.CopyFiles)
+
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))
 	s.router.Handle("/*", spaHandler(frontendFS, fileServer))
