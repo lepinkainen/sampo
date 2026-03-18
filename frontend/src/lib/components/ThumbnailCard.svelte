@@ -8,11 +8,23 @@ interface Props {
 	rootId: string;
 	entry: FileEntry;
 	selected?: boolean;
-	onclick?: () => void;
+	cut?: boolean;
+	onclick?: (e: MouseEvent) => void;
 	ondblclick?: () => void;
+	oncontextmenu?: (e: MouseEvent) => void;
+	ondragstart?: (e: DragEvent) => void;
 }
 
-let { rootId, entry, selected = false, onclick, ondblclick }: Props = $props();
+let {
+	rootId,
+	entry,
+	selected = false,
+	cut = false,
+	onclick,
+	ondblclick,
+	oncontextmenu,
+	ondragstart,
+}: Props = $props();
 
 let imgError = $state(false);
 </script>
@@ -23,16 +35,20 @@ let imgError = $state(false);
 	{selected
 		? 'border-blue-500 bg-blue-900/30'
 		: 'border-gray-700 bg-gray-800 hover:border-gray-500'}
+	{cut ? ' opacity-50' : ''}
 	{onclick ? ' cursor-pointer' : ''}"
 	role={onclick ? 'button' : undefined}
 	tabindex={onclick ? 0 : undefined}
+	draggable={ondragstart ? true : undefined}
 	{onclick}
 	{ondblclick}
+	{oncontextmenu}
+	{ondragstart}
 	onkeydown={onclick
 		? (e) => {
 				if (e.key === 'Enter' || e.key === ' ') {
 					e.preventDefault();
-					onclick();
+					onclick(new MouseEvent('click'));
 				}
 			}
 		: undefined}

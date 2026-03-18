@@ -1,10 +1,28 @@
 <script lang="ts">
-import { fetchDirectory, thumbnailUrl } from '$lib/api';
+import {
+	deleteFiles,
+	fetchDirectory,
+	moveFiles,
+	copyFiles,
+	thumbnailUrl,
+} from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize, sortEntries } from '$lib/utils';
+import { createSelection } from '$lib/selection.svelte';
+import { createClipboard } from '$lib/clipboard.svelte';
 import FileIcon from './FileIcon.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
+import ConfirmDialog from './ConfirmDialog.svelte';
+import ContextMenu from './ContextMenu.svelte';
+import Toast from './Toast.svelte';
+import {
+	Trash2,
+	Scissors,
+	Copy,
+	ClipboardPaste,
+	FolderOpen,
+} from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -26,9 +44,15 @@ let entries = $state<FileEntry[]>([]);
 let loading = $state(false);
 let error = $state<string | null>(null);
 let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
-let selectedEntry = $state<FileEntry | null>(null);
 let savedScrollTop = $state(0);
 let scrollContainer: HTMLDivElement | undefined = $state();
+
+const selection = createSelection();
+const clipboard = createClipboard();
+
+let showDeleteConfirm = $state(false);
+let contextMenu = $state<{ x: number; y: number } | null>(null);
+let toastComponent: Toast | undefined = $state();
 
 let mediaEntries = $derived(
 	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
@@ -51,15 +75,15 @@ let gridClass = $derived.by(() => {
 	}
 });
 
+let selectedEntries = $derived(entries.filter((e) => selection.has(e.path)));
+
 $effect(() => {
 	loadDirectory(rootId, path);
 });
 
-// Restore scroll position when returning from preview
 $effect(() => {
 	if (!previewFile && scrollContainer && savedScrollTop > 0) {
 		const scrollTarget = savedScrollTop;
-		// Use requestAnimationFrame to wait for DOM to render
 		requestAnimationFrame(() => {
 			if (scrollContainer) {
 				scrollContainer.scrollTop = scrollTarget;
@@ -69,7 +93,7 @@ $effect(() => {
 });
 
 async function loadDirectory(rid: string, p: string) {
-	selectedEntry = null;
+	selection.clear();
 	savedScrollTop = 0;
 	loading = true;
 	error = null;
@@ -83,8 +107,14 @@ async function loadDirectory(rid: string, p: string) {
 	loading = false;
 }
 
-function handleSelect(entry: FileEntry) {
-	selectedEntry = entry;
+function handleClick(entry: FileEntry, e: MouseEvent) {
+	if (e.metaKey || e.ctrlKey) {
+		selection.toggle(entry);
+	} else if (e.shiftKey) {
+		selection.selectRange(entries, entry);
+	} else {
+		selection.selectOne(entry);
+	}
 }
 
 function handleOpen(entry: FileEntry) {
@@ -94,9 +124,210 @@ function handleOpen(entry: FileEntry) {
 		if (scrollContainer) {
 			savedScrollTop = scrollContainer.scrollTop;
 		}
-		selectedEntry = null;
+		selection.clear();
 		onPreviewChange?.(entry.path);
 	}
+}
+
+function handleContextMenu(e: MouseEvent, entry: FileEntry) {
+	e.preventDefault();
+	if (!selection.has(entry.path)) {
+		selection.selectOne(entry);
+	}
+	contextMenu = { x: e.clientX, y: e.clientY };
+}
+
+function handleKeydown(e: KeyboardEvent) {
+	if (showDeleteConfirm || previewFile) return;
+
+	const mod = e.metaKey || e.ctrlKey;
+
+	if (e.key === 'Delete' || (e.key === 'Backspace' && mod)) {
+		if (selection.size > 0) {
+			e.preventDefault();
+			showDeleteConfirm = true;
+		}
+	} else if (mod && e.key === 'a') {
+		e.preventDefault();
+		selection.selectAll(entries);
+	} else if (mod && e.key === 'c') {
+		if (selection.size > 0) {
+			e.preventDefault();
+			clipboard.copy(rootId, selection.paths);
+			toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+		}
+	} else if (mod && e.key === 'x') {
+		if (selection.size > 0) {
+			e.preventDefault();
+			clipboard.cut(rootId, selection.paths);
+			toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+		}
+	} else if (mod && e.key === 'v') {
+		if (clipboard.hasItems) {
+			e.preventDefault();
+			handlePaste();
+		}
+	}
+}
+
+async function handleDelete() {
+	showDeleteConfirm = false;
+	const paths = selection.paths;
+	const hasDirectories = selectedEntries.some((e) => e.isDir);
+
+	try {
+		await deleteFiles(rootId, paths, hasDirectories);
+		toastComponent?.show(`Deleted ${paths.length} item(s)`, 'success');
+		// Also clear clipboard if deleted items were cut
+		if (
+			clipboard.mode === 'cut' &&
+			clipboard.items.some((i) => i.rootId === rootId && paths.includes(i.path))
+		) {
+			clipboard.clear();
+		}
+		await loadDirectory(rootId, path);
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Delete failed',
+			'error',
+		);
+	}
+}
+
+async function handlePaste() {
+	const op = clipboard.mode === 'cut' ? moveFiles : copyFiles;
+	try {
+		const results = await op({
+			items: clipboard.items.map((i) => ({
+				srcRoot: i.rootId,
+				srcPath: i.path,
+			})),
+			dstRoot: rootId,
+			dstPath: path || '/',
+		});
+		const errors = results.filter((r) => r.error);
+		if (errors.length > 0) {
+			toastComponent?.show(
+				`${errors.length} item(s) failed to ${clipboard.mode}`,
+				'error',
+			);
+		} else {
+			toastComponent?.show(
+				`${clipboard.mode === 'cut' ? 'Moved' : 'Copied'} ${results.length} item(s)`,
+				'success',
+			);
+		}
+		if (clipboard.mode === 'cut') clipboard.clear();
+		await loadDirectory(rootId, path);
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Paste failed',
+			'error',
+		);
+	}
+}
+
+function handleDrop(e: DragEvent) {
+	e.preventDefault();
+	const data = e.dataTransfer?.getData('application/json');
+	if (!data) return;
+
+	try {
+		const payload = JSON.parse(data) as {
+			rootId: string;
+			paths: string[];
+			mode: 'move' | 'copy';
+		};
+		const op = payload.mode === 'copy' ? copyFiles : moveFiles;
+		op({
+			items: payload.paths.map((p: string) => ({
+				srcRoot: payload.rootId,
+				srcPath: p,
+			})),
+			dstRoot: rootId,
+			dstPath: path || '/',
+		}).then(async () => {
+			toastComponent?.show(
+				`${payload.mode === 'copy' ? 'Copied' : 'Moved'} ${payload.paths.length} item(s)`,
+				'success',
+			);
+			await loadDirectory(rootId, path);
+		});
+	} catch {
+		// ignore invalid drag data
+	}
+}
+
+function handleDragOver(e: DragEvent) {
+	e.preventDefault();
+	if (e.dataTransfer) {
+		e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+	}
+}
+
+function handleDragStartFromCard(e: DragEvent, entry: FileEntry) {
+	if (!selection.has(entry.path)) {
+		selection.selectOne(entry);
+	}
+	const paths = selection.paths;
+	e.dataTransfer?.setData(
+		'application/json',
+		JSON.stringify({
+			rootId,
+			paths,
+			mode: e.altKey ? 'copy' : 'move',
+		}),
+	);
+	if (e.dataTransfer) {
+		e.dataTransfer.effectAllowed = 'copyMove';
+	}
+}
+
+function getContextMenuItems() {
+	const hasSelection = selection.size > 0;
+	return [
+		{
+			label: 'Open',
+			icon: FolderOpen,
+			action: () => {
+				if (selectedEntries.length === 1) handleOpen(selectedEntries[0]);
+			},
+			disabled: selection.size !== 1,
+		},
+		{
+			label: 'Cut',
+			icon: Scissors,
+			action: () => {
+				clipboard.cut(rootId, selection.paths);
+				toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+			},
+			disabled: !hasSelection,
+		},
+		{
+			label: 'Copy',
+			icon: Copy,
+			action: () => {
+				clipboard.copy(rootId, selection.paths);
+				toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+			},
+			disabled: !hasSelection,
+		},
+		{
+			label: 'Paste',
+			icon: ClipboardPaste,
+			action: handlePaste,
+			disabled: !clipboard.hasItems,
+		},
+		{
+			label: 'Delete',
+			icon: Trash2,
+			action: () => {
+				showDeleteConfirm = true;
+			},
+			disabled: !hasSelection,
+			destructive: true,
+		},
+	];
 }
 
 function formatDate(dateStr: string): string {
@@ -107,6 +338,8 @@ function formatDate(dateStr: string): string {
 	}
 }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 {#if previewIndex !== -1 && previewFile}
 	<MediaPreview
@@ -120,30 +353,102 @@ function formatDate(dateStr: string): string {
 	<div class="flex h-full flex-col bg-gray-950">
 		<!-- Toolbar -->
 		<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-4 py-2">
-			<div class="truncate text-sm font-medium text-gray-300">
-				<span class="text-gray-500">{rootId}</span>
-				<span class="mx-1 text-gray-600">/</span>
-				{path || '(root)'}
+			<div class="flex items-center gap-4 min-w-0 flex-1">
+				<div class="truncate text-sm font-medium text-gray-300">
+					<button
+						class="text-gray-500 hover:text-gray-200 transition-colors"
+						onclick={() => onNavigate?.('')}
+					>
+						{rootId}
+					</button>
+					{#if path}
+						{@const segments = path.split('/')}
+						{#each segments as segment, i}
+							<span class="mx-1 text-gray-600">/</span>
+							{#if i < segments.length - 1}
+								<button
+									class="text-gray-400 hover:text-gray-200 transition-colors"
+									onclick={() => onNavigate?.(segments.slice(0, i + 1).join('/'))}
+								>
+									{segment}
+								</button>
+							{:else}
+								<span>{segment}</span>
+							{/if}
+						{/each}
+					{:else}
+						<span class="mx-1 text-gray-600">/</span>
+						<span>(root)</span>
+					{/if}
+				</div>
+
+				<!-- File operation buttons -->
+				<div class="flex items-center gap-1">
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Cut (Ctrl+X)"
+						disabled={selection.size === 0}
+						onclick={() => {
+							clipboard.cut(rootId, selection.paths);
+							toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+						}}
+					>
+						<Scissors size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Copy (Ctrl+C)"
+						disabled={selection.size === 0}
+						onclick={() => {
+							clipboard.copy(rootId, selection.paths);
+							toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+						}}
+					>
+						<Copy size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Paste (Ctrl+V)"
+						disabled={!clipboard.hasItems}
+						onclick={handlePaste}
+					>
+						<ClipboardPaste size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Delete"
+						disabled={selection.size === 0}
+						onclick={() => (showDeleteConfirm = true)}
+					>
+						<Trash2 size={16} />
+					</button>
+				</div>
 			</div>
-			<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-					onclick={() => (thumbSize = 'small')}
-				>
-					Small
-				</button>
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-					onclick={() => (thumbSize = 'medium')}
-				>
-					Medium
-				</button>
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-					onclick={() => (thumbSize = 'large')}
-				>
-					Large
-				</button>
+
+			<div class="flex items-center gap-2">
+				{#if selection.size > 0}
+					<span class="text-xs text-gray-500">{selection.size} selected</span>
+				{/if}
+				<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
+					<button
+						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+						onclick={() => (thumbSize = 'small')}
+					>
+						Small
+					</button>
+					<button
+						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+						onclick={() => (thumbSize = 'medium')}
+					>
+						Medium
+					</button>
+					<button
+						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+						onclick={() => (thumbSize = 'large')}
+					>
+						Large
+					</button>
+				</div>
 			</div>
 		</div>
 
@@ -153,7 +458,9 @@ function formatDate(dateStr: string): string {
 			<div
 				class="flex-1 overflow-y-auto p-4"
 				bind:this={scrollContainer}
-				onclick={() => (selectedEntry = null)}
+				onclick={() => selection.clear()}
+				ondrop={handleDrop}
+				ondragover={handleDragOver}
 			>
 				{#if loading}
 					<div class="flex h-full items-center justify-center">
@@ -175,58 +482,76 @@ function formatDate(dateStr: string): string {
 							<ThumbnailCard
 								{rootId}
 								{entry}
-								selected={selectedEntry?.path === entry.path}
-								onclick={() => handleSelect(entry)}
+								selected={selection.has(entry.path)}
+								cut={clipboard.isCut(rootId, entry.path)}
+								onclick={(e) => handleClick(entry, e)}
 								ondblclick={() => handleOpen(entry)}
+								oncontextmenu={(e) => handleContextMenu(e, entry)}
+								ondragstart={(e) => handleDragStartFromCard(e, entry)}
 							/>
 						{/each}
 					</div>
 				{/if}
 			</div>
 
-			<!-- Details Panel (always rendered to prevent grid reflow) -->
+			<!-- Details Panel -->
 			<div class="w-80 overflow-y-auto border-l border-gray-800 bg-gray-900 p-6 shadow-xl">
-				{#if selectedEntry}
+				{#if selectedEntries.length === 1}
+					{@const sel = selectedEntries[0]}
 					<div class="flex flex-col gap-6">
 						<div class="aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
-							{#if selectedEntry.hasThumb}
+							{#if sel.hasThumb}
 								<img
-									src={thumbnailUrl(rootId, selectedEntry.path)}
-									alt={selectedEntry.name}
+									src={thumbnailUrl(rootId, sel.path)}
+									alt={sel.name}
 									class="h-full w-full object-contain"
 								/>
 							{:else}
 								<div class="flex h-full items-center justify-center text-gray-700">
-									<FileIcon entry={selectedEntry} size={64} />
+									<FileIcon entry={sel} size={64} />
 								</div>
 							{/if}
 						</div>
 
 						<div class="space-y-4">
 							<div>
-								<h3 class="break-all text-lg font-semibold text-gray-100">{selectedEntry.name}</h3>
-								<p class="text-sm text-gray-400">{selectedEntry.mediaType}</p>
+								<h3 class="break-all text-lg font-semibold text-gray-100">{sel.name}</h3>
+								<p class="text-sm text-gray-400">{sel.mediaType}</p>
 							</div>
 
 							<div class="grid grid-cols-2 gap-y-4 text-sm">
 								<div class="text-gray-500">Size</div>
-								<div class="text-gray-300">{formatSize(selectedEntry.size)}</div>
+								<div class="text-gray-300">{formatSize(sel.size)}</div>
 
 								<div class="text-gray-500">Modified</div>
-								<div class="text-gray-300">{formatDate(selectedEntry.modTime)}</div>
+								<div class="text-gray-300">{formatDate(sel.modTime)}</div>
 
 								<div class="text-gray-500">Path</div>
-								<div class="break-all text-gray-300">{selectedEntry.path}</div>
+								<div class="break-all text-gray-300">{sel.path}</div>
 							</div>
 						</div>
 
 						<div class="mt-auto pt-6">
 							<button
 								class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-								onclick={() => handleOpen(selectedEntry!)}
+								onclick={() => handleOpen(sel)}
 							>
-								{selectedEntry.isDir ? 'Open Folder' : 'Open'}
+								{sel.isDir ? 'Open Folder' : 'Open'}
 							</button>
+						</div>
+					</div>
+				{:else if selectedEntries.length > 1}
+					<div class="flex flex-col gap-4">
+						<h3 class="text-lg font-semibold text-gray-100">{selectedEntries.length} items selected</h3>
+						<div class="grid grid-cols-2 gap-y-4 text-sm">
+							<div class="text-gray-500">Total size</div>
+							<div class="text-gray-300">{formatSize(selectedEntries.reduce((sum, e) => sum + e.size, 0))}</div>
+
+							<div class="text-gray-500">Files</div>
+							<div class="text-gray-300">{selectedEntries.filter((e) => !e.isDir).length}</div>
+
+							<div class="text-gray-500">Folders</div>
+							<div class="text-gray-300">{selectedEntries.filter((e) => e.isDir).length}</div>
 						</div>
 					</div>
 				{:else}
@@ -238,3 +563,23 @@ function formatDate(dateStr: string): string {
 		</div>
 	</div>
 {/if}
+
+{#if showDeleteConfirm}
+	<ConfirmDialog
+		title="Delete {selectedEntries.length} item(s)?"
+		items={selectedEntries.map((e) => e.name)}
+		onConfirm={handleDelete}
+		onCancel={() => (showDeleteConfirm = false)}
+	/>
+{/if}
+
+{#if contextMenu}
+	<ContextMenu
+		x={contextMenu.x}
+		y={contextMenu.y}
+		items={getContextMenuItems()}
+		onClose={() => (contextMenu = null)}
+	/>
+{/if}
+
+<Toast bind:this={toastComponent} />

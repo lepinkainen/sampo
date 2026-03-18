@@ -14,6 +14,9 @@ let selectedKey = $derived(
 	selectedRootId && selectedPath ? `${selectedRootId}:${selectedPath}` : null,
 );
 
+// Increment to force grid refresh after tree drop
+let refreshKey = $state(0);
+
 function updateUrl(
 	rootId: string | null,
 	path: string | null,
@@ -45,6 +48,10 @@ function handlePreviewChange(path: string | null) {
 		updateUrl(selectedRootId, selectedPath, path);
 	}
 }
+
+function handleRefresh() {
+	refreshKey++;
+}
 </script>
 
 <div class="flex h-screen bg-gray-950 text-gray-100">
@@ -54,20 +61,22 @@ function handlePreviewChange(path: string | null) {
 			<h1 class="text-sm font-semibold text-gray-300">File Manager</h1>
 		</div>
 		<div class="h-[calc(100vh-3rem)]">
-			<TreeView selectedPath={selectedKey} onSelect={handleSelect} />
+			<TreeView selectedPath={selectedKey} onSelect={handleSelect} onRefresh={handleRefresh} />
 		</div>
 	</div>
 
 	<!-- Content area -->
 	<div class="flex-1">
 		{#if selectedRootId && selectedPath != null}
-			<ThumbnailGrid
-				rootId={selectedRootId}
-				path={selectedPath}
-				previewFile={previewPath}
-				onNavigate={handleNavigate}
-				onPreviewChange={handlePreviewChange}
-			/>
+			{#key refreshKey}
+				<ThumbnailGrid
+					rootId={selectedRootId}
+					path={selectedPath}
+					previewFile={previewPath}
+					onNavigate={handleNavigate}
+					onPreviewChange={handlePreviewChange}
+				/>
+			{/key}
 		{:else}
 			<div class="flex h-full items-center justify-center">
 				<p class="text-gray-600">Select a directory to browse</p>
