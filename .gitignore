@@ -6,6 +6,7 @@
 *.dylib
 *.test
 *.out
+filemanager
 
 # Build artifacts
 build/
@@ -49,6 +50,7 @@ frontend/build/
 # Playwright
 test-results/
 frontend/test-results/
+.playwright-cli/
 
 # ONNX models
 models/*.onnx
