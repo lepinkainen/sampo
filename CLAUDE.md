@@ -19,6 +19,8 @@ task dev-logs       # Show background log file locations
 task dev-frontend   # SvelteKit dev server (port 5173, proxies API to :8080)
 task dev-go         # Go backend only (port 8080)
 task clean          # Remove build artifacts
+task download-model       # Download YOLOv8n and export to ONNX
+task download-clip-model  # Export CLIP ViT-B/32 to ONNX + pre-compute text embeddings
 ```
 
 Run a single Go test:
@@ -29,6 +31,18 @@ go test ./internal/filesystem/ -run TestResolvePath
 Frontend is in `frontend/` — uses pnpm:
 ```bash
 cd frontend && pnpm install && pnpm run build
+```
+
+Frontend linting uses Biome (not ESLint):
+```bash
+cd frontend && pnpm exec biome check .        # lint
+cd frontend && pnpm exec biome check --write . # lint + autofix
+```
+
+E2E tests use Playwright (`frontend/e2e/`). Requires dev servers running:
+```bash
+task dev-up
+cd frontend && pnpm exec playwright test
 ```
 
 ### Running during development
@@ -66,6 +80,14 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 - `frontend/src/lib/api.ts` wraps all fetch calls; `vite.config.ts` proxies `/api`, `/whoami`, `/health` to `:8080` in dev mode
 - Static adapter outputs to `frontend/build/` — no SSR, pure SPA
 
+### ML Pipeline (ONNX-based)
+
+Both detection and classification are optional — enabled via `config.yaml` `detection:` and `classification:` sections. Models live in `models/` (gitignored); download with `task download-model` / `task download-clip-model`.
+
+- **ONNX Runtime** (`internal/onnxenv/`): shared lazy init via `sync.Once`. Auto-detects library path per platform (Homebrew on ARM64 macOS, `/usr/lib` on Linux). Override with `ORT_LIB_PATH` env var. Uses CoreML execution provider on macOS
+- **Person detection** (`internal/detection/`): YOLOv8n model. Scanner for batch directory processing, SQLite-backed result cache
+- **Image classification** (`internal/classification/`): CLIP ViT-B/32 vision encoder. Text embeddings pre-computed at export time from `scripts/clip-labels.yaml` (18 labels: clothing, locations, etc.). Scanner + SQLite store. Classifies by cosine similarity against label embeddings
+
 ### API
 
 | Endpoint | Purpose |
@@ -77,6 +99,12 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 | `DELETE /api/files/{rootID}/*path` | Delete file or directory (`?recursive=true` for non-empty dirs) |
 | `POST /api/files/move` | Move/rename files (supports cross-root, smart dedup) |
 | `POST /api/files/copy` | Copy files (supports cross-root, smart dedup) |
+| `GET /api/detect/{rootID}/*path` | Run person detection on single image |
+| `POST /api/detect/scan` | Start background detection scan |
+| `GET /api/detect/status` | Poll detection scan progress |
+| `GET /api/classify/{rootID}/*path` | Classify single image (or get cached result) |
+| `POST /api/classify/scan` | Start background classification scan |
+| `GET /api/classify/status` | Poll classification scan progress |
 | `GET /whoami` | App version info |
 | `GET /health` | Health check |
 
@@ -86,4 +114,6 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 - Hidden files (dotfiles) are excluded from directory listings
 - `llm-shared/` is a git submodule — **do not edit**. Excluded from linting and testing
 - Thumbnail cache lives in `.cache/thumbs/{rootID}/` relative to working directory
+- ONNX Runtime library must be installed on the system; auto-detected per platform or override with `ORT_LIB_PATH`
+- ML results cached in SQLite databases under `.cache/`
 - Version injected via ldflags: `-X main.version=...`
