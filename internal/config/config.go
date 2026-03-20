@@ -12,6 +12,15 @@ type RootConfig struct {
 	Path string `mapstructure:"path"`
 }
 
+// DetectionConfig holds person detection settings.
+type DetectionConfig struct {
+	Enabled      bool    `mapstructure:"enabled"`
+	ModelPath    string  `mapstructure:"model_path"`
+	ModelVersion string  `mapstructure:"model_version"`
+	Threshold    float32 `mapstructure:"threshold"`
+	Workers      int     `mapstructure:"workers"`
+}
+
 // Config holds the application configuration.
 type Config struct {
 	Server struct {
@@ -20,7 +29,8 @@ type Config struct {
 	Cache struct {
 		Dir string `mapstructure:"dir"`
 	} `mapstructure:"cache"`
-	Roots []RootConfig `mapstructure:"roots"`
+	Roots     []RootConfig    `mapstructure:"roots"`
+	Detection DetectionConfig `mapstructure:"detection"`
 }
 
 // Load reads configuration from file and environment.
@@ -32,6 +42,11 @@ func Load() (*Config, error) {
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("cache.dir", ".cache")
+	viper.SetDefault("detection.enabled", false)
+	viper.SetDefault("detection.model_path", "models/yolov8n.onnx")
+	viper.SetDefault("detection.model_version", "v8n-1.0")
+	viper.SetDefault("detection.threshold", 0.5)
+	viper.SetDefault("detection.workers", 2)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

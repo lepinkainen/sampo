@@ -20,6 +20,12 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Delete("/api/files/{rootID}/*", h.DeleteFile)
 	s.router.Post("/api/files/move", h.MoveFiles)
 	s.router.Post("/api/files/copy", h.CopyFiles)
+	s.router.Post("/api/files/rename", h.RenameFile)
+
+	// Detection (returns 503 if not enabled)
+	s.router.Get("/api/detect/{rootID}/*", h.DetectFile)
+	s.router.Post("/api/detect/scan", h.StartScan)
+	s.router.Get("/api/detect/status", h.ScanStatus)
 
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))

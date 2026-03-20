@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/filemanager/internal/filesystem"
@@ -152,6 +154,51 @@ func (h *Handler) bulkOp(w http.ResponseWriter, r *http.Request, op string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(results); err != nil {
+		slog.Error("encoding response", "error", err)
+	}
+}
+
+type renameRequest struct {
+	RootID  string `json:"rootId"`
+	Path    string `json:"path"`
+	NewName string `json:"newName"`
+}
+
+// RenameFile handles POST /api/files/rename
+func (h *Handler) RenameFile(w http.ResponseWriter, r *http.Request) {
+	var req renameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.NewName == "" {
+		http.Error(w, "New name must not be empty", http.StatusBadRequest)
+		return
+	}
+	if strings.Contains(req.NewName, "/") || strings.Contains(req.NewName, "..") {
+		http.Error(w, "Invalid new name", http.StatusBadRequest)
+		return
+	}
+
+	srcFull, err := h.roots.ResolvePath(req.RootID, req.Path)
+	if err != nil {
+		h.logger.Error("resolving path", "error", err, "rootID", req.RootID, "path", req.Path)
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	dstFull := filepath.Join(filepath.Dir(srcFull), req.NewName)
+
+	if err := os.Rename(srcFull, dstFull); err != nil {
+		h.logger.Error("renaming file", "error", err, "src", srcFull, "dst", dstFull)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("renamed", "rootID", req.RootID, "from", req.Path, "to", req.NewName)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"newName": req.NewName}); err != nil {
 		slog.Error("encoding response", "error", err)
 	}
 }

@@ -37,6 +37,28 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enrich entries with detection data and optionally filter
+	if h.detectionStore != nil {
+		detections, err := h.detectionStore.GetDirDetections(rootID, relPath)
+		if err != nil {
+			h.logger.Error("getting dir detections", "error", err)
+		} else if len(detections) > 0 {
+			filter := r.URL.Query().Get("filter")
+			filtered := make([]filesystem.FileEntry, 0, len(entries))
+			for i := range entries {
+				if hasPerson, ok := detections[entries[i].Path]; ok {
+					if filter == "no-people" && hasPerson {
+						continue
+					}
+					v := hasPerson
+					entries[i].HasPerson = &v
+				}
+				filtered = append(filtered, entries[i])
+			}
+			entries = filtered
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		slog.Error("encoding directory response", "error", err)

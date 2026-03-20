@@ -17,6 +17,7 @@ type FileEntry struct {
 	ModTime   time.Time `json:"modTime"`
 	MediaType string    `json:"mediaType"`
 	HasThumb  bool      `json:"hasThumb"`
+	HasPerson *bool     `json:"hasPerson,omitempty"`
 }
 
 var imageExts = map[string]bool{
