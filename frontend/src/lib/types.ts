@@ -12,4 +12,5 @@ export interface FileEntry {
 	modTime: string;
 	mediaType: 'image' | 'video' | 'archive' | 'other';
 	hasThumb: boolean;
+	hasPerson?: boolean | null;
 }

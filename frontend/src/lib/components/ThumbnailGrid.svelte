@@ -4,8 +4,13 @@ import {
 	fetchDirectory,
 	moveFiles,
 	copyFiles,
+	renameFile,
 	thumbnailUrl,
+	startScan,
+	getScanStatus,
+	getDetection,
 } from '$lib/api';
+import type { ScanStatus, DetectionResult } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize, sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
@@ -14,6 +19,7 @@ import FileIcon from './FileIcon.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
+import RenameDialog from './RenameDialog.svelte';
 import ContextMenu from './ContextMenu.svelte';
 import Toast from './Toast.svelte';
 import {
@@ -22,6 +28,9 @@ import {
 	Copy,
 	ClipboardPaste,
 	FolderOpen,
+	Pencil,
+	UserX,
+	ScanSearch,
 } from '@lucide/svelte';
 
 interface Props {
@@ -51,8 +60,13 @@ const selection = createSelection();
 const clipboard = createClipboard();
 
 let showDeleteConfirm = $state(false);
+let showRenameDialog = $state(false);
 let contextMenu = $state<{ x: number; y: number } | null>(null);
 let toastComponent: Toast | undefined = $state();
+let filterPeople = $state(false);
+let scanStatus = $state<ScanStatus | null>(null);
+let scanPollTimer: ReturnType<typeof setInterval> | null = null;
+let detectionResult = $state<DetectionResult | null>(null);
 
 let mediaEntries = $derived(
 	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
@@ -82,6 +96,28 @@ $effect(() => {
 });
 
 $effect(() => {
+	return () => {
+		if (scanPollTimer) {
+			clearInterval(scanPollTimer);
+			scanPollTimer = null;
+		}
+	};
+});
+
+$effect(() => {
+	detectionResult = null;
+	if (
+		selectedEntries.length === 1 &&
+		selectedEntries[0].mediaType === 'image'
+	) {
+		const sel = selectedEntries[0];
+		getDetection(rootId, sel.path)
+			.then((r) => (detectionResult = r))
+			.catch(() => (detectionResult = null));
+	}
+});
+
+$effect(() => {
 	if (!previewFile && scrollContainer && savedScrollTop > 0) {
 		const scrollTarget = savedScrollTop;
 		requestAnimationFrame(() => {
@@ -98,7 +134,11 @@ async function loadDirectory(rid: string, p: string) {
 	loading = true;
 	error = null;
 	try {
-		const result = await fetchDirectory(rid, p);
+		const result = await fetchDirectory(
+			rid,
+			p,
+			filterPeople ? { filter: 'no-people' } : undefined,
+		);
 		entries = sortEntries(result);
 	} catch (e) {
 		error = e instanceof Error ? e.message : 'Failed to load directory';
@@ -138,7 +178,7 @@ function handleContextMenu(e: MouseEvent, entry: FileEntry) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-	if (showDeleteConfirm || previewFile) return;
+	if (showDeleteConfirm || showRenameDialog || previewFile) return;
 
 	const mod = e.metaKey || e.ctrlKey;
 
@@ -166,6 +206,11 @@ function handleKeydown(e: KeyboardEvent) {
 		if (clipboard.hasItems) {
 			e.preventDefault();
 			handlePaste();
+		}
+	} else if (e.key === 'F2') {
+		if (selection.size === 1) {
+			e.preventDefault();
+			showRenameDialog = true;
 		}
 	}
 }
@@ -222,6 +267,21 @@ async function handlePaste() {
 	} catch (e) {
 		toastComponent?.show(
 			e instanceof Error ? e.message : 'Paste failed',
+			'error',
+		);
+	}
+}
+
+async function handleRename(newName: string) {
+	showRenameDialog = false;
+	const entry = selectedEntries[0];
+	try {
+		await renameFile(rootId, entry.path, newName);
+		toastComponent?.show(`Renamed to "${newName}"`, 'success');
+		await loadDirectory(rootId, path);
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Rename failed',
 			'error',
 		);
 	}
@@ -295,6 +355,14 @@ function getContextMenuItems() {
 			disabled: selection.size !== 1,
 		},
 		{
+			label: 'Rename',
+			icon: Pencil,
+			action: () => {
+				showRenameDialog = true;
+			},
+			disabled: selection.size !== 1,
+		},
+		{
 			label: 'Cut',
 			icon: Scissors,
 			action: () => {
@@ -330,9 +398,49 @@ function getContextMenuItems() {
 	];
 }
 
+function toggleFilter() {
+	filterPeople = !filterPeople;
+	loadDirectory(rootId, path);
+}
+
+async function handleScan() {
+	try {
+		scanStatus = await startScan(rootId, path);
+		toastComponent?.show(`Scanning ${scanStatus.total} images...`, 'success');
+		startPollingScanStatus();
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Scan failed',
+			'error',
+		);
+	}
+}
+
+function startPollingScanStatus() {
+	if (scanPollTimer) clearInterval(scanPollTimer);
+	scanPollTimer = setInterval(async () => {
+		try {
+			scanStatus = await getScanStatus();
+			if (!scanStatus.running) {
+				if (scanPollTimer) clearInterval(scanPollTimer);
+				scanPollTimer = null;
+				toastComponent?.show(
+					`Scan complete: ${scanStatus.completed} images processed`,
+					'success',
+				);
+				// Reload to reflect new detection badges (and filter if active)
+				loadDirectory(rootId, path);
+			}
+		} catch {
+			if (scanPollTimer) clearInterval(scanPollTimer);
+			scanPollTimer = null;
+		}
+	}, 1000);
+}
+
 function formatDate(dateStr: string): string {
 	try {
-		return new Date(dateStr).toLocaleString();
+		return new Date(dateStr).toISOString().replace('T', ' ').slice(0, 19);
 	} catch {
 		return dateStr;
 	}
@@ -415,6 +523,14 @@ function formatDate(dateStr: string): string {
 						<ClipboardPaste size={16} />
 					</button>
 					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Rename (F2)"
+						disabled={selection.size !== 1}
+						onclick={() => (showRenameDialog = true)}
+					>
+						<Pencil size={16} />
+					</button>
+					<button
 						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
 						title="Delete"
 						disabled={selection.size === 0}
@@ -422,10 +538,33 @@ function formatDate(dateStr: string): string {
 					>
 						<Trash2 size={16} />
 					</button>
+
+					<div class="mx-1 h-4 w-px bg-gray-700"></div>
+
+					<button
+						class="rounded p-1.5 transition-colors {filterPeople ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}"
+						title="Hide images with people"
+						onclick={toggleFilter}
+					>
+						<UserX size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Scan for people"
+						disabled={scanStatus?.running === true}
+						onclick={handleScan}
+					>
+						<ScanSearch size={16} />
+					</button>
 				</div>
 			</div>
 
 			<div class="flex items-center gap-2">
+				{#if scanStatus?.running}
+					<span class="text-xs text-blue-400">
+						Scanning {scanStatus.completed}/{scanStatus.total}
+					</span>
+				{/if}
 				{#if selection.size > 0}
 					<span class="text-xs text-gray-500">{selection.size} selected</span>
 				{/if}
@@ -528,6 +667,17 @@ function formatDate(dateStr: string): string {
 
 								<div class="text-gray-500">Path</div>
 								<div class="break-all text-gray-300">{sel.path}</div>
+
+								{#if detectionResult}
+									<div class="text-gray-500">Person</div>
+									<div class="text-gray-300">
+										{#if detectionResult.hasPerson}
+											<span class="text-red-400">Yes ({(detectionResult.confidence * 100).toFixed(0)}%)</span>
+										{:else}
+											<span class="text-green-400">No</span>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						</div>
 
@@ -579,6 +729,14 @@ function formatDate(dateStr: string): string {
 		y={contextMenu.y}
 		items={getContextMenuItems()}
 		onClose={() => (contextMenu = null)}
+	/>
+{/if}
+
+{#if showRenameDialog && selectedEntries.length === 1}
+	<RenameDialog
+		currentName={selectedEntries[0].name}
+		onConfirm={handleRename}
+		onCancel={() => (showRenameDialog = false)}
 	/>
 {/if}
 

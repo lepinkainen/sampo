@@ -15,8 +15,11 @@ export async function fetchRoots(): Promise<Root[]> {
 export async function fetchDirectory(
 	rootId: string,
 	path: string,
+	options?: { filter?: string },
 ): Promise<FileEntry[]> {
-	const res = await fetch(`${BASE}/api/tree/${rootId}/${encodePath(path)}`);
+	let url = `${BASE}/api/tree/${rootId}/${encodePath(path)}`;
+	if (options?.filter) url += `?filter=${encodeURIComponent(options.filter)}`;
+	const res = await fetch(url);
 	if (!res.ok) throw new Error(`Failed to fetch directory: ${res.statusText}`);
 	return res.json();
 }
@@ -79,6 +82,23 @@ export async function moveFiles(req: BulkRequest): Promise<ItemResult[]> {
 	return res.json();
 }
 
+export async function renameFile(
+	rootId: string,
+	path: string,
+	newName: string,
+): Promise<{ newName: string }> {
+	const res = await fetch(`${BASE}/api/files/rename`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path, newName }),
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(text || res.statusText);
+	}
+	return res.json();
+}
+
 export async function copyFiles(req: BulkRequest): Promise<ItemResult[]> {
 	const res = await fetch(`${BASE}/api/files/copy`, {
 		method: 'POST',
@@ -88,5 +108,53 @@ export async function copyFiles(req: BulkRequest): Promise<ItemResult[]> {
 	if (!res.ok && res.status !== 207) {
 		throw new Error(`Copy failed: ${res.statusText}`);
 	}
+	return res.json();
+}
+
+// Detection API
+
+export interface DetectionResult {
+	rootId: string;
+	relPath: string;
+	hasPerson: boolean;
+	confidence: number;
+	modelVer: string;
+	scannedAt: string;
+}
+
+export interface ScanStatus {
+	running: boolean;
+	rootId?: string;
+	path?: string;
+	total: number;
+	completed: number;
+	errors: number;
+}
+
+export async function getDetection(
+	rootId: string,
+	path: string,
+): Promise<DetectionResult> {
+	const res = await fetch(`${BASE}/api/detect/${rootId}/${encodePath(path)}`);
+	if (!res.ok) throw new Error(`Detection failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function startScan(
+	rootId: string,
+	path: string,
+): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/detect/scan`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path }),
+	});
+	if (!res.ok) throw new Error(`Scan failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function getScanStatus(): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/detect/status`);
+	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
 	return res.json();
 }

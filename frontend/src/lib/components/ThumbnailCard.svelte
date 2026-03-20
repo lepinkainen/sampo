@@ -3,6 +3,7 @@ import { thumbnailUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
+import { User } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -53,7 +54,7 @@ let imgError = $state(false);
 			}
 		: undefined}
 >
-	<div class="flex aspect-square items-center justify-center bg-gray-900">
+	<div class="relative flex aspect-square items-center justify-center bg-gray-900">
 		{#if entry.hasThumb && !imgError}
 			<img
 				src={thumbnailUrl(rootId, entry.path)}
@@ -65,6 +66,11 @@ let imgError = $state(false);
 		{:else}
 			<span class="text-gray-500">
 				<FileIcon {entry} size={48} />
+			</span>
+		{/if}
+		{#if entry.hasPerson === true}
+			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
+				<User size={14} />
 			</span>
 		{/if}
 	</div>
