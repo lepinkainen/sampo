@@ -107,6 +107,9 @@ Both detection and classification are optional — enabled via `config.yaml` `de
 | `GET /api/classify/{rootID}/*path` | Classify single image (or get cached result) |
 | `POST /api/classify/scan` | Start background classification scan |
 | `GET /api/classify/status` | Poll classification scan progress |
+| `GET /api/search/{rootID}?q=<query>&path=<scope>` | Search files by name and classification tags |
+| `GET /api/usage/{rootID}/*path` | Disk usage stats (total size, file/dir counts) |
+| `GET /api/duplicates/{rootID}/*path` | Find duplicate files by SHA256 checksum |
 | `GET /whoami` | App version info |
 | `GET /health` | Health check |
 
