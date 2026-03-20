@@ -27,6 +27,11 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Post("/api/detect/scan", h.StartScan)
 	s.router.Get("/api/detect/status", h.ScanStatus)
 
+	// Classification (returns 503 if not enabled)
+	s.router.Get("/api/classify/{rootID}/*", h.ClassifyFile)
+	s.router.Post("/api/classify/scan", h.StartClassifyScan)
+	s.router.Get("/api/classify/status", h.ClassifyScanStatus)
+
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))
 	s.router.Handle("/*", spaHandler(frontendFS, fileServer))

@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 
+	"github.com/lepinkainen/filemanager/internal/classification"
 	"github.com/lepinkainen/filemanager/internal/detection"
 	"github.com/lepinkainen/filemanager/internal/filesystem"
 	"github.com/lepinkainen/filemanager/internal/thumbnail"
@@ -16,6 +17,9 @@ type Handler struct {
 	detectionStore *detection.Store
 	detector       *detection.Detector
 	scanner        *detection.Scanner
+	classStore     *classification.Store
+	classifier     *classification.Classifier
+	classScanner   *classification.Scanner
 }
 
 // New creates a new Handler.
@@ -32,4 +36,11 @@ func (h *Handler) SetDetection(store *detection.Store, detector *detection.Detec
 	h.detectionStore = store
 	h.detector = detector
 	h.scanner = scanner
+}
+
+// SetClassification configures optional classification components.
+func (h *Handler) SetClassification(store *classification.Store, classifier *classification.Classifier, scanner *classification.Scanner) {
+	h.classStore = store
+	h.classifier = classifier
+	h.classScanner = scanner
 }

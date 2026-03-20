@@ -21,6 +21,16 @@ type DetectionConfig struct {
 	Workers      int     `mapstructure:"workers"`
 }
 
+// ClassificationConfig holds CLIP classification settings.
+type ClassificationConfig struct {
+	Enabled      bool    `mapstructure:"enabled"`
+	ModelPath    string  `mapstructure:"model_path"`
+	LabelsPath   string  `mapstructure:"labels_path"`
+	ModelVersion string  `mapstructure:"model_version"`
+	Threshold    float32 `mapstructure:"threshold"`
+	Workers      int     `mapstructure:"workers"`
+}
+
 // Config holds the application configuration.
 type Config struct {
 	Server struct {
@@ -29,8 +39,9 @@ type Config struct {
 	Cache struct {
 		Dir string `mapstructure:"dir"`
 	} `mapstructure:"cache"`
-	Roots     []RootConfig    `mapstructure:"roots"`
-	Detection DetectionConfig `mapstructure:"detection"`
+	Roots          []RootConfig         `mapstructure:"roots"`
+	Detection      DetectionConfig      `mapstructure:"detection"`
+	Classification ClassificationConfig `mapstructure:"classification"`
 }
 
 // Load reads configuration from file and environment.
@@ -47,6 +58,12 @@ func Load() (*Config, error) {
 	viper.SetDefault("detection.model_version", "v8n-1.0")
 	viper.SetDefault("detection.threshold", 0.5)
 	viper.SetDefault("detection.workers", 2)
+	viper.SetDefault("classification.enabled", false)
+	viper.SetDefault("classification.model_path", "models/clip-vit-b32-image.onnx")
+	viper.SetDefault("classification.labels_path", "models/clip-labels.json")
+	viper.SetDefault("classification.model_version", "clip-vit-b32-1.0")
+	viper.SetDefault("classification.threshold", 0.2)
+	viper.SetDefault("classification.workers", 2)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

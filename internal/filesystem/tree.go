@@ -7,17 +7,24 @@ import (
 	"time"
 )
 
+// TagScore holds a classification tag and its confidence score.
+type TagScore struct {
+	Label string  `json:"label"`
+	Score float32 `json:"score"`
+}
+
 // FileEntry represents a file or directory in a listing.
 type FileEntry struct {
-	Name      string    `json:"name"`
-	Path      string    `json:"path"`
-	IsDir     bool      `json:"isDir"`
-	IsZip     bool      `json:"isZip"`
-	Size      int64     `json:"size"`
-	ModTime   time.Time `json:"modTime"`
-	MediaType string    `json:"mediaType"`
-	HasThumb  bool      `json:"hasThumb"`
-	HasPerson *bool     `json:"hasPerson,omitempty"`
+	Name      string     `json:"name"`
+	Path      string     `json:"path"`
+	IsDir     bool       `json:"isDir"`
+	IsZip     bool       `json:"isZip"`
+	Size      int64      `json:"size"`
+	ModTime   time.Time  `json:"modTime"`
+	MediaType string     `json:"mediaType"`
+	HasThumb  bool       `json:"hasThumb"`
+	HasPerson *bool      `json:"hasPerson,omitempty"`
+	Tags      []TagScore `json:"tags,omitempty"`
 }
 
 var imageExts = map[string]bool{
