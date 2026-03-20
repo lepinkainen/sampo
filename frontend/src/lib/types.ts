@@ -3,6 +3,11 @@ export interface Root {
 	name: string;
 }
 
+export interface TagScore {
+	label: string;
+	score: number;
+}
+
 export interface FileEntry {
 	name: string;
 	path: string;
@@ -13,4 +18,5 @@ export interface FileEntry {
 	mediaType: 'image' | 'video' | 'archive' | 'other';
 	hasThumb: boolean;
 	hasPerson?: boolean | null;
+	tags?: TagScore[] | null;
 }

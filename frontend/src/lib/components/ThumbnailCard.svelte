@@ -68,6 +68,15 @@ let imgError = $state(false);
 				<FileIcon {entry} size={48} />
 			</span>
 		{/if}
+		{#if entry.tags && entry.tags.length > 0}
+			<div class="absolute bottom-1 left-1 flex flex-wrap gap-0.5">
+				{#each entry.tags.slice(0, 3) as tag}
+					<span class="rounded bg-purple-600/80 px-1 py-0.5 text-[10px] font-medium leading-none text-white">
+						{tag.label}
+					</span>
+				{/each}
+			</div>
+		{/if}
 		{#if entry.hasPerson === true}
 			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
 				<User size={14} />

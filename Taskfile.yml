@@ -148,6 +148,15 @@ tasks:
     status:
       - test -f models/yolov8n.onnx
 
+  download-clip-model:
+    desc: Export CLIP ViT-B/32 image encoder to ONNX and pre-compute text embeddings
+    cmds:
+      - mkdir -p models
+      - uv run --with transformers --with torch --with "onnx>=1.12.0,<2.0.0" --with onnxruntime --with onnxscript --with pyyaml --with pillow python scripts/export-clip.py
+    status:
+      - test -f models/clip-vit-b32-image.onnx
+      - test -f models/clip-labels.json
+
   docker-build:
     desc: Build Docker image
     cmds:

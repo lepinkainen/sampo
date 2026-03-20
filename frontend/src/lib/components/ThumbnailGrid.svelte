@@ -9,8 +9,15 @@ import {
 	startScan,
 	getScanStatus,
 	getDetection,
+	startClassifyScan,
+	getClassifyScanStatus,
+	getClassification,
 } from '$lib/api';
-import type { ScanStatus, DetectionResult } from '$lib/api';
+import type {
+	ScanStatus,
+	DetectionResult,
+	ClassificationResult,
+} from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize, sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
@@ -31,6 +38,8 @@ import {
 	Pencil,
 	UserX,
 	ScanSearch,
+	Sparkles,
+	Tag,
 } from '@lucide/svelte';
 
 interface Props {
@@ -64,9 +73,24 @@ let showRenameDialog = $state(false);
 let contextMenu = $state<{ x: number; y: number } | null>(null);
 let toastComponent: Toast | undefined = $state();
 let filterPeople = $state(false);
+let filterTag = $state<string>('');
 let scanStatus = $state<ScanStatus | null>(null);
 let scanPollTimer: ReturnType<typeof setInterval> | null = null;
 let detectionResult = $state<DetectionResult | null>(null);
+let classifyScanStatus = $state<ScanStatus | null>(null);
+let classifyPollTimer: ReturnType<typeof setInterval> | null = null;
+let classificationResult = $state<ClassificationResult | null>(null);
+let availableTags = $derived.by(() => {
+	const tagSet = new Set<string>();
+	for (const e of entries) {
+		if (e.tags) {
+			for (const t of e.tags) {
+				tagSet.add(t.label);
+			}
+		}
+	}
+	return Array.from(tagSet).sort();
+});
 
 let mediaEntries = $derived(
 	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
@@ -101,11 +125,16 @@ $effect(() => {
 			clearInterval(scanPollTimer);
 			scanPollTimer = null;
 		}
+		if (classifyPollTimer) {
+			clearInterval(classifyPollTimer);
+			classifyPollTimer = null;
+		}
 	};
 });
 
 $effect(() => {
 	detectionResult = null;
+	classificationResult = null;
 	if (
 		selectedEntries.length === 1 &&
 		selectedEntries[0].mediaType === 'image'
@@ -114,6 +143,9 @@ $effect(() => {
 		getDetection(rootId, sel.path)
 			.then((r) => (detectionResult = r))
 			.catch(() => (detectionResult = null));
+		getClassification(rootId, sel.path)
+			.then((r) => (classificationResult = r))
+			.catch(() => (classificationResult = null));
 	}
 });
 
@@ -134,10 +166,13 @@ async function loadDirectory(rid: string, p: string) {
 	loading = true;
 	error = null;
 	try {
+		const opts: { filter?: string; tag?: string } = {};
+		if (filterPeople) opts.filter = 'no-people';
+		if (filterTag) opts.tag = filterTag;
 		const result = await fetchDirectory(
 			rid,
 			p,
-			filterPeople ? { filter: 'no-people' } : undefined,
+			Object.keys(opts).length > 0 ? opts : undefined,
 		);
 		entries = sortEntries(result);
 	} catch (e) {
@@ -438,6 +473,49 @@ function startPollingScanStatus() {
 	}, 1000);
 }
 
+async function handleClassifyScan() {
+	try {
+		classifyScanStatus = await startClassifyScan(rootId, path);
+		toastComponent?.show(
+			`Classifying ${classifyScanStatus.total} images...`,
+			'success',
+		);
+		startPollingClassifyStatus();
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Classification scan failed',
+			'error',
+		);
+	}
+}
+
+function startPollingClassifyStatus() {
+	if (classifyPollTimer) clearInterval(classifyPollTimer);
+	classifyPollTimer = setInterval(async () => {
+		try {
+			classifyScanStatus = await getClassifyScanStatus();
+			if (!classifyScanStatus.running) {
+				if (classifyPollTimer) clearInterval(classifyPollTimer);
+				classifyPollTimer = null;
+				toastComponent?.show(
+					`Classification complete: ${classifyScanStatus.completed} images processed`,
+					'success',
+				);
+				loadDirectory(rootId, path);
+			}
+		} catch {
+			if (classifyPollTimer) clearInterval(classifyPollTimer);
+			classifyPollTimer = null;
+		}
+	}, 1000);
+}
+
+function handleTagFilter(e: Event) {
+	const target = e.target as HTMLSelectElement;
+	filterTag = target.value;
+	loadDirectory(rootId, path);
+}
+
 function formatDate(dateStr: string): string {
 	try {
 		return new Date(dateStr).toISOString().replace('T', ' ').slice(0, 19);
@@ -556,6 +634,32 @@ function formatDate(dateStr: string): string {
 					>
 						<ScanSearch size={16} />
 					</button>
+
+					<div class="mx-1 h-4 w-px bg-gray-700"></div>
+
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Classify images (CLIP)"
+						disabled={classifyScanStatus?.running === true}
+						onclick={handleClassifyScan}
+					>
+						<Sparkles size={16} />
+					</button>
+					{#if availableTags.length > 0}
+						<div class="relative flex items-center">
+							<Tag size={14} class="absolute left-1.5 text-gray-500 pointer-events-none" />
+							<select
+								class="appearance-none rounded bg-gray-800 py-1 pl-6 pr-6 text-xs text-gray-300 border border-gray-700 focus:border-blue-500 focus:outline-none"
+								value={filterTag}
+								onchange={handleTagFilter}
+							>
+								<option value="">All tags</option>
+								{#each availableTags as tag}
+									<option value={tag}>{tag}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 				</div>
 			</div>
 
@@ -563,6 +667,11 @@ function formatDate(dateStr: string): string {
 				{#if scanStatus?.running}
 					<span class="text-xs text-blue-400">
 						Scanning {scanStatus.completed}/{scanStatus.total}
+					</span>
+				{/if}
+				{#if classifyScanStatus?.running}
+					<span class="text-xs text-purple-400">
+						Classifying {classifyScanStatus.completed}/{classifyScanStatus.total}
 					</span>
 				{/if}
 				{#if selection.size > 0}
@@ -676,6 +785,19 @@ function formatDate(dateStr: string): string {
 										{:else}
 											<span class="text-green-400">No</span>
 										{/if}
+									</div>
+								{/if}
+
+								{#if classificationResult?.tags && classificationResult.tags.length > 0}
+									<div class="col-span-2 border-t border-gray-800 pt-2">
+										<div class="text-gray-500 mb-1">Tags</div>
+										<div class="flex flex-wrap gap-1">
+											{#each classificationResult.tags as tag}
+												<span class="rounded bg-purple-600/80 px-1.5 py-0.5 text-xs text-white" title={`${(tag.score * 100).toFixed(0)}%`}>
+													{tag.label} <span class="text-purple-300">{(tag.score * 100).toFixed(0)}%</span>
+												</span>
+											{/each}
+										</div>
 									</div>
 								{/if}
 							</div>

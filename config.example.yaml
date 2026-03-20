@@ -15,3 +15,13 @@ detection:
   model_version: "v8n-1.0"
   threshold: 0.5
   workers: 2
+
+# CLIP image classification (opt-in, requires ONNX Runtime installed)
+# Run `task download-clip-model` to export model and label embeddings
+classification:
+  enabled: false
+  model_path: "models/clip-vit-b32-image.onnx"
+  labels_path: "models/clip-labels.json"
+  model_version: "clip-vit-b32-1.0"
+  threshold: 0.2
+  workers: 2

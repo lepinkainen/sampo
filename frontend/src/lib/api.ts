@@ -1,4 +1,4 @@
-import type { FileEntry, Root } from './types';
+import type { FileEntry, Root, TagScore } from './types';
 
 const BASE = '';
 
@@ -15,10 +15,14 @@ export async function fetchRoots(): Promise<Root[]> {
 export async function fetchDirectory(
 	rootId: string,
 	path: string,
-	options?: { filter?: string },
+	options?: { filter?: string; tag?: string },
 ): Promise<FileEntry[]> {
 	let url = `${BASE}/api/tree/${rootId}/${encodePath(path)}`;
-	if (options?.filter) url += `?filter=${encodeURIComponent(options.filter)}`;
+	const params = new URLSearchParams();
+	if (options?.filter) params.set('filter', options.filter);
+	if (options?.tag) params.set('tag', options.tag);
+	const qs = params.toString();
+	if (qs) url += `?${qs}`;
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`Failed to fetch directory: ${res.statusText}`);
 	return res.json();
@@ -155,6 +159,44 @@ export async function startScan(
 
 export async function getScanStatus(): Promise<ScanStatus> {
 	const res = await fetch(`${BASE}/api/detect/status`);
+	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
+	return res.json();
+}
+
+// Classification API
+
+export interface ClassificationResult {
+	rootId: string;
+	relPath: string;
+	tags: TagScore[];
+	modelVer: string;
+	scannedAt: string;
+}
+
+export async function getClassification(
+	rootId: string,
+	path: string,
+): Promise<ClassificationResult> {
+	const res = await fetch(`${BASE}/api/classify/${rootId}/${encodePath(path)}`);
+	if (!res.ok) throw new Error(`Classification failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function startClassifyScan(
+	rootId: string,
+	path: string,
+): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/classify/scan`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path }),
+	});
+	if (!res.ok) throw new Error(`Classification scan failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function getClassifyScanStatus(): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/classify/status`);
 	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
 	return res.json();
 }
