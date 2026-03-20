@@ -14,3 +14,11 @@ export function sortEntries(entries: FileEntry[]): FileEntry[] {
 		return a.name.localeCompare(b.name);
 	});
 }
+
+export function formatDate(dateStr: string): string {
+	try {
+		return new Date(dateStr).toISOString().replace('T', ' ').slice(0, 19);
+	} catch {
+		return dateStr;
+	}
+}

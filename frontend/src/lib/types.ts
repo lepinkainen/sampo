@@ -19,4 +19,22 @@ export interface FileEntry {
 	hasThumb: boolean;
 	hasPerson?: boolean | null;
 	tags?: TagScore[] | null;
+	sha256?: string | null;
+	crc32?: string | null;
+}
+
+export interface DuplicateFile {
+	rootId: string;
+	path: string;
+}
+
+export interface DuplicateGroup {
+	hash: string;
+	hashType: string;
+	size: number;
+	files: DuplicateFile[];
+}
+
+export interface DuplicatesResponse {
+	groups: DuplicateGroup[];
 }

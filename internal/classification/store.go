@@ -40,6 +40,8 @@ func migrate(db *sql.DB) error {
 			size       INTEGER NOT NULL,
 			model_ver  TEXT NOT NULL,
 			scanned_at DATETIME NOT NULL,
+			sha256     TEXT,
+			crc32      TEXT,
 			PRIMARY KEY (root_id, rel_path)
 		);
 		CREATE TABLE IF NOT EXISTS tags (
@@ -56,6 +58,12 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("migrating classification db: %w", err)
 	}
+
+	// Migration: add sha256 and crc32 columns if they don't exist
+	for _, col := range []string{"sha256", "crc32"} {
+		_, _ = db.Exec("ALTER TABLE classifications ADD COLUMN " + col + " TEXT")
+	}
+
 	return nil
 }
 
@@ -77,9 +85,10 @@ func (s *Store) Put(result *Result) error {
 	}
 
 	_, err = tx.Exec(
-		`INSERT OR REPLACE INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		result.RootID, result.RelPath, result.Mtime, result.Size, result.ModelVer, result.ScannedAt,
+		nullString(result.SHA256), nullString(result.CRC32),
 	)
 	if err != nil {
 		return fmt.Errorf("upserting classification: %w", err)
@@ -98,22 +107,33 @@ func (s *Store) Put(result *Result) error {
 	return tx.Commit()
 }
 
+// nullString converts an empty string to nil for nullable TEXT columns.
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // Get retrieves a classification result with tags for a single file.
 func (s *Store) Get(rootID, relPath string) (*Result, error) {
 	row := s.db.QueryRow(
-		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at
+		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32
 		 FROM classifications WHERE root_id = ? AND rel_path = ?`,
 		rootID, relPath,
 	)
 
 	var r Result
-	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.ModelVer, &r.ScannedAt)
+	var sha256Val, crc32Val sql.NullString
+	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.ModelVer, &r.ScannedAt, &sha256Val, &crc32Val)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying classification: %w", err)
 	}
+	r.SHA256 = sha256Val.String
+	r.CRC32 = crc32Val.String
 
 	tags, err := s.getTags(rootID, relPath)
 	if err != nil {
@@ -231,6 +251,38 @@ func (s *Store) FilterByTag(rootID, dirPath, label string, minScore float32) (ma
 	return result, rows.Err()
 }
 
+// SearchByTag returns rel paths where any tag label contains the query substring,
+// scoped to files under dirPath.
+func (s *Store) SearchByTag(rootID, dirPath, query string) ([]string, error) {
+	prefix := dirPrefix(dirPath)
+	pattern := "%" + query + "%"
+
+	rows, err := s.db.Query(
+		`SELECT DISTINCT t.rel_path FROM tags t
+		 WHERE t.root_id = ? AND t.rel_path LIKE ? AND LOWER(t.label) LIKE ?`,
+		rootID, prefix+"%", pattern,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("searching by tag: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var paths []string
+	for rows.Next() {
+		var relPath string
+		if err := rows.Scan(&relPath); err != nil {
+			return nil, err
+		}
+		paths = append(paths, relPath)
+	}
+	return paths, rows.Err()
+}
+
+// GetFileTags returns tags for a single file (by exact rel_path).
+func (s *Store) GetFileTags(rootID, relPath string) ([]TagScore, error) {
+	return s.getTags(rootID, relPath)
+}
+
 // ScannedAt returns the scan time for a file, or zero if not scanned.
 func (s *Store) ScannedAt(rootID, relPath string) time.Time {
 	var t time.Time
@@ -239,6 +291,102 @@ func (s *Store) ScannedAt(rootID, relPath string) time.Time {
 		rootID, relPath,
 	).Scan(&t)
 	return t
+}
+
+// ChecksumInfo holds hash information for a file.
+type ChecksumInfo struct {
+	SHA256 string `json:"sha256,omitempty"`
+	CRC32  string `json:"crc32,omitempty"`
+}
+
+// GetDirChecksums returns a map of relPath -> ChecksumInfo for scanned files under dirPath.
+func (s *Store) GetDirChecksums(rootID, dirPath string) (map[string]ChecksumInfo, error) {
+	prefix := dirPrefix(dirPath)
+
+	rows, err := s.db.Query(
+		`SELECT rel_path, sha256, crc32 FROM classifications
+		 WHERE root_id = ? AND rel_path LIKE ? AND (sha256 IS NOT NULL OR crc32 IS NOT NULL)`,
+		rootID, prefix+"%",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("getting dir checksums: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string]ChecksumInfo)
+	for rows.Next() {
+		var relPath string
+		var sha256Val, crc32Val sql.NullString
+		if err := rows.Scan(&relPath, &sha256Val, &crc32Val); err != nil {
+			return nil, err
+		}
+		if isDirectChild(relPath, prefix) {
+			result[relPath] = ChecksumInfo{SHA256: sha256Val.String, CRC32: crc32Val.String}
+		}
+	}
+	return result, rows.Err()
+}
+
+// DuplicateGroup holds a group of files with matching hashes.
+type DuplicateGroup struct {
+	Hash     string    `json:"hash"`
+	HashType string    `json:"hashType"`
+	Size     int64     `json:"size"`
+	Files    []DupFile `json:"files"`
+}
+
+// DupFile identifies a file in a duplicate group.
+type DupFile struct {
+	RootID string `json:"rootId"`
+	Path   string `json:"path"`
+}
+
+// FindDuplicates finds files with matching SHA256 under a directory.
+func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error) {
+	prefix := dirPrefix(dirPath)
+
+	rows, err := s.db.Query(
+		`SELECT c1.sha256, c1.size, c1.rel_path
+		 FROM classifications c1
+		 WHERE c1.root_id = ? AND c1.rel_path LIKE ? AND c1.sha256 IS NOT NULL
+		   AND c1.sha256 IN (
+		     SELECT sha256 FROM classifications
+		     WHERE root_id = ? AND rel_path LIKE ? AND sha256 IS NOT NULL
+		     GROUP BY sha256 HAVING COUNT(*) > 1
+		   )
+		 ORDER BY c1.sha256`,
+		rootID, prefix+"%", rootID, prefix+"%",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding duplicates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	groups := make(map[string]*DuplicateGroup)
+	var order []string
+	for rows.Next() {
+		var hash, relPath string
+		var size int64
+		if err := rows.Scan(&hash, &size, &relPath); err != nil {
+			return nil, err
+		}
+		g, ok := groups[hash]
+		if !ok {
+			g = &DuplicateGroup{Hash: hash, HashType: "sha256", Size: size}
+			groups[hash] = g
+			order = append(order, hash)
+		}
+		g.Files = append(g.Files, DupFile{RootID: rootID, Path: relPath})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]DuplicateGroup, 0, len(order))
+	for _, hash := range order {
+		result = append(result, *groups[hash])
+	}
+	return result, nil
 }
 
 // Close closes the database.

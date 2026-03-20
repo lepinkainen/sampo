@@ -1,13 +1,18 @@
 package classification
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"image"
+	"io"
 	"log/slog"
 	"math"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +57,8 @@ type Result struct {
 	ModelVer  string     `json:"modelVer"`
 	ScannedAt time.Time  `json:"scannedAt"`
 	Tags      []TagScore `json:"tags"`
+	SHA256    string     `json:"sha256,omitempty"`
+	CRC32     string     `json:"crc32,omitempty"`
 }
 
 // Classifier runs CLIP image classification using ONNX Runtime.
@@ -134,8 +141,35 @@ func NewClassifier(modelPath, labelsPath string, threshold float32, modelVer str
 	}, nil
 }
 
+// computeFileHashes computes SHA256 and CRC32 for a file.
+func computeFileHashes(path string) (sha256Hex, crc32Hex string, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", err
+	}
+	defer func() { _ = f.Close() }()
+
+	sha256Hash := sha256.New()
+	crc32Hash := crc32.NewIEEE()
+	w := io.MultiWriter(sha256Hash, crc32Hash)
+
+	if _, err := io.Copy(w, f); err != nil {
+		return "", "", err
+	}
+
+	return hex.EncodeToString(sha256Hash.Sum(nil)),
+		strings.ToUpper(fmt.Sprintf("%08X", crc32Hash.Sum32())),
+		nil
+}
+
 // Classify runs CLIP classification on an image file and returns tags above threshold.
 func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, size int64) (*Result, error) {
+	// Compute hashes before locking (IO-bound, doesn't need ONNX mutex)
+	sha256Hex, crc32Hex, hashErr := computeFileHashes(imagePath)
+	if hashErr != nil {
+		c.logger.Warn("failed to compute file hashes", "path", imagePath, "error", hashErr)
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -177,6 +211,8 @@ func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, s
 		ModelVer:  c.modelVer,
 		ScannedAt: time.Now(),
 		Tags:      tags,
+		SHA256:    sha256Hex,
+		CRC32:     crc32Hex,
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package filesystem
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -25,6 +26,24 @@ type FileEntry struct {
 	HasThumb  bool       `json:"hasThumb"`
 	HasPerson *bool      `json:"hasPerson,omitempty"`
 	Tags      []TagScore `json:"tags,omitempty"`
+	SHA256    *string    `json:"sha256,omitempty"`
+	CRC32     *string    `json:"crc32,omitempty"`
+}
+
+// videotaggerCRC32Re matches the CRC32 bracket group in videotagger-style filenames.
+// Pattern: name_[resolution][duration][CRC32_HEX].ext
+var videotaggerCRC32Re = regexp.MustCompile(`\[[A-Fa-f0-9]{8}\]`)
+
+// ParseCRC32FromFilename extracts CRC32 from videotagger-style filenames.
+// Returns empty string if not found.
+func ParseCRC32FromFilename(name string) string {
+	matches := videotaggerCRC32Re.FindAllString(name, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	// Take the last match (CRC32 is typically the last bracket group)
+	last := matches[len(matches)-1]
+	return strings.ToUpper(last[1 : len(last)-1])
 }
 
 var imageExts = map[string]bool{
@@ -90,6 +109,12 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			ModTime:   info.ModTime(),
 			MediaType: mediaType,
 			HasThumb:  mediaType == "image" || mediaType == "video",
+		}
+		// Parse CRC32 from videotagger-style filenames for videos
+		if mediaType == "video" {
+			if crc := ParseCRC32FromFilename(e.Name()); crc != "" {
+				entry.CRC32 = &crc
+			}
 		}
 		result = append(result, entry)
 	}

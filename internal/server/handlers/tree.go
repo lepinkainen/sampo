@@ -96,6 +96,25 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Enrich entries with checksums from classification store
+	if h.classStore != nil {
+		checksums, err := h.classStore.GetDirChecksums(rootID, relPath)
+		if err != nil {
+			h.logger.Error("getting dir checksums", "error", err)
+		} else if len(checksums) > 0 {
+			for i := range entries {
+				if info, ok := checksums[entries[i].Path]; ok {
+					if info.SHA256 != "" {
+						entries[i].SHA256 = &info.SHA256
+					}
+					if info.CRC32 != "" {
+						entries[i].CRC32 = &info.CRC32
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		slog.Error("encoding directory response", "error", err)

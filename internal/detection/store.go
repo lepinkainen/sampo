@@ -172,6 +172,19 @@ func (s *Store) GetDirDetections(rootID, dirPath string) (map[string]bool, error
 	return result, rows.Err()
 }
 
+// GetDetection returns whether a person was detected for a single file.
+func (s *Store) GetDetection(rootID, relPath string) (bool, error) {
+	var hasPerson bool
+	err := s.db.QueryRow(
+		`SELECT has_person FROM detections WHERE root_id = ? AND rel_path = ?`,
+		rootID, relPath,
+	).Scan(&hasPerson)
+	if err != nil {
+		return false, err
+	}
+	return hasPerson, nil
+}
+
 // Close closes the database.
 func (s *Store) Close() error {
 	return s.db.Close()

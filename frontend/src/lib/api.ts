@@ -1,4 +1,4 @@
-import type { FileEntry, Root, TagScore } from './types';
+import type { DuplicatesResponse, FileEntry, Root, TagScore } from './types';
 
 const BASE = '';
 
@@ -198,5 +198,49 @@ export async function startClassifyScan(
 export async function getClassifyScanStatus(): Promise<ScanStatus> {
 	const res = await fetch(`${BASE}/api/classify/status`);
 	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
+	return res.json();
+}
+
+// Search API
+
+export async function searchFiles(
+	rootId: string,
+	query: string,
+	path?: string,
+): Promise<FileEntry[]> {
+	const params = new URLSearchParams({ q: query });
+	if (path) params.set('path', path);
+	const res = await fetch(`${BASE}/api/search/${rootId}?${params}`);
+	if (!res.ok) throw new Error(`Search failed: ${res.statusText}`);
+	return res.json();
+}
+
+// Disk Usage API
+
+export interface DiskUsage {
+	totalSize: number;
+	fileCount: number;
+	dirCount: number;
+}
+
+export async function getDiskUsage(
+	rootId: string,
+	path: string,
+): Promise<DiskUsage> {
+	const res = await fetch(`${BASE}/api/usage/${rootId}/${encodePath(path)}`);
+	if (!res.ok) throw new Error(`Usage failed: ${res.statusText}`);
+	return res.json();
+}
+
+// Duplicates API
+
+export async function findDuplicates(
+	rootId: string,
+	path: string,
+): Promise<DuplicatesResponse> {
+	const res = await fetch(
+		`${BASE}/api/duplicates/${rootId}/${encodePath(path)}`,
+	);
+	if (!res.ok) throw new Error(`Duplicates failed: ${res.statusText}`);
 	return res.json();
 }

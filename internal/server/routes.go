@@ -27,6 +27,15 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Post("/api/detect/scan", h.StartScan)
 	s.router.Get("/api/detect/status", h.ScanStatus)
 
+	// Search
+	s.router.Get("/api/search/{rootID}", h.SearchFiles)
+
+	// Disk usage
+	s.router.Get("/api/usage/{rootID}/*", h.GetDiskUsage)
+
+	// Duplicates (returns 503 if classification not enabled)
+	s.router.Get("/api/duplicates/{rootID}/*", h.FindDuplicates)
+
 	// Classification (returns 503 if not enabled)
 	s.router.Get("/api/classify/{rootID}/*", h.ClassifyFile)
 	s.router.Post("/api/classify/scan", h.StartClassifyScan)

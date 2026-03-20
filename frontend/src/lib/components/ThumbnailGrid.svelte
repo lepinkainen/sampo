@@ -12,19 +12,25 @@ import {
 	startClassifyScan,
 	getClassifyScanStatus,
 	getClassification,
+	searchFiles,
+	getDiskUsage,
+	findDuplicates,
 } from '$lib/api';
 import type {
 	ScanStatus,
 	DetectionResult,
 	ClassificationResult,
+	DiskUsage,
 } from '$lib/api';
+import type { DuplicateGroup } from '$lib/types';
 import type { FileEntry } from '$lib/types';
-import { formatSize, sortEntries } from '$lib/utils';
+import { formatSize, sortEntries, formatDate } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
 import { createClipboard } from '$lib/clipboard.svelte';
 import FileIcon from './FileIcon.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
+import ListView from './ListView.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
 import RenameDialog from './RenameDialog.svelte';
 import ContextMenu from './ContextMenu.svelte';
@@ -40,6 +46,11 @@ import {
 	ScanSearch,
 	Sparkles,
 	Tag,
+	Search,
+	X,
+	LayoutGrid,
+	List,
+	Files,
 } from '@lucide/svelte';
 
 interface Props {
@@ -64,6 +75,7 @@ let error = $state<string | null>(null);
 let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
 let savedScrollTop = $state(0);
 let scrollContainer: HTMLDivElement | undefined = $state();
+let viewMode = $state<'grid' | 'list'>('grid');
 
 const selection = createSelection();
 const clipboard = createClipboard();
@@ -80,9 +92,27 @@ let detectionResult = $state<DetectionResult | null>(null);
 let classifyScanStatus = $state<ScanStatus | null>(null);
 let classifyPollTimer: ReturnType<typeof setInterval> | null = null;
 let classificationResult = $state<ClassificationResult | null>(null);
+
+// Search state
+let searchActive = $state(false);
+let searchQuery = $state('');
+let searchResults = $state<FileEntry[]>([]);
+let searchLoading = $state(false);
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let searchInput: HTMLInputElement | undefined = $state();
+
+// Disk usage state
+let diskUsage = $state<DiskUsage | null>(null);
+let diskUsageLoading = $state(false);
+
+// Duplicates state
+let showDuplicates = $state(false);
+let duplicateGroups = $state<DuplicateGroup[]>([]);
+let duplicatesLoading = $state(false);
+
 let availableTags = $derived.by(() => {
 	const tagSet = new Set<string>();
-	for (const e of entries) {
+	for (const e of displayEntries) {
 		if (e.tags) {
 			for (const t of e.tags) {
 				tagSet.add(t.label);
@@ -92,8 +122,14 @@ let availableTags = $derived.by(() => {
 	return Array.from(tagSet).sort();
 });
 
+let displayEntries = $derived(
+	searchActive && searchQuery ? searchResults : entries,
+);
+
 let mediaEntries = $derived(
-	entries.filter((e) => e.mediaType === 'image' || e.mediaType === 'video'),
+	displayEntries.filter(
+		(e) => e.mediaType === 'image' || e.mediaType === 'video',
+	),
 );
 
 let previewIndex = $derived.by(() => {
@@ -113,9 +149,12 @@ let gridClass = $derived.by(() => {
 	}
 });
 
-let selectedEntries = $derived(entries.filter((e) => selection.has(e.path)));
+let selectedEntries = $derived(
+	displayEntries.filter((e) => selection.has(e.path)),
+);
 
 $effect(() => {
+	closeSearch();
 	loadDirectory(rootId, path);
 });
 
@@ -129,23 +168,34 @@ $effect(() => {
 			clearInterval(classifyPollTimer);
 			classifyPollTimer = null;
 		}
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+			searchDebounceTimer = null;
+		}
 	};
 });
 
 $effect(() => {
 	detectionResult = null;
 	classificationResult = null;
-	if (
-		selectedEntries.length === 1 &&
-		selectedEntries[0].mediaType === 'image'
-	) {
+	diskUsage = null;
+	if (selectedEntries.length === 1) {
 		const sel = selectedEntries[0];
-		getDetection(rootId, sel.path)
-			.then((r) => (detectionResult = r))
-			.catch(() => (detectionResult = null));
-		getClassification(rootId, sel.path)
-			.then((r) => (classificationResult = r))
-			.catch(() => (classificationResult = null));
+		if (sel.mediaType === 'image') {
+			getDetection(rootId, sel.path)
+				.then((r) => (detectionResult = r))
+				.catch(() => (detectionResult = null));
+			getClassification(rootId, sel.path)
+				.then((r) => (classificationResult = r))
+				.catch(() => (classificationResult = null));
+		}
+		if (sel.isDir) {
+			diskUsageLoading = true;
+			getDiskUsage(rootId, sel.path)
+				.then((r) => (diskUsage = r))
+				.catch(() => (diskUsage = null))
+				.finally(() => (diskUsageLoading = false));
+		}
 	}
 });
 
@@ -182,11 +232,46 @@ async function loadDirectory(rid: string, p: string) {
 	loading = false;
 }
 
+function handleSearchInput(e: Event) {
+	const value = (e.target as HTMLInputElement).value;
+	searchQuery = value;
+
+	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+
+	if (!value.trim()) {
+		searchResults = [];
+		return;
+	}
+
+	searchDebounceTimer = setTimeout(async () => {
+		searchLoading = true;
+		try {
+			const results = await searchFiles(rootId, value, path || undefined);
+			searchResults = results;
+		} catch {
+			searchResults = [];
+		}
+		searchLoading = false;
+	}, 300);
+}
+
+function openSearch() {
+	searchActive = true;
+	requestAnimationFrame(() => searchInput?.focus());
+}
+
+function closeSearch() {
+	searchActive = false;
+	searchQuery = '';
+	searchResults = [];
+	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+}
+
 function handleClick(entry: FileEntry, e: MouseEvent) {
 	if (e.metaKey || e.ctrlKey) {
 		selection.toggle(entry);
 	} else if (e.shiftKey) {
-		selection.selectRange(entries, entry);
+		selection.selectRange(displayEntries, entry);
 	} else {
 		selection.selectOne(entry);
 	}
@@ -217,6 +302,21 @@ function handleKeydown(e: KeyboardEvent) {
 
 	const mod = e.metaKey || e.ctrlKey;
 
+	if (mod && e.key === 'f') {
+		e.preventDefault();
+		if (searchActive) {
+			searchInput?.focus();
+		} else {
+			openSearch();
+		}
+		return;
+	}
+
+	if (e.key === 'Escape' && searchActive) {
+		closeSearch();
+		return;
+	}
+
 	if (e.key === 'Delete' || (e.key === 'Backspace' && mod)) {
 		if (selection.size > 0) {
 			e.preventDefault();
@@ -224,7 +324,7 @@ function handleKeydown(e: KeyboardEvent) {
 		}
 	} else if (mod && e.key === 'a') {
 		e.preventDefault();
-		selection.selectAll(entries);
+		selection.selectAll(displayEntries);
 	} else if (mod && e.key === 'c') {
 		if (selection.size > 0) {
 			e.preventDefault();
@@ -516,12 +616,16 @@ function handleTagFilter(e: Event) {
 	loadDirectory(rootId, path);
 }
 
-function formatDate(dateStr: string): string {
+async function handleFindDuplicates() {
+	showDuplicates = true;
+	duplicatesLoading = true;
 	try {
-		return new Date(dateStr).toISOString().replace('T', ' ').slice(0, 19);
+		const result = await findDuplicates(rootId, path || '/');
+		duplicateGroups = result.groups || [];
 	} catch {
-		return dateStr;
+		duplicateGroups = [];
 	}
+	duplicatesLoading = false;
 }
 </script>
 
@@ -540,36 +644,69 @@ function formatDate(dateStr: string): string {
 		<!-- Toolbar -->
 		<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-4 py-2">
 			<div class="flex items-center gap-4 min-w-0 flex-1">
-				<div class="truncate text-sm font-medium text-gray-300">
-					<button
-						class="text-gray-500 hover:text-gray-200 transition-colors"
-						onclick={() => onNavigate?.('')}
-					>
-						{rootId}
-					</button>
-					{#if path}
-						{@const segments = path.split('/')}
-						{#each segments as segment, i}
+				{#if searchActive}
+					<div class="flex items-center gap-2 flex-1 max-w-md">
+						<Search size={16} class="text-gray-500 shrink-0" />
+						<input
+							bind:this={searchInput}
+							type="text"
+							placeholder="Search files and tags..."
+							class="flex-1 bg-transparent border-none text-sm text-gray-200 placeholder-gray-500 focus:outline-none"
+							value={searchQuery}
+							oninput={handleSearchInput}
+						/>
+						{#if searchLoading}
+							<span class="text-xs text-gray-500">...</span>
+						{/if}
+						<button
+							class="rounded p-1 text-gray-500 hover:text-gray-300 transition-colors"
+							onclick={closeSearch}
+						>
+							<X size={14} />
+						</button>
+					</div>
+				{:else}
+					<div class="truncate text-sm font-medium text-gray-300">
+						<button
+							class="text-gray-500 hover:text-gray-200 transition-colors"
+							onclick={() => onNavigate?.('')}
+						>
+							{rootId}
+						</button>
+						{#if path}
+							{@const segments = path.split('/')}
+							{#each segments as segment, i}
+								<span class="mx-1 text-gray-600">/</span>
+								{#if i < segments.length - 1}
+									<button
+										class="text-gray-400 hover:text-gray-200 transition-colors"
+										onclick={() => onNavigate?.(segments.slice(0, i + 1).join('/'))}
+									>
+										{segment}
+									</button>
+								{:else}
+									<span>{segment}</span>
+								{/if}
+							{/each}
+						{:else}
 							<span class="mx-1 text-gray-600">/</span>
-							{#if i < segments.length - 1}
-								<button
-									class="text-gray-400 hover:text-gray-200 transition-colors"
-									onclick={() => onNavigate?.(segments.slice(0, i + 1).join('/'))}
-								>
-									{segment}
-								</button>
-							{:else}
-								<span>{segment}</span>
-							{/if}
-						{/each}
-					{:else}
-						<span class="mx-1 text-gray-600">/</span>
-						<span>(root)</span>
-					{/if}
-				</div>
+							<span>(root)</span>
+						{/if}
+					</div>
+				{/if}
 
 				<!-- File operation buttons -->
 				<div class="flex items-center gap-1">
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
+						title="Search (Ctrl+F)"
+						onclick={openSearch}
+					>
+						<Search size={16} />
+					</button>
+
+					<div class="mx-1 h-4 w-px bg-gray-700"></div>
+
 					<button
 						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
 						title="Cut (Ctrl+X)"
@@ -645,6 +782,13 @@ function formatDate(dateStr: string): string {
 					>
 						<Sparkles size={16} />
 					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
+						title="Find duplicates"
+						onclick={handleFindDuplicates}
+					>
+						<Files size={16} />
+					</button>
 					{#if availableTags.length > 0}
 						<div class="relative flex items-center">
 							<Tag size={14} class="absolute left-1.5 text-gray-500 pointer-events-none" />
@@ -664,6 +808,9 @@ function formatDate(dateStr: string): string {
 			</div>
 
 			<div class="flex items-center gap-2">
+				{#if searchActive && searchQuery && !searchLoading}
+					<span class="text-xs text-gray-500">{searchResults.length} result(s)</span>
+				{/if}
 				{#if scanStatus?.running}
 					<span class="text-xs text-blue-400">
 						Scanning {scanStatus.completed}/{scanStatus.total}
@@ -677,26 +824,47 @@ function formatDate(dateStr: string): string {
 				{#if selection.size > 0}
 					<span class="text-xs text-gray-500">{selection.size} selected</span>
 				{/if}
+
+				<!-- View mode toggle -->
 				<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
 					<button
-						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-						onclick={() => (thumbSize = 'small')}
+						class="rounded p-1 transition-colors {viewMode === 'grid' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+						title="Grid view"
+						onclick={() => (viewMode = 'grid')}
 					>
-						Small
+						<LayoutGrid size={14} />
 					</button>
 					<button
-						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-						onclick={() => (thumbSize = 'medium')}
+						class="rounded p-1 transition-colors {viewMode === 'list' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+						title="List view"
+						onclick={() => (viewMode = 'list')}
 					>
-						Medium
-					</button>
-					<button
-						class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-						onclick={() => (thumbSize = 'large')}
-					>
-						Large
+						<List size={14} />
 					</button>
 				</div>
+
+				{#if viewMode === 'grid'}
+					<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
+						<button
+							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+							onclick={() => (thumbSize = 'small')}
+						>
+							S
+						</button>
+						<button
+							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+							onclick={() => (thumbSize = 'medium')}
+						>
+							M
+						</button>
+						<button
+							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+							onclick={() => (thumbSize = 'large')}
+						>
+							L
+						</button>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -704,13 +872,13 @@ function formatDate(dateStr: string): string {
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="flex-1 overflow-y-auto p-4"
+				class="flex-1 overflow-y-auto {viewMode === 'grid' ? 'p-4' : ''}"
 				bind:this={scrollContainer}
 				onclick={() => selection.clear()}
 				ondrop={handleDrop}
 				ondragover={handleDragOver}
 			>
-				{#if loading}
+				{#if loading || (searchActive && searchLoading)}
 					<div class="flex h-full items-center justify-center">
 						<p class="text-gray-500">Loading...</p>
 					</div>
@@ -718,15 +886,30 @@ function formatDate(dateStr: string): string {
 					<div class="flex h-full items-center justify-center">
 						<p class="text-red-400">{error}</p>
 					</div>
-				{:else if entries.length === 0}
+				{:else if displayEntries.length === 0}
 					<div class="flex h-full items-center justify-center">
-						<p class="text-gray-500">Empty directory</p>
+						<p class="text-gray-500">{searchActive && searchQuery ? 'No results found' : 'Empty directory'}</p>
+					</div>
+				{:else if viewMode === 'list'}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div onclick={(e) => e.stopPropagation()}>
+						<ListView
+							{rootId}
+							entries={displayEntries}
+							isSelected={(path) => selection.has(path)}
+							isCut={(path) => clipboard.isCut(rootId, path)}
+							onclick={(entry, e) => handleClick(entry, e)}
+							ondblclick={(entry) => handleOpen(entry)}
+							oncontextmenu={(e, entry) => handleContextMenu(e, entry)}
+							ondragstart={(e, entry) => handleDragStartFromCard(e, entry)}
+						/>
 					</div>
 				{:else}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div class={`grid gap-3 ${gridClass}`} onclick={(e) => e.stopPropagation()}>
-						{#each entries as entry (entry.path)}
+						{#each displayEntries as entry (entry.path)}
 							<ThumbnailCard
 								{rootId}
 								{entry}
@@ -777,6 +960,22 @@ function formatDate(dateStr: string): string {
 								<div class="text-gray-500">Path</div>
 								<div class="break-all text-gray-300">{sel.path}</div>
 
+								{#if sel.isDir && diskUsageLoading}
+									<div class="text-gray-500">Usage</div>
+									<div class="text-gray-400">Computing...</div>
+								{/if}
+
+								{#if sel.isDir && diskUsage}
+									<div class="text-gray-500">Total size</div>
+									<div class="text-gray-300">{formatSize(diskUsage.totalSize)}</div>
+
+									<div class="text-gray-500">Files</div>
+									<div class="text-gray-300">{diskUsage.fileCount}</div>
+
+									<div class="text-gray-500">Subdirs</div>
+									<div class="text-gray-300">{diskUsage.dirCount}</div>
+								{/if}
+
 								{#if detectionResult}
 									<div class="text-gray-500">Person</div>
 									<div class="text-gray-300">
@@ -786,6 +985,24 @@ function formatDate(dateStr: string): string {
 											<span class="text-green-400">No</span>
 										{/if}
 									</div>
+								{/if}
+
+								{#if sel.sha256}
+									<div class="text-gray-500">SHA256</div>
+									<div class="text-gray-300">
+										<button
+											class="font-mono text-xs break-all text-left hover:text-blue-400 transition-colors"
+											title="Click to copy full hash"
+											onclick={() => { navigator.clipboard.writeText(sel.sha256 ?? ''); toastComponent?.show('SHA256 copied', 'success'); }}
+										>
+											{sel.sha256.slice(0, 16)}...
+										</button>
+									</div>
+								{/if}
+
+								{#if sel.crc32}
+									<div class="text-gray-500">CRC32</div>
+									<div class="text-gray-300 font-mono text-xs">{sel.crc32}</div>
 								{/if}
 
 								{#if classificationResult?.tags && classificationResult.tags.length > 0}
@@ -860,6 +1077,55 @@ function formatDate(dateStr: string): string {
 		onConfirm={handleRename}
 		onCancel={() => (showRenameDialog = false)}
 	/>
+{/if}
+
+{#if showDuplicates}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+		onclick={() => (showDuplicates = false)}
+	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div
+			class="w-[600px] max-h-[80vh] overflow-y-auto rounded-lg bg-gray-900 border border-gray-700 shadow-2xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+				<h2 class="text-lg font-semibold text-gray-100">Duplicate Files</h2>
+				<button class="text-gray-500 hover:text-gray-300" onclick={() => (showDuplicates = false)}>
+					<X size={18} />
+				</button>
+			</div>
+			<div class="p-6">
+				{#if duplicatesLoading}
+					<p class="text-gray-500 text-center">Searching for duplicates...</p>
+				{:else if duplicateGroups.length === 0}
+					<p class="text-gray-500 text-center">No duplicates found</p>
+				{:else}
+					<div class="space-y-4">
+						{#each duplicateGroups as group}
+							<div class="rounded border border-gray-700 bg-gray-800/50 p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<span class="text-xs text-gray-500 font-mono">{group.hashType}: {group.hash.slice(0, 16)}...</span>
+									<span class="text-xs text-gray-400">{formatSize(group.size)}</span>
+								</div>
+								<ul class="space-y-1">
+									{#each group.files as file}
+										<li class="text-sm text-gray-300 flex items-center gap-2">
+											<span class="text-gray-500 text-xs">{file.rootId}</span>
+											<span class="break-all">{file.path}</span>
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
 {/if}
 
 <Toast bind:this={toastComponent} />
