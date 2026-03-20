@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/lepinkainen/filemanager/internal/videoframe"
 )
 
 func TestGenerateVideoThumbnail(t *testing.T) {
@@ -48,7 +50,7 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 
 func TestGetSeekPosition(t *testing.T) {
 	// With no valid file, should fallback to "1"
-	pos := getSeekPosition("/nonexistent/file.mp4")
+	pos := videoframe.SeekPosition("/nonexistent/file.mp4")
 	if pos != "1" {
 		t.Errorf("expected fallback '1', got %q", pos)
 	}
