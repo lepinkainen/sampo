@@ -58,20 +58,29 @@ test.describe('Tree view and navigation', () => {
 		await page.goto('/');
 		await page.getByText('Sample').click();
 
-		// Navigate to images
+		// Navigate to images and wait for URL + grid items
 		await page.locator('.select-none button', { hasText: 'images' }).click();
+		await page.waitForURL(/path=.*images/);
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
+		await page
+			.locator('[class*="grid-cols"] > [role="button"]')
+			.first()
+			.waitFor();
 
 		// Count thumbnails in images
 		const imagesCount = await page
 			.locator('[class*="grid-cols"] > [role="button"]')
 			.count();
 
-		// Navigate to dir&special
+		// Navigate to dir&special and wait for URL to update first
 		await page
 			.locator('.select-none button', { hasText: 'dir&special' })
 			.click();
-		await page.waitForSelector('[class*="grid-cols-[repeat"]');
+		await page.waitForURL(/path=.*dir/);
+		await page
+			.locator('[class*="grid-cols"] > [role="button"]')
+			.first()
+			.waitFor();
 
 		// Count thumbnails in dir&special
 		const specialCount = await page
@@ -83,7 +92,6 @@ test.describe('Tree view and navigation', () => {
 		expect(specialCount).toBeGreaterThan(0);
 
 		// URL should reflect new directory
-		await page.waitForURL(/path=.*dir/);
 		const url = new URL(page.url());
 		expect(url.searchParams.get('path')).toContain('dir');
 	});
