@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -30,13 +29,8 @@ type Detector struct {
 }
 
 // NewDetector loads the ONNX model and creates a detector.
+// The caller must call onnxenv.Init() before creating a detector.
 func NewDetector(modelPath string, threshold float32, modelVer string, logger *slog.Logger) (*Detector, error) {
-	ort.SetSharedLibraryPath(findOrtLibrary())
-
-	if err := ort.InitializeEnvironment(); err != nil {
-		return nil, fmt.Errorf("initializing ONNX Runtime: %w", err)
-	}
-
 	opts, err := ort.NewSessionOptions()
 	if err != nil {
 		return nil, fmt.Errorf("creating session options: %w", err)
@@ -174,7 +168,8 @@ func (d *Detector) ModelVersion() string {
 	return d.modelVer
 }
 
-// Destroy cleans up ONNX resources.
+// Destroy cleans up ONNX session resources.
+// Does not destroy the shared ONNX environment — that is managed by onnxenv.
 func (d *Detector) Destroy() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -186,27 +181,5 @@ func (d *Detector) Destroy() {
 	}
 	if d.outputTensor != nil {
 		_ = d.outputTensor.Destroy()
-	}
-	_ = ort.DestroyEnvironment()
-}
-
-// findOrtLibrary returns the platform-specific ONNX Runtime shared library path.
-func findOrtLibrary() string {
-	// Check environment variable first
-	if p := os.Getenv("ORT_LIB_PATH"); p != "" {
-		return p
-	}
-
-	switch runtime.GOOS {
-	case "darwin":
-		// Homebrew install location
-		if runtime.GOARCH == "arm64" {
-			return "/opt/homebrew/lib/libonnxruntime.dylib"
-		}
-		return "/usr/local/lib/libonnxruntime.dylib"
-	case "linux":
-		return "/usr/lib/libonnxruntime.so"
-	default:
-		return "onnxruntime.dll"
 	}
 }

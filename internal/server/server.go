@@ -8,9 +8,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/lepinkainen/filemanager/internal/classification"
 	"github.com/lepinkainen/filemanager/internal/config"
 	"github.com/lepinkainen/filemanager/internal/detection"
 	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/filemanager/internal/onnxenv"
 	"github.com/lepinkainen/filemanager/internal/server/handlers"
 	"github.com/lepinkainen/filemanager/internal/thumbnail"
 )
@@ -46,6 +48,13 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 
 	h := handlers.New(rootMgr, thumbCache, logger)
 
+	// Initialize shared ONNX environment if any ML feature is enabled
+	if cfg.Detection.Enabled || cfg.Classification.Enabled {
+		if err := onnxenv.Init(); err != nil {
+			return nil, fmt.Errorf("initializing ONNX Runtime: %w", err)
+		}
+	}
+
 	// Conditionally initialize detection
 	if cfg.Detection.Enabled {
 		detStore, err := detection.NewStore(cfg.Cache.Dir)
@@ -67,6 +76,30 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		scanner := detection.NewScanner(detStore, detector, rootMgr, cfg.Detection.Workers, logger)
 		h.SetDetection(detStore, detector, scanner)
 		logger.Info("person detection enabled", "model", cfg.Detection.ModelPath, "threshold", cfg.Detection.Threshold)
+	}
+
+	// Conditionally initialize classification
+	if cfg.Classification.Enabled {
+		classStore, err := classification.NewStore(cfg.Cache.Dir)
+		if err != nil {
+			return nil, fmt.Errorf("initializing classification store: %w", err)
+		}
+
+		classifier, err := classification.NewClassifier(
+			cfg.Classification.ModelPath,
+			cfg.Classification.LabelsPath,
+			cfg.Classification.Threshold,
+			cfg.Classification.ModelVersion,
+			logger,
+		)
+		if err != nil {
+			_ = classStore.Close()
+			return nil, fmt.Errorf("initializing classifier: %w", err)
+		}
+
+		classScanner := classification.NewScanner(classStore, classifier, rootMgr, cfg.Classification.Workers, logger)
+		h.SetClassification(classStore, classifier, classScanner)
+		logger.Info("classification enabled", "model", cfg.Classification.ModelPath, "threshold", cfg.Classification.Threshold)
 	}
 
 	s.setupRoutes(h, frontendFS)
