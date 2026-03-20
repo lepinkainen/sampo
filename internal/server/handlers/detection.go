@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/filemanager/internal/videoframe"
 )
 
 // DetectFile handles GET /api/detect/{rootID}/* — runs detection on a single image.
@@ -48,7 +50,24 @@ func (h *Handler) DetectFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.detector.Detect(fullPath, rootID, relPath, info.ModTime().Unix(), info.Size())
+	// For video files, extract a frame to analyze
+	detectPath := fullPath
+	if filesystem.DetectMediaType(fullPath) == "video" {
+		framePath, cleanup, extractErr := videoframe.ExtractFrame(h.frameDir, fullPath)
+		if extractErr != nil {
+			h.logger.Error("video frame extraction failed", "error", extractErr, "path", relPath)
+			http.Error(w, "Video frame extraction failed", http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			if cleanupErr := cleanup(); cleanupErr != nil {
+				h.logger.Warn("failed to remove temp video frame", "path", framePath, "error", cleanupErr)
+			}
+		}()
+		detectPath = framePath
+	}
+
+	result, err := h.detector.Detect(detectPath, rootID, relPath, info.ModTime().Unix(), info.Size())
 	if err != nil {
 		h.logger.Error("detection failed", "error", err, "path", relPath)
 		http.Error(w, "Detection failed", http.StatusInternalServerError)

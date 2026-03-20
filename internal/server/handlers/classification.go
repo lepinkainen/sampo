@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/filemanager/internal/videoframe"
 )
 
 // ClassifyFile handles GET /api/classify/{rootID}/* — runs classification on a single image.
@@ -47,7 +49,24 @@ func (h *Handler) ClassifyFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.classifier.Classify(fullPath, rootID, relPath, info.ModTime().Unix(), info.Size())
+	// For video files, extract a frame to analyze
+	classifyPath := fullPath
+	if filesystem.DetectMediaType(fullPath) == "video" {
+		framePath, cleanup, extractErr := videoframe.ExtractFrame(h.frameDir, fullPath)
+		if extractErr != nil {
+			h.logger.Error("video frame extraction failed", "error", extractErr, "path", relPath)
+			http.Error(w, "Video frame extraction failed", http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			if cleanupErr := cleanup(); cleanupErr != nil {
+				h.logger.Warn("failed to remove temp video frame", "path", framePath, "error", cleanupErr)
+			}
+		}()
+		classifyPath = framePath
+	}
+
+	result, err := h.classifier.Classify(classifyPath, rootID, relPath, info.ModTime().Unix(), info.Size())
 	if err != nil {
 		h.logger.Error("classification failed", "error", err, "path", relPath)
 		http.Error(w, "Classification failed", http.StatusInternalServerError)

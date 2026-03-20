@@ -15,6 +15,7 @@ import (
 	"github.com/lepinkainen/filemanager/internal/onnxenv"
 	"github.com/lepinkainen/filemanager/internal/server/handlers"
 	"github.com/lepinkainen/filemanager/internal/thumbnail"
+	"github.com/lepinkainen/filemanager/internal/videoframe"
 )
 
 // Server is the main HTTP server.
@@ -36,6 +37,12 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		return nil, fmt.Errorf("initializing thumbnail cache: %w", err)
 	}
 
+	// Clean leftover video frames from previous runs
+	frameDir := cfg.Cache.Dir + "/frames"
+	if err := videoframe.CleanDir(frameDir); err != nil {
+		logger.Warn("cleaning leftover video frames", "error", err)
+	}
+
 	s := &Server{
 		cfg:    cfg,
 		router: chi.NewRouter(),
@@ -46,7 +53,7 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Compress(5))
 
-	h := handlers.New(rootMgr, thumbCache, logger)
+	h := handlers.New(rootMgr, thumbCache, frameDir, logger)
 
 	// Initialize shared ONNX environment if any ML feature is enabled
 	if cfg.Detection.Enabled || cfg.Classification.Enabled {
@@ -73,7 +80,7 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 			return nil, fmt.Errorf("initializing detector: %w", err)
 		}
 
-		scanner := detection.NewScanner(detStore, detector, rootMgr, cfg.Detection.Workers, logger)
+		scanner := detection.NewScanner(detStore, detector, rootMgr, frameDir, cfg.Detection.Workers, logger)
 		h.SetDetection(detStore, detector, scanner)
 		logger.Info("person detection enabled", "model", cfg.Detection.ModelPath, "threshold", cfg.Detection.Threshold)
 	}
@@ -97,7 +104,7 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 			return nil, fmt.Errorf("initializing classifier: %w", err)
 		}
 
-		classScanner := classification.NewScanner(classStore, classifier, rootMgr, cfg.Classification.Workers, logger)
+		classScanner := classification.NewScanner(classStore, classifier, rootMgr, frameDir, cfg.Classification.Workers, logger)
 		h.SetClassification(classStore, classifier, classScanner)
 		logger.Info("classification enabled", "model", cfg.Classification.ModelPath, "threshold", cfg.Classification.Threshold)
 	}

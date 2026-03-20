@@ -43,7 +43,7 @@ func setupTestHandler(t *testing.T) (*handlers.Handler, string) {
 		t.Fatal(err)
 	}
 
-	h := handlers.New(roots, cache, slog.Default())
+	h := handlers.New(roots, cache, t.TempDir(), slog.Default())
 	return h, dir
 }
 
@@ -157,7 +157,7 @@ func setupSpecialCharHandler(t *testing.T) *handlers.Handler {
 		t.Fatal(err)
 	}
 
-	return handlers.New(roots, cache, slog.Default())
+	return handlers.New(roots, cache, t.TempDir(), slog.Default())
 }
 
 // serveAllWithChi registers all API routes and serves a request.

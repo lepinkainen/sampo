@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/filemanager/internal/videoframe"
 )
 
 // ScanStatus reports the progress of a background classification scan.
@@ -27,6 +28,7 @@ type Scanner struct {
 	store      *Store
 	classifier *Classifier
 	roots      *filesystem.RootManager
+	frameDir   string
 	workers    int
 	logger     *slog.Logger
 
@@ -36,11 +38,12 @@ type Scanner struct {
 }
 
 // NewScanner creates a background classification scanner.
-func NewScanner(store *Store, classifier *Classifier, roots *filesystem.RootManager, workers int, logger *slog.Logger) *Scanner {
+func NewScanner(store *Store, classifier *Classifier, roots *filesystem.RootManager, frameDir string, workers int, logger *slog.Logger) *Scanner {
 	s := &Scanner{
 		store:      store,
 		classifier: classifier,
 		roots:      roots,
+		frameDir:   frameDir,
 		workers:    workers,
 		logger:     logger,
 	}
@@ -83,7 +86,7 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 			continue
 		}
 		mediaType := filesystem.DetectMediaType(e.Name())
-		if mediaType != "image" {
+		if mediaType != "image" && mediaType != "video" {
 			continue
 		}
 
@@ -100,11 +103,12 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 		}
 
 		files = append(files, scanItem{
-			rootID:   rootID,
-			relPath:  entryRelPath,
-			fullPath: entryFullPath,
-			mtime:    info.ModTime().Unix(),
-			size:     info.Size(),
+			rootID:    rootID,
+			relPath:   entryRelPath,
+			fullPath:  entryFullPath,
+			mtime:     info.ModTime().Unix(),
+			size:      info.Size(),
+			mediaType: mediaType,
 		})
 	}
 
@@ -155,15 +159,34 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 }
 
 type scanItem struct {
-	rootID   string
-	relPath  string
-	fullPath string
-	mtime    int64
-	size     int64
+	rootID    string
+	relPath   string
+	fullPath  string
+	mtime     int64
+	size      int64
+	mediaType string
 }
 
 func (s *Scanner) processItem(item scanItem) {
-	result, err := s.classifier.Classify(item.fullPath, item.rootID, item.relPath, item.mtime, item.size)
+	classifyPath := item.fullPath
+	if item.mediaType == "video" {
+		framePath, cleanup, err := videoframe.ExtractFrame(s.frameDir, item.fullPath)
+		if err != nil {
+			s.logger.Error("video frame extraction failed", "path", item.relPath, "error", err)
+			current := s.status.Load()
+			atomic.AddInt64(&current.Errors, 1)
+			atomic.AddInt64(&current.Completed, 1)
+			return
+		}
+		defer func() {
+			if err := cleanup(); err != nil {
+				s.logger.Warn("failed to remove temp video frame", "path", framePath, "error", err)
+			}
+		}()
+		classifyPath = framePath
+	}
+
+	result, err := s.classifier.Classify(classifyPath, item.rootID, item.relPath, item.mtime, item.size)
 	if err != nil {
 		s.logger.Error("classification failed", "path", item.relPath, "error", err)
 		current := s.status.Load()

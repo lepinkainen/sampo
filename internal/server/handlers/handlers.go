@@ -13,6 +13,7 @@ import (
 type Handler struct {
 	roots          *filesystem.RootManager
 	thumbCache     *thumbnail.Cache
+	frameDir       string
 	logger         *slog.Logger
 	detectionStore *detection.Store
 	detector       *detection.Detector
@@ -23,10 +24,11 @@ type Handler struct {
 }
 
 // New creates a new Handler.
-func New(roots *filesystem.RootManager, thumbCache *thumbnail.Cache, logger *slog.Logger) *Handler {
+func New(roots *filesystem.RootManager, thumbCache *thumbnail.Cache, frameDir string, logger *slog.Logger) *Handler {
 	return &Handler{
 		roots:      roots,
 		thumbCache: thumbCache,
+		frameDir:   frameDir,
 		logger:     logger,
 	}
 }
