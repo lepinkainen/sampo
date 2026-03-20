@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 task build          # Full build: test + lint + frontend + Go binary
-task test           # Run Go tests (excludes llm-shared)
+task test           # Run Go tests + frontend type checking
+task test-full      # Full suite: test + lint + build + e2e (run after new features)
+task test-e2e       # Playwright e2e tests only (requires dev servers running)
 task lint           # goimports + go vet + golangci-lint
 task build-frontend # Build SvelteKit frontend only
 task build-go       # Build Go binary only (requires frontend/build to exist)

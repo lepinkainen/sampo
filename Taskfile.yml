@@ -41,6 +41,24 @@ tasks:
     desc: Run tests
     cmds:
       - task: test-go
+      - task: test-frontend
+
+  test-full:
+    desc: Run full test suite (unit + lint + build + e2e). Run after every new feature
+    cmds:
+      - task: test
+      - task: lint
+      - task: build-frontend
+      - task: build-go
+      - task: dev-up
+      - defer: { task: dev-down }
+      - task: test-e2e
+
+  test-e2e:
+    desc: Run Playwright end-to-end tests (requires dev servers running)
+    dir: frontend
+    cmds:
+      - pnpm exec playwright test
 
   test-ci:
     desc: Run tests with coverage for CI
@@ -78,6 +96,13 @@ tasks:
     desc: Run Go tests with coverage for CI
     cmds:
       - go test -tags=ci -cover -v $(go list ./... | grep -v llm-shared)
+
+  test-frontend:
+    desc: Run frontend type checking and diagnostics
+    dir: frontend
+    cmds:
+      - pnpm exec svelte-kit sync
+      - pnpm exec svelte-check --tsconfig ./tsconfig.json
 
   lint-go:
     desc: Lint Go code
