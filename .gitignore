@@ -50,6 +50,9 @@ frontend/build/
 test-results/
 frontend/test-results/
 
+# ONNX models
+models/*.onnx
+
 # Cache
 .cache/
 
