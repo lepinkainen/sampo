@@ -53,7 +53,7 @@ frontend/test-results/
 .playwright-cli/
 
 # ONNX models
-models/*.onnx
+models/
 
 # Cache
 .cache/
