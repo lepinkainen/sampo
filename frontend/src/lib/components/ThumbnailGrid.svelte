@@ -15,12 +15,15 @@ import {
 	searchFiles,
 	getDiskUsage,
 	findDuplicates,
+	getAnalysisSettings,
+	setAnalysisSettings,
 } from '$lib/api';
 import type {
 	ScanStatus,
 	DetectionResult,
 	ClassificationResult,
 	DiskUsage,
+	AnalysisSettings,
 } from '$lib/api';
 import type { DuplicateGroup } from '$lib/types';
 import type { FileEntry } from '$lib/types';
@@ -51,6 +54,7 @@ import {
 	LayoutGrid,
 	List,
 	Files,
+	LoaderCircle,
 } from '@lucide/svelte';
 
 interface Props {
@@ -95,6 +99,14 @@ let detectionResult = $state<DetectionResult | null>(null);
 let classifyScanStatus = $state<ScanStatus | null>(null);
 let classifyPollTimer: ReturnType<typeof setInterval> | null = null;
 let classificationResult = $state<ClassificationResult | null>(null);
+let analysisSettings = $state<AnalysisSettings | null>(null);
+let analysisSettingsSaving = $state(false);
+let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let loadRequestId = 0;
+let detailsThumbLoading = $state(false);
+let detailsThumbError = $state(false);
+let detailsImgEl: HTMLImageElement | undefined = $state();
 
 // Search state
 let searchActive = $state(false);
@@ -156,9 +168,37 @@ let selectedEntries = $derived(
 	displayEntries.filter((e) => selection.has(e.path)),
 );
 
+let lastDetailsThumbKey = $state('');
+
+$effect(() => {
+	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
+	const thumbKey = sel ? `${rootId}:${sel.path}:${sel.hasThumb}` : '';
+	if (thumbKey === lastDetailsThumbKey) {
+		return;
+	}
+	lastDetailsThumbKey = thumbKey;
+	detailsThumbError = false;
+	detailsThumbLoading = !!sel?.hasThumb;
+
+	// Check if already complete
+	if (sel?.hasThumb && detailsImgEl?.complete) {
+		detailsThumbLoading = false;
+	}
+});
+
 $effect(() => {
 	closeSearch();
 	loadDirectory(rootId, path);
+});
+
+$effect(() => {
+	loadAnalysisSettings();
+	if (analysisPollTimer) {
+		clearInterval(analysisPollTimer);
+	}
+	analysisPollTimer = setInterval(() => {
+		void loadAnalysisSettings();
+	}, 2000);
 });
 
 $effect(() => {
@@ -171,9 +211,48 @@ $effect(() => {
 			clearInterval(classifyPollTimer);
 			classifyPollTimer = null;
 		}
+		if (autoRefreshTimer) {
+			clearInterval(autoRefreshTimer);
+			autoRefreshTimer = null;
+		}
 		if (searchDebounceTimer) {
 			clearTimeout(searchDebounceTimer);
 			searchDebounceTimer = null;
+		}
+		if (analysisPollTimer) {
+			clearInterval(analysisPollTimer);
+			analysisPollTimer = null;
+		}
+	};
+});
+
+$effect(() => {
+	if (autoRefreshTimer) {
+		clearInterval(autoRefreshTimer);
+		autoRefreshTimer = null;
+	}
+
+	if (!analysisSettings?.autoBrowseEnabled) {
+		return;
+	}
+
+	autoRefreshTimer = setInterval(() => {
+		if (
+			loading ||
+			searchLoading ||
+			scanStatus?.running ||
+			classifyScanStatus?.running ||
+			(searchActive && !!searchQuery.trim())
+		) {
+			return;
+		}
+		loadDirectory(rootId, path, { preserveSelection: true, silent: true });
+	}, 2000);
+
+	return () => {
+		if (autoRefreshTimer) {
+			clearInterval(autoRefreshTimer);
+			autoRefreshTimer = null;
 		}
 	};
 });
@@ -213,10 +292,30 @@ $effect(() => {
 	}
 });
 
-async function loadDirectory(rid: string, p: string) {
-	selection.clear();
-	savedScrollTop = 0;
-	loading = true;
+async function loadAnalysisSettings() {
+	try {
+		analysisSettings = await getAnalysisSettings();
+	} catch {
+		analysisSettings = null;
+	}
+}
+
+async function loadDirectory(
+	rid: string,
+	p: string,
+	options?: { preserveSelection?: boolean; silent?: boolean },
+) {
+	const preserveSelection = options?.preserveSelection ?? false;
+	const silent = options?.silent ?? false;
+	const requestId = ++loadRequestId;
+
+	if (!preserveSelection) {
+		selection.clear();
+		savedScrollTop = 0;
+	}
+	if (!silent) {
+		loading = true;
+	}
 	error = null;
 	try {
 		const opts: { filter?: string; tag?: string } = {};
@@ -227,12 +326,18 @@ async function loadDirectory(rid: string, p: string) {
 			p,
 			Object.keys(opts).length > 0 ? opts : undefined,
 		);
+		if (requestId !== loadRequestId) return;
 		entries = sortEntries(result);
 	} catch (e) {
+		if (requestId !== loadRequestId) return;
 		error = e instanceof Error ? e.message : 'Failed to load directory';
-		entries = [];
+		if (!silent) {
+			entries = [];
+		}
 	}
-	loading = false;
+	if (requestId === loadRequestId && !silent) {
+		loading = false;
+	}
 }
 
 function handleSearchInput(e: Event) {
@@ -541,6 +646,25 @@ function toggleFilter() {
 	loadDirectory(rootId, path);
 }
 
+async function toggleAutoBrowseAnalysis() {
+	if (!analysisSettings || analysisSettingsSaving) return;
+	const next = !analysisSettings.autoBrowseEnabled;
+	analysisSettingsSaving = true;
+	try {
+		analysisSettings = await setAnalysisSettings(next);
+		toastComponent?.show(
+			next
+				? 'Auto analyze while browsing enabled'
+				: 'Auto analyze while browsing disabled',
+			'success',
+		);
+	} catch {
+		toastComponent?.show('Failed to update auto analysis setting', 'error');
+	} finally {
+		analysisSettingsSaving = false;
+	}
+}
+
 async function handleScan() {
 	try {
 		scanStatus = await startScan(rootId, path);
@@ -754,6 +878,26 @@ async function handleFindDuplicates() {
 					<div class="mx-1 h-4 w-px bg-gray-700"></div>
 
 					<button
+						class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {analysisSettings?.autoBrowseEnabled ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
+						title="Automatically analyze files while browsing"
+						disabled={!analysisSettings || analysisSettingsSaving}
+						onclick={toggleAutoBrowseAnalysis}
+					>
+						Auto ML
+					</button>
+					{#if analysisSettings?.browseStatus.running}
+						<div
+							class="flex items-center gap-1 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-300"
+							title={`Background analysis running (${analysisSettings.browseStatus.active} active, ${analysisSettings.browseStatus.queued} queued)`}
+						>
+							<LoaderCircle size={12} class="animate-spin" />
+							<span>{analysisSettings.browseStatus.active} active</span>
+							{#if analysisSettings.browseStatus.queued > 0}
+								<span class="text-amber-400/80">/ {analysisSettings.browseStatus.queued} queued</span>
+							{/if}
+						</div>
+					{/if}
+					<button
 						class="rounded p-1.5 transition-colors {filterPeople ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}"
 						title="Hide images with people"
 						onclick={toggleFilter}
@@ -927,12 +1071,24 @@ async function handleFindDuplicates() {
 				{#if selectedEntries.length === 1}
 					{@const sel = selectedEntries[0]}
 					<div class="flex flex-col gap-6">
-						<div class="aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
-							{#if sel.hasThumb}
+						<div class="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
+							{#if sel.hasThumb && !detailsThumbError}
+								{#if detailsThumbLoading}
+									<div
+										class="thumb-skeleton absolute inset-0 z-10"
+										data-testid="details-thumbnail-skeleton"
+									></div>
+								{/if}
 								<img
+									bind:this={detailsImgEl}
 									src={thumbnailUrl(rootId, sel.path)}
 									alt={sel.name}
-									class="h-full w-full object-contain"
+									class="relative z-0 h-full w-full object-contain"
+									onload={() => (detailsThumbLoading = false)}
+									onerror={() => {
+										detailsThumbLoading = false;
+										detailsThumbError = true;
+									}}
 								/>
 							{:else}
 								<div class="flex h-full items-center justify-center text-gray-700">

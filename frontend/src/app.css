@@ -1,1 +1,31 @@
 @import "tailwindcss";
+
+@keyframes thumb-shimmer {
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(100%);
+	}
+}
+
+.thumb-skeleton {
+	position: relative;
+	overflow: hidden;
+	background-color: rgb(31 41 55);
+}
+
+.thumb-skeleton::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		rgb(255 255 255 / 0.05) 25%,
+		rgb(255 255 255 / 0.2) 50%,
+		rgb(255 255 255 / 0.05) 75%,
+		transparent 100%
+	);
+	animation: thumb-shimmer 1.5s linear infinite;
+}

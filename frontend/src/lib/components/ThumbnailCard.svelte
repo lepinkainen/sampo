@@ -27,11 +27,30 @@ let {
 	ondragstart,
 }: Props = $props();
 
+let imgLoading = $state(entry.hasThumb);
 let imgError = $state(false);
+let lastThumbKey = $state(`${rootId}:${entry.path}:${entry.hasThumb}`);
+let imgEl: HTMLImageElement | undefined = $state();
+
+$effect(() => {
+	const thumbKey = `${rootId}:${entry.path}:${entry.hasThumb}`;
+	if (thumbKey === lastThumbKey) {
+		return;
+	}
+	lastThumbKey = thumbKey;
+	imgLoading = entry.hasThumb;
+	imgError = false;
+
+	// Check if already complete (e.g. from cache)
+	if (entry.hasThumb && imgEl?.complete) {
+		imgLoading = false;
+	}
+});
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
+	data-testid="thumbnail-card"
 	class="group flex flex-col overflow-hidden rounded-lg border transition-colors
 	{selected
 		? 'border-blue-500 bg-blue-900/30'
@@ -56,12 +75,23 @@ let imgError = $state(false);
 >
 	<div class="relative flex aspect-square items-center justify-center bg-gray-900">
 		{#if entry.hasThumb && !imgError}
+			{#if imgLoading}
+				<div
+					class="thumb-skeleton absolute inset-0 z-10"
+					data-testid="thumbnail-skeleton"
+				></div>
+			{/if}
 			<img
+				bind:this={imgEl}
 				src={thumbnailUrl(rootId, entry.path)}
 				alt={entry.name}
-				class="h-full w-full object-cover"
+				class="relative z-0 h-full w-full object-cover"
 				loading="lazy"
-				onerror={() => (imgError = true)}
+				onload={() => (imgLoading = false)}
+				onerror={() => {
+					imgLoading = false;
+					imgError = true;
+				}}
 			/>
 		{:else}
 			<span class="text-gray-500">

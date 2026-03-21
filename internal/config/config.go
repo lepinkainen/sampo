@@ -31,6 +31,14 @@ type ClassificationConfig struct {
 	Workers      int     `mapstructure:"workers"`
 }
 
+// AnalysisConfig holds browse-triggered automatic analysis settings.
+type AnalysisConfig struct {
+	AutoBrowseEnabled bool `mapstructure:"auto_browse_enabled"`
+	BrowseWorkers     int  `mapstructure:"browse_workers"`
+	BrowseQueueSize   int  `mapstructure:"browse_queue_size"`
+	IncludeVideos     bool `mapstructure:"include_videos"`
+}
+
 // Config holds the application configuration.
 type Config struct {
 	Server struct {
@@ -42,6 +50,7 @@ type Config struct {
 	Roots          []RootConfig         `mapstructure:"roots"`
 	Detection      DetectionConfig      `mapstructure:"detection"`
 	Classification ClassificationConfig `mapstructure:"classification"`
+	Analysis       AnalysisConfig       `mapstructure:"analysis"`
 }
 
 // Load reads configuration from file and environment.
@@ -64,6 +73,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("classification.model_version", "clip-vit-b32-1.0")
 	viper.SetDefault("classification.threshold", 0.2)
 	viper.SetDefault("classification.workers", 2)
+	viper.SetDefault("analysis.auto_browse_enabled", false)
+	viper.SetDefault("analysis.browse_workers", 1)
+	viper.SetDefault("analysis.browse_queue_size", 128)
+	viper.SetDefault("analysis.include_videos", false)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

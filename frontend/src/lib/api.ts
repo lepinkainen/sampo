@@ -36,6 +36,38 @@ export function fileUrl(rootId: string, path: string): string {
 	return `${BASE}/api/file/${rootId}/${encodePath(path)}`;
 }
 
+export interface BrowseAnalysisStatus {
+	pending: number;
+	queued: number;
+	active: number;
+	running: boolean;
+}
+
+export interface AnalysisSettings {
+	autoBrowseEnabled: boolean;
+	browseStatus: BrowseAnalysisStatus;
+}
+
+export async function getAnalysisSettings(): Promise<AnalysisSettings> {
+	const res = await fetch(`${BASE}/api/analysis/settings`);
+	if (!res.ok)
+		throw new Error(`Failed to fetch analysis settings: ${res.statusText}`);
+	return res.json();
+}
+
+export async function setAnalysisSettings(
+	autoBrowseEnabled: boolean,
+): Promise<AnalysisSettings> {
+	const res = await fetch(`${BASE}/api/analysis/settings`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ autoBrowseEnabled }),
+	});
+	if (!res.ok)
+		throw new Error(`Failed to update analysis settings: ${res.statusText}`);
+	return res.json();
+}
+
 export interface BulkRequest {
 	items: { srcRoot: string; srcPath: string }[];
 	dstRoot: string;

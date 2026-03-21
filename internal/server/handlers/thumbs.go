@@ -32,9 +32,11 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cacheKey := thumbnail.CacheKey(rootID, relPath, info.ModTime().Unix(), info.Size())
+	mediaType := filesystem.DetectMediaType(fullPath)
 
 	// Check cache first
 	if cachedPath, ok := h.thumbCache.Get(rootID, cacheKey); ok {
+		h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, info.ModTime().Unix(), info.Size())
 		http.ServeFile(w, r, cachedPath)
 		return
 	}
@@ -48,7 +50,6 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dstPath := h.thumbCache.Path(rootID, cacheKey)
-	mediaType := filesystem.DetectMediaType(fullPath)
 
 	switch mediaType {
 	case "image":
@@ -66,5 +67,13 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, info.ModTime().Unix(), info.Size())
 	http.ServeFile(w, r, dstPath)
+}
+
+func (h *Handler) enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType string, mtime, size int64) {
+	if !h.AutoBrowseEnabled() || h.browseCoordinator == nil {
+		return
+	}
+	_ = h.browseCoordinator.Enqueue(rootID, relPath, fullPath, mediaType, mtime, size)
 }

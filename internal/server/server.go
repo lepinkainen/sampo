@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/lepinkainen/filemanager/internal/analysis"
 	"github.com/lepinkainen/filemanager/internal/classification"
 	"github.com/lepinkainen/filemanager/internal/config"
 	"github.com/lepinkainen/filemanager/internal/detection"
@@ -54,6 +55,12 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	s.router.Use(middleware.Compress(5))
 
 	h := handlers.New(rootMgr, thumbCache, frameDir, logger)
+	h.SetAutoBrowseEnabled(cfg.Analysis.AutoBrowseEnabled)
+
+	var detStore *detection.Store
+	var detector *detection.Detector
+	var classStore *classification.Store
+	var classifier *classification.Classifier
 
 	// Initialize shared ONNX environment if any ML feature is enabled
 	if cfg.Detection.Enabled || cfg.Classification.Enabled {
@@ -64,12 +71,12 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 
 	// Conditionally initialize detection
 	if cfg.Detection.Enabled {
-		detStore, err := detection.NewStore(cfg.Cache.Dir)
+		detStore, err = detection.NewStore(cfg.Cache.Dir)
 		if err != nil {
 			return nil, fmt.Errorf("initializing detection store: %w", err)
 		}
 
-		detector, err := detection.NewDetector(
+		detector, err = detection.NewDetector(
 			cfg.Detection.ModelPath,
 			cfg.Detection.Threshold,
 			cfg.Detection.ModelVersion,
@@ -87,12 +94,12 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 
 	// Conditionally initialize classification
 	if cfg.Classification.Enabled {
-		classStore, err := classification.NewStore(cfg.Cache.Dir)
+		classStore, err = classification.NewStore(cfg.Cache.Dir)
 		if err != nil {
 			return nil, fmt.Errorf("initializing classification store: %w", err)
 		}
 
-		classifier, err := classification.NewClassifier(
+		classifier, err = classification.NewClassifier(
 			cfg.Classification.ModelPath,
 			cfg.Classification.LabelsPath,
 			cfg.Classification.Threshold,
@@ -107,6 +114,27 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		classScanner := classification.NewScanner(classStore, classifier, rootMgr, frameDir, cfg.Classification.Workers, logger)
 		h.SetClassification(classStore, classifier, classScanner)
 		logger.Info("classification enabled", "model", cfg.Classification.ModelPath, "threshold", cfg.Classification.Threshold)
+	}
+
+	if cfg.Detection.Enabled || cfg.Classification.Enabled {
+		coordinator := analysis.NewCoordinator(
+			detStore,
+			detector,
+			classStore,
+			classifier,
+			frameDir,
+			cfg.Analysis.BrowseWorkers,
+			cfg.Analysis.BrowseQueueSize,
+			cfg.Analysis.IncludeVideos,
+			logger,
+		)
+		h.SetBrowseCoordinator(coordinator)
+		logger.Info("browse analysis configured",
+			"autoEnabled", cfg.Analysis.AutoBrowseEnabled,
+			"workers", cfg.Analysis.BrowseWorkers,
+			"queueSize", cfg.Analysis.BrowseQueueSize,
+			"includeVideos", cfg.Analysis.IncludeVideos,
+		)
 	}
 
 	s.setupRoutes(h, frontendFS)

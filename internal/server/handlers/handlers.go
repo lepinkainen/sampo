@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"log/slog"
+	"sync/atomic"
 
+	"github.com/lepinkainen/filemanager/internal/analysis"
 	"github.com/lepinkainen/filemanager/internal/classification"
 	"github.com/lepinkainen/filemanager/internal/detection"
 	"github.com/lepinkainen/filemanager/internal/filesystem"
@@ -11,16 +13,18 @@ import (
 
 // Handler holds dependencies for HTTP handlers.
 type Handler struct {
-	roots          *filesystem.RootManager
-	thumbCache     *thumbnail.Cache
-	frameDir       string
-	logger         *slog.Logger
-	detectionStore *detection.Store
-	detector       *detection.Detector
-	scanner        *detection.Scanner
-	classStore     *classification.Store
-	classifier     *classification.Classifier
-	classScanner   *classification.Scanner
+	roots             *filesystem.RootManager
+	thumbCache        *thumbnail.Cache
+	frameDir          string
+	logger            *slog.Logger
+	detectionStore    *detection.Store
+	detector          *detection.Detector
+	scanner           *detection.Scanner
+	classStore        *classification.Store
+	classifier        *classification.Classifier
+	classScanner      *classification.Scanner
+	browseCoordinator *analysis.Coordinator
+	autoBrowseEnabled atomic.Bool
 }
 
 // New creates a new Handler.
@@ -45,4 +49,19 @@ func (h *Handler) SetClassification(store *classification.Store, classifier *cla
 	h.classStore = store
 	h.classifier = classifier
 	h.classScanner = scanner
+}
+
+// SetBrowseCoordinator configures optional browse-triggered background analysis.
+func (h *Handler) SetBrowseCoordinator(coordinator *analysis.Coordinator) {
+	h.browseCoordinator = coordinator
+}
+
+// SetAutoBrowseEnabled updates the runtime browse-triggered analysis flag.
+func (h *Handler) SetAutoBrowseEnabled(enabled bool) {
+	h.autoBrowseEnabled.Store(enabled)
+}
+
+// AutoBrowseEnabled reports whether browse-triggered analysis is enabled.
+func (h *Handler) AutoBrowseEnabled() bool {
+	return h.autoBrowseEnabled.Load()
 }
