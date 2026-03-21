@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,13 +15,16 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 		t.Skip("ffmpeg not available")
 	}
 
-	// Generate a 2-second test video with ffmpeg
 	srcDir := t.TempDir()
 	srcPath := filepath.Join(srcDir, "test.mp4")
 
 	genArgs := []string{
-		"-f", "lavfi",
-		"-i", "color=c=red:s=320x240:d=2",
+		"-f", "lavfi", "-i", "color=c=red:s=320x240:d=1",
+		"-f", "lavfi", "-i", "color=c=green:s=320x240:d=1",
+		"-f", "lavfi", "-i", "color=c=blue:s=320x240:d=1",
+		"-f", "lavfi", "-i", "color=c=yellow:s=320x240:d=1",
+		"-filter_complex", "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0[outv]",
+		"-map", "[outv]",
 		"-c:v", "libx264",
 		"-pix_fmt", "yuv420p",
 		"-y",
@@ -34,8 +38,7 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 	dstDir := t.TempDir()
 	dstPath := filepath.Join(dstDir, "thumb.jpg")
 
-	err := GenerateVideoThumbnail(srcPath, dstPath)
-	if err != nil {
+	if err := GenerateVideoThumbnail(srcPath, dstPath); err != nil {
 		t.Fatalf("GenerateVideoThumbnail failed: %v", err)
 	}
 
@@ -44,7 +47,23 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 		t.Fatalf("thumbnail not created: %v", err)
 	}
 	if info.Size() == 0 {
-		t.Error("thumbnail is empty")
+		t.Fatal("thumbnail is empty")
+	}
+
+	f, err := os.Open(dstPath)
+	if err != nil {
+		t.Fatalf("opening thumbnail: %v", err)
+	}
+	defer f.Close()
+
+	img, err := jpeg.Decode(f)
+	if err != nil {
+		t.Fatalf("decoding thumbnail: %v", err)
+	}
+
+	bounds := img.Bounds()
+	if bounds.Dx() != thumbSize || bounds.Dy() != thumbSize {
+		t.Fatalf("expected thumbnail size %dx%d, got %dx%d", thumbSize, thumbSize, bounds.Dx(), bounds.Dy())
 	}
 }
 
