@@ -55,6 +55,7 @@ import {
 
 interface Props {
 	rootId: string;
+	rootName?: string;
 	path: string;
 	previewFile?: string | null;
 	onNavigate?: (path: string) => void;
@@ -63,12 +64,14 @@ interface Props {
 
 let {
 	rootId,
+	rootName,
 	path,
 	previewFile = null,
 	onNavigate,
 	onPreviewChange,
 }: Props = $props();
 
+let pathSegments = $derived(path.split('/').filter(Boolean));
 let entries = $state<FileEntry[]>([]);
 let loading = $state(false);
 let error = $state<string | null>(null);
@@ -671,27 +674,21 @@ async function handleFindDuplicates() {
 							class="text-gray-500 hover:text-gray-200 transition-colors"
 							onclick={() => onNavigate?.('')}
 						>
-							{rootId}
+							{rootName || rootId}
 						</button>
-						{#if path}
-							{@const segments = path.split('/')}
-							{#each segments as segment, i}
-								<span class="mx-1 text-gray-600">/</span>
-								{#if i < segments.length - 1}
-									<button
-										class="text-gray-400 hover:text-gray-200 transition-colors"
-										onclick={() => onNavigate?.(segments.slice(0, i + 1).join('/'))}
-									>
-										{segment}
-									</button>
-								{:else}
-									<span>{segment}</span>
-								{/if}
-							{/each}
-						{:else}
+						{#each pathSegments as segment, i}
 							<span class="mx-1 text-gray-600">/</span>
-							<span>(root)</span>
-						{/if}
+							{#if i < pathSegments.length - 1}
+								<button
+									class="text-gray-400 hover:text-gray-200 transition-colors"
+									onclick={() => onNavigate?.(pathSegments.slice(0, i + 1).join('/'))}
+								>
+									{segment}
+								</button>
+							{:else}
+								<span>{segment}</span>
+							{/if}
+						{/each}
 					</div>
 				{/if}
 

@@ -1,13 +1,20 @@
 <script lang="ts">
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
+import { fetchRoots } from '$lib/api';
 import ThumbnailGrid from '$lib/components/ThumbnailGrid.svelte';
 import TreeView from '$lib/components/TreeView.svelte';
+import type { Root } from '$lib/types';
 
 // Derived state from URL
 let selectedRootId = $derived($page.url.searchParams.get('root'));
 let selectedPath = $derived($page.url.searchParams.get('path'));
 let previewPath = $derived($page.url.searchParams.get('preview'));
+
+// Roots data for resolving names
+let roots: Root[] = $state([]);
+fetchRoots().then((r) => (roots = r));
+let rootName = $derived(roots.find((r) => r.id === selectedRootId)?.name);
 
 // Tree selection key
 let selectedKey = $derived(
@@ -71,6 +78,7 @@ function handleRefresh() {
 			{#key refreshKey}
 				<ThumbnailGrid
 					rootId={selectedRootId}
+					{rootName}
 					path={selectedPath}
 					previewFile={previewPath}
 					onNavigate={handleNavigate}
