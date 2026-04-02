@@ -19,6 +19,8 @@ labels:
     prompt: "a photo of a person wearing a costume or cosplay"
   - name: winter_clothing
     prompt: "a photo of a person wearing heavy winter clothing"
+  - name: "evening_dress"
+    prompt: "a photo of a person wearing an evening dress"
   - name: beach
     prompt: "a photo taken at a beach"
   - name: pool
