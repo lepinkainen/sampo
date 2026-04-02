@@ -182,6 +182,12 @@ tasks:
       - test -f models/clip-vit-b32-image.onnx
       - test -f models/clip-labels.json
 
+  update-clip-labels:
+    desc: Regenerate CLIP text embeddings from clip-labels.yaml (without re-exporting ONNX model)
+    cmds:
+      - mkdir -p models
+      - uv run --with transformers --with torch --with pyyaml --with numpy python scripts/export-clip-labels.py
+
   docker-build:
     desc: Build Docker image
     cmds:
