@@ -1104,8 +1104,10 @@ async function handleFindDuplicates() {
 							</div>
 
 							<div class="grid grid-cols-2 gap-y-4 text-sm">
-								<div class="text-gray-500">Size</div>
-								<div class="text-gray-300">{formatSize(sel.size)}</div>
+								{#if !sel.isDir}
+									<div class="text-gray-500">Size</div>
+									<div class="text-gray-300">{formatSize(sel.size)}</div>
+								{/if}
 
 								<div class="text-gray-500">Modified</div>
 								<div class="text-gray-300">{formatDate(sel.modTime)}</div>
@@ -1187,7 +1189,7 @@ async function handleFindDuplicates() {
 						<h3 class="text-lg font-semibold text-gray-100">{selectedEntries.length} items selected</h3>
 						<div class="grid grid-cols-2 gap-y-4 text-sm">
 							<div class="text-gray-500">Total size</div>
-							<div class="text-gray-300">{formatSize(selectedEntries.reduce((sum, e) => sum + e.size, 0))}</div>
+							<div class="text-gray-300">{formatSize(selectedEntries.reduce((sum, e) => (e.isDir ? sum : sum + e.size), 0))}</div>
 
 							<div class="text-gray-500">Files</div>
 							<div class="text-gray-300">{selectedEntries.filter((e) => !e.isDir).length}</div>
