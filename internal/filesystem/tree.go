@@ -75,6 +75,65 @@ func DetectMediaType(name string) string {
 	}
 }
 
+// ImageEntry holds metadata for an image file within a directory.
+type ImageEntry struct {
+	AbsPath string
+	RelPath string
+	ModTime int64
+	Size    int64
+}
+
+// isVisibleImage reports whether a directory entry is a non-hidden image file.
+func isVisibleImage(e os.DirEntry) bool {
+	return !e.IsDir() && !strings.HasPrefix(e.Name(), ".") && imageExts[strings.ToLower(filepath.Ext(e.Name()))]
+}
+
+// HasImageFile reports whether dirPath contains at least one image file.
+func HasImageFile(dirPath string) bool {
+	f, err := os.Open(dirPath)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+
+	for {
+		entries, err := f.ReadDir(64)
+		for _, e := range entries {
+			if isVisibleImage(e) {
+				return true
+			}
+		}
+		if err != nil {
+			return false
+		}
+	}
+}
+
+// ImageFilesInDir returns metadata for all image files in dirPath, sorted lexicographically.
+func ImageFilesInDir(dirPath, relBase string) ([]ImageEntry, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	var result []ImageEntry
+	for _, e := range entries {
+		if !isVisibleImage(e) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		result = append(result, ImageEntry{
+			AbsPath: filepath.Join(dirPath, e.Name()),
+			RelPath: filepath.Join(relBase, e.Name()),
+			ModTime: info.ModTime().Unix(),
+			Size:    info.Size(),
+		})
+	}
+	return result, nil
+}
+
 // ListDirectory returns the contents of a directory.
 func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 	entries, err := os.ReadDir(dirPath)
@@ -100,6 +159,11 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			mediaType = DetectMediaType(e.Name())
 		}
 
+		hasThumb := mediaType == "image" || mediaType == "video"
+		if e.IsDir() {
+			hasThumb = HasImageFile(filepath.Join(dirPath, e.Name()))
+		}
+
 		entry := FileEntry{
 			Name:      e.Name(),
 			Path:      relPath,
@@ -108,7 +172,7 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
 			MediaType: mediaType,
-			HasThumb:  mediaType == "image" || mediaType == "video",
+			HasThumb:  hasThumb,
 		}
 		// Parse CRC32 from videotagger-style filenames for videos
 		if mediaType == "video" {

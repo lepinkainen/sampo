@@ -3,7 +3,7 @@ import { thumbnailUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
-import { User } from '@lucide/svelte';
+import { Folder, User } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -107,7 +107,11 @@ $effect(() => {
 				{/each}
 			</div>
 		{/if}
-		{#if entry.hasPerson === true}
+		{#if entry.isDir && entry.hasThumb && !imgError}
+			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
+				<Folder size={14} />
+			</span>
+		{:else if entry.hasPerson === true}
 			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
 				<User size={14} />
 			</span>
@@ -115,6 +119,8 @@ $effect(() => {
 	</div>
 	<div class="p-2">
 		<p class="truncate text-sm text-gray-200" title={entry.name}>{entry.name}</p>
-		<p class="text-xs text-gray-500">{formatSize(entry.size)}</p>
+		{#if !entry.isDir}
+			<p class="text-xs text-gray-500">{formatSize(entry.size)}</p>
+		{/if}
 	</div>
 </div>

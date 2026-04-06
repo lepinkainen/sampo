@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,6 +29,11 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	if info.IsDir() {
+		h.serveDirThumbnail(w, r, rootID, relPath, fullPath)
 		return
 	}
 
@@ -69,6 +75,28 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, info.ModTime().Unix(), info.Size())
 	http.ServeFile(w, r, dstPath)
+}
+
+func (h *Handler) serveDirThumbnail(w http.ResponseWriter, r *http.Request, rootID, relPath, fullPath string) {
+	images, err := filesystem.ImageFilesInDir(fullPath, relPath)
+	if err != nil {
+		h.logger.Error("reading directory for thumbnail", "error", err, "path", fullPath)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	thumbPath, err := thumbnail.FindFirstCachedOrGenerate(images, rootID, h.thumbCache)
+	if err != nil {
+		if errors.Is(err, thumbnail.ErrNoImages) {
+			http.Error(w, "No thumbnail available", http.StatusNotFound)
+			return
+		}
+		h.logger.Error("generating directory thumbnail", "error", err, "path", fullPath)
+		http.Error(w, "Failed to generate thumbnail", http.StatusInternalServerError)
+		return
+	}
+
+	http.ServeFile(w, r, thumbPath)
 }
 
 func (h *Handler) enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType string, mtime, size int64) {
