@@ -73,7 +73,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("classification.model_version", "clip-vit-b32-1.0")
 	viper.SetDefault("classification.threshold", 0.2)
 	viper.SetDefault("classification.workers", 2)
-	viper.SetDefault("analysis.auto_browse_enabled", false)
+	viper.SetDefault("analysis.auto_browse_enabled", true)
 	viper.SetDefault("analysis.browse_workers", 1)
 	viper.SetDefault("analysis.browse_queue_size", 128)
 	viper.SetDefault("analysis.include_videos", false)
