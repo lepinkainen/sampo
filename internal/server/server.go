@@ -40,8 +40,8 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 
 	// Clean leftover video frames from previous runs
 	frameDir := cfg.Cache.Dir + "/frames"
-	if err := videoframe.CleanDir(frameDir); err != nil {
-		logger.Warn("cleaning leftover video frames", "error", err)
+	if cleanErr := videoframe.CleanDir(frameDir); cleanErr != nil {
+		logger.Warn("cleaning leftover video frames", "error", cleanErr)
 	}
 
 	s := &Server{
@@ -64,8 +64,8 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 
 	// Initialize shared ONNX environment if any ML feature is enabled
 	if cfg.Detection.Enabled || cfg.Classification.Enabled {
-		if err := onnxenv.Init(); err != nil {
-			return nil, fmt.Errorf("initializing ONNX Runtime: %w", err)
+		if initErr := onnxenv.Init(); initErr != nil {
+			return nil, fmt.Errorf("initializing ONNX Runtime: %w", initErr)
 		}
 	}
 

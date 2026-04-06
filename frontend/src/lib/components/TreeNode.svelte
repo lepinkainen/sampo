@@ -41,8 +41,8 @@ async function toggle() {
 		loading = true;
 		try {
 			children = sortEntries(await fetchDirectory(rootId, entry.path)).filter(
-					(e) => e.isDir || e.isZip
-				);
+				(e) => e.isDir || e.isZip,
+			);
 		} catch (e) {
 			console.error('Failed to load directory', e);
 		}

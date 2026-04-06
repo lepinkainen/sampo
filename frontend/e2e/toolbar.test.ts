@@ -9,7 +9,7 @@ test.describe('Toolbar and path display', () => {
 
 		// Toolbar area (border-b bar) should show root ID and path
 		const toolbar = page.locator('.border-b.bg-gray-900');
-		await expect(toolbar).toContainText('root-');
+		await expect(toolbar).toContainText('Sample');
 		await expect(toolbar).toContainText('/ images');
 	});
 

@@ -38,21 +38,21 @@ func GenerateVideoThumbnail(srcPath, dstPath string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	tileSize := thumbSize / 2
 	tiles := make([]image.Image, 0, videoThumbnailFrameCount)
 	positions := evenlySpacedPositions(duration, videoThumbnailFrameCount)
 
 	for _, pos := range positions {
-		framePath, err := extractFrameWithFallback(srcPath, tempDir, duration, pos)
-		if err != nil {
-			return err
+		framePath, extractErr := extractFrameWithFallback(srcPath, tempDir, duration, pos)
+		if extractErr != nil {
+			return extractErr
 		}
 
-		img, err := imaging.Open(framePath)
-		if err != nil {
-			return fmt.Errorf("opening extracted frame %s: %w", framePath, err)
+		img, openErr := imaging.Open(framePath)
+		if openErr != nil {
+			return fmt.Errorf("opening extracted frame %s: %w", framePath, openErr)
 		}
 
 		tile := imaging.Fill(img, tileSize, tileSize, imaging.Center, imaging.Lanczos)

@@ -92,7 +92,7 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 	if c == nil {
 		return false
 	}
-	if mediaType != "image" && !(c.includeVideos && mediaType == "video") {
+	if mediaType != "image" && (!c.includeVideos || mediaType != "video") {
 		return false
 	}
 

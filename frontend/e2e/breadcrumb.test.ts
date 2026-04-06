@@ -20,8 +20,8 @@ test.describe('Breadcrumb navigation', () => {
 		const toolbar = page.locator('.border-b.bg-gray-900');
 		await expect(toolbar).toContainText('/ images');
 
-		// Click root-0 segment to go back to root
-		await toolbar.locator('button', { hasText: /^root-/ }).click();
+		// Click "Sample" segment to go back to root
+		await toolbar.locator('button', { hasText: 'Sample' }).click();
 
 		// Should show root contents — toolbar shows "/ (root)" or just the root path
 		// Wait for the URL to update (no path param or empty path)
