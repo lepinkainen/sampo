@@ -40,7 +40,9 @@ async function toggle() {
 	if (!expanded) {
 		loading = true;
 		try {
-			children = sortEntries(await fetchDirectory(rootId, entry.path));
+			children = sortEntries(await fetchDirectory(rootId, entry.path)).filter(
+					(e) => e.isDir || e.isZip
+				);
 		} catch (e) {
 			console.error('Failed to load directory', e);
 		}
@@ -121,7 +123,7 @@ async function handleDrop(e: DragEvent) {
 		{/if}
 
 		<span class="w-5 shrink-0 text-gray-400">
-			<FileIcon {entry} size={16} />
+			<FileIcon {entry} open={expanded} size={16} />
 		</span>
 		<span class="truncate">{entry.name}</span>
 	</button>

@@ -3,7 +3,7 @@ import { onMount } from 'svelte';
 import { fetchDirectory, fetchRoots, moveFiles, copyFiles } from '$lib/api';
 import type { FileEntry, Root } from '$lib/types';
 import { sortEntries } from '$lib/utils';
-import { Folder, ChevronDown, ChevronRight } from '@lucide/svelte';
+import { Folder, FolderOpen, ChevronDown, ChevronRight } from '@lucide/svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -37,7 +37,7 @@ async function toggleRoot(rootId: string) {
 		if (!rootChildren[rootId]) {
 			try {
 				const entries = sortEntries(await fetchDirectory(rootId, '/'));
-				rootChildren[rootId] = entries;
+				rootChildren[rootId] = entries.filter((e) => e.isDir || e.isZip);
 			} catch (e) {
 				console.error('Failed to load root', rootId, e);
 			}
@@ -114,7 +114,13 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 							<ChevronRight size={14} />
 						{/if}
 					</span>
-					<span class="w-5 shrink-0 text-gray-400"><Folder size={16} /></span>
+					<span class="w-5 shrink-0 text-gray-400">
+						{#if expandedRoots.has(root.id)}
+							<FolderOpen size={16} />
+						{:else}
+							<Folder size={16} />
+						{/if}
+					</span>
 					<span class="truncate">{root.name}</span>
 				</button>
 

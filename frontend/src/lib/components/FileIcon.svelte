@@ -2,6 +2,7 @@
 import type { FileEntry } from '$lib/types';
 import {
 	Folder,
+	FolderOpen,
 	FileArchive,
 	Image as ImageIcon,
 	Video,
@@ -11,13 +12,18 @@ import {
 interface Props {
 	entry: FileEntry;
 	size: number;
+	open?: boolean;
 }
 
-let { entry, size }: Props = $props();
+let { entry, size, open = false }: Props = $props();
 </script>
 
 {#if entry.isDir}
-	<Folder {size} />
+	{#if open}
+		<FolderOpen {size} />
+	{:else}
+		<Folder {size} />
+	{/if}
 {:else if entry.isZip || entry.mediaType === 'archive'}
 	<FileArchive {size} />
 {:else if entry.mediaType === 'image'}
