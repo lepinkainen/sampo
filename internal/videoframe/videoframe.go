@@ -86,6 +86,82 @@ func SeekPosition(videoPath string) string {
 	return strconv.FormatFloat(seek, 'f', 2, 64)
 }
 
+// EvenlySpacedPositions returns count timestamps evenly distributed across the
+// given duration (in seconds). Positions land at 1/(count+1), 2/(count+1), …
+// fractions of the duration. If duration <= 0 every position defaults to 1s.
+func EvenlySpacedPositions(duration float64, count int) []float64 {
+	positions := make([]float64, 0, count)
+	if count <= 0 {
+		return positions
+	}
+	if duration <= 0 {
+		for range count {
+			positions = append(positions, 1)
+		}
+		return positions
+	}
+	for i := range count {
+		fraction := float64(i+1) / float64(count+1)
+		positions = append(positions, duration*fraction)
+	}
+	return positions
+}
+
+// ExtractFrames extracts multiple full-resolution frames at evenly-spaced
+// positions across the video. Returns the paths of successfully extracted
+// frames and a cleanup function that removes all of them. At least one frame
+// must succeed or an error is returned.
+func ExtractFrames(dir, videoPath string, count int) (framePaths []string, cleanup func() error, err error) {
+	if _, lookErr := exec.LookPath("ffmpeg"); lookErr != nil {
+		return nil, nil, fmt.Errorf("ffmpeg not found in PATH: %w", lookErr)
+	}
+	if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
+		return nil, nil, fmt.Errorf("creating frame dir: %w", mkdirErr)
+	}
+
+	duration, _ := ProbeDuration(videoPath)
+	positions := EvenlySpacedPositions(duration, count)
+
+	var paths []string
+	for i, pos := range positions {
+		tmp, tmpErr := os.CreateTemp(dir, fmt.Sprintf("videoframe-%d-*.jpg", i))
+		if tmpErr != nil {
+			continue
+		}
+		_ = tmp.Close()
+
+		args := []string{
+			"-ss", fmt.Sprintf("%.2f", pos),
+			"-i", videoPath,
+			"-vframes", "1",
+			"-f", "mjpeg",
+			"-y",
+			tmp.Name(),
+		}
+		cmd := exec.Command("ffmpeg", args...)
+		if _, runErr := cmd.CombinedOutput(); runErr != nil {
+			_ = os.Remove(tmp.Name())
+			continue
+		}
+		paths = append(paths, tmp.Name())
+	}
+
+	if len(paths) == 0 {
+		return nil, nil, fmt.Errorf("failed to extract any frames from %s", videoPath)
+	}
+
+	cleanup = func() error {
+		var firstErr error
+		for _, p := range paths {
+			if rmErr := os.Remove(p); rmErr != nil && firstErr == nil {
+				firstErr = rmErr
+			}
+		}
+		return firstErr
+	}
+	return paths, cleanup, nil
+}
+
 // ProbeDuration uses ffprobe to get the video duration in seconds.
 func ProbeDuration(videoPath string) (float64, error) {
 	args := []string{

@@ -42,7 +42,7 @@ func GenerateVideoThumbnail(srcPath, dstPath string) error {
 
 	tileSize := thumbSize / 2
 	tiles := make([]image.Image, 0, videoThumbnailFrameCount)
-	positions := evenlySpacedPositions(duration, videoThumbnailFrameCount)
+	positions := videoframe.EvenlySpacedPositions(duration, videoThumbnailFrameCount)
 
 	for _, pos := range positions {
 		framePath, extractErr := extractFrameWithFallback(srcPath, tempDir, duration, pos)
@@ -84,25 +84,6 @@ func GenerateVideoThumbnail(srcPath, dstPath string) error {
 	}
 
 	return nil
-}
-
-func evenlySpacedPositions(duration float64, count int) []float64 {
-	positions := make([]float64, 0, count)
-	if count <= 0 {
-		return positions
-	}
-	if duration <= 0 {
-		for i := 0; i < count; i++ {
-			positions = append(positions, 1)
-		}
-		return positions
-	}
-
-	for i := 0; i < count; i++ {
-		fraction := float64(i+1) / float64(count+1)
-		positions = append(positions, duration*fraction)
-	}
-	return positions
 }
 
 func extractFrameWithFallback(srcPath, tempDir string, duration, targetSeconds float64) (string, error) {
