@@ -3,8 +3,10 @@ package thumbnail
 import (
 	"crypto/sha256"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Cache manages thumbnail storage on disk.
@@ -46,4 +48,46 @@ func (c *Cache) Get(rootID, key string) (string, bool) {
 func (c *Cache) EnsureDir(rootID string) error {
 	dir := filepath.Join(c.baseDir, rootID)
 	return os.MkdirAll(dir, 0o755)
+}
+
+// Prune removes cached thumbnails older than maxAge based on file mtime.
+// Returns the number of files removed and the first error encountered.
+func (c *Cache) Prune(maxAge time.Duration) (int, error) {
+	cutoff := time.Now().Add(-maxAge)
+	removed := 0
+	var firstErr error
+
+	err := filepath.WalkDir(c.baseDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
+		}
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(path); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				return nil
+			}
+			removed++
+		}
+		return nil
+	})
+	if err != nil && firstErr == nil {
+		firstErr = err
+	}
+
+	return removed, firstErr
 }

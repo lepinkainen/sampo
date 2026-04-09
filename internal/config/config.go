@@ -45,7 +45,8 @@ type Config struct {
 		Port int `mapstructure:"port"`
 	} `mapstructure:"server"`
 	Cache struct {
-		Dir string `mapstructure:"dir"`
+		Dir        string `mapstructure:"dir"`
+		MaxAgeDays int    `mapstructure:"max_age_days"`
 	} `mapstructure:"cache"`
 	Roots          []RootConfig         `mapstructure:"roots"`
 	Detection      DetectionConfig      `mapstructure:"detection"`
@@ -62,6 +63,7 @@ func Load() (*Config, error) {
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("cache.dir", ".cache")
+	viper.SetDefault("cache.max_age_days", 90)
 	viper.SetDefault("detection.enabled", false)
 	viper.SetDefault("detection.model_path", "models/yolov8n.onnx")
 	viper.SetDefault("detection.model_version", "v8n-1.0")

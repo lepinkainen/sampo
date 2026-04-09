@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -36,6 +37,18 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	thumbCache, err := thumbnail.NewCache(cfg.Cache.Dir + "/thumbs")
 	if err != nil {
 		return nil, fmt.Errorf("initializing thumbnail cache: %w", err)
+	}
+
+	// Prune stale thumbnails from cache
+	if cfg.Cache.MaxAgeDays > 0 {
+		maxAge := time.Duration(cfg.Cache.MaxAgeDays) * 24 * time.Hour
+		pruned, pruneErr := thumbCache.Prune(maxAge)
+		if pruneErr != nil {
+			logger.Warn("pruning thumbnail cache", "error", pruneErr)
+		}
+		if pruned > 0 {
+			logger.Info("pruned stale thumbnails", "count", pruned)
+		}
 	}
 
 	// Clean leftover video frames from previous runs
