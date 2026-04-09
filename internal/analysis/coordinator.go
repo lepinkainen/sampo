@@ -170,28 +170,19 @@ func (c *Coordinator) Status() Status {
 	}
 }
 
+// videoAnalysisFrames is the number of frames extracted for video ML analysis,
+// matching the thumbnail grid's 4-frame sampling for consistent coverage.
+const videoAnalysisFrames = 4
+
 func (c *Coordinator) process(j job) {
-	analyzePath := j.fullPath
-	var cleanup func() error
-
 	if j.mediaType == "video" {
-		framePath, frameCleanup, err := videoframe.ExtractFrame(c.frameDir, j.fullPath)
-		if err != nil {
-			c.logger.Warn("browse analysis video frame extraction failed", "path", j.relPath, "error", err)
-			return
-		}
-		analyzePath = framePath
-		cleanup = frameCleanup
+		c.processVideo(j)
+		return
 	}
+	c.processImage(j, j.fullPath)
+}
 
-	if cleanup != nil {
-		defer func() {
-			if err := cleanup(); err != nil {
-				c.logger.Warn("failed to remove browse analysis temp frame", "path", analyzePath, "error", err)
-			}
-		}()
-	}
-
+func (c *Coordinator) processImage(j job, analyzePath string) {
 	if j.needDetect {
 		result, err := c.detector.Detect(analyzePath, j.rootID, j.relPath, j.mtime, j.size)
 		if err != nil {
@@ -209,4 +200,94 @@ func (c *Coordinator) process(j job) {
 			c.logger.Warn("storing browse analysis classification result", "path", j.relPath, "error", err)
 		}
 	}
+}
+
+func (c *Coordinator) processVideo(j job) {
+	framePaths, cleanup, err := videoframe.ExtractFrames(c.frameDir, j.fullPath, videoAnalysisFrames)
+	if err != nil {
+		c.logger.Warn("browse analysis video frame extraction failed", "path", j.relPath, "error", err)
+		return
+	}
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			c.logger.Warn("failed to remove browse analysis temp frames", "path", j.relPath, "error", cleanupErr)
+		}
+	}()
+
+	if j.needDetect {
+		var results []*detection.Result
+		for _, fp := range framePaths {
+			result, detectErr := c.detector.Detect(fp, j.rootID, j.relPath, j.mtime, j.size)
+			if detectErr != nil {
+				c.logger.Debug("browse analysis detection failed for frame", "path", j.relPath, "frame", fp, "error", detectErr)
+				continue
+			}
+			results = append(results, result)
+		}
+		if agg := aggregateDetections(results); agg != nil {
+			if putErr := c.detectionStore.Put(agg); putErr != nil {
+				c.logger.Warn("storing browse analysis detection result", "path", j.relPath, "error", putErr)
+			}
+		}
+	}
+
+	if j.needClassify {
+		var results []*classification.Result
+		for _, fp := range framePaths {
+			result, classErr := c.classifier.Classify(fp, j.rootID, j.relPath, j.mtime, j.size)
+			if classErr != nil {
+				c.logger.Debug("browse analysis classification failed for frame", "path", j.relPath, "frame", fp, "error", classErr)
+				continue
+			}
+			results = append(results, result)
+		}
+		if agg := aggregateClassifications(results); agg != nil {
+			// Clear file hashes — they're from temporary frames, not the original video.
+			agg.SHA256 = ""
+			agg.CRC32 = ""
+			if putErr := c.classStore.Put(agg); putErr != nil {
+				c.logger.Warn("storing browse analysis classification result", "path", j.relPath, "error", putErr)
+			}
+		}
+	}
+}
+
+// aggregateDetections merges detection results from multiple frames.
+// HasPerson is true if any frame detected a person; Confidence is the maximum.
+func aggregateDetections(results []*detection.Result) *detection.Result {
+	if len(results) == 0 {
+		return nil
+	}
+	agg := *results[0]
+	for _, r := range results[1:] {
+		if r.HasPerson {
+			agg.HasPerson = true
+		}
+		if r.Confidence > agg.Confidence {
+			agg.Confidence = r.Confidence
+		}
+	}
+	return &agg
+}
+
+// aggregateClassifications merges classification results from multiple frames.
+// Tags are unioned, keeping the highest score per label.
+func aggregateClassifications(results []*classification.Result) *classification.Result {
+	if len(results) == 0 {
+		return nil
+	}
+	agg := *results[0]
+	best := make(map[string]float32)
+	for _, r := range results {
+		for _, tag := range r.Tags {
+			if tag.Score > best[tag.Label] {
+				best[tag.Label] = tag.Score
+			}
+		}
+	}
+	agg.Tags = make([]classification.TagScore, 0, len(best))
+	for label, score := range best {
+		agg.Tags = append(agg.Tags, classification.TagScore{Label: label, Score: score})
+	}
+	return &agg
 }

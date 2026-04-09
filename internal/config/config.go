@@ -76,7 +76,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("analysis.auto_browse_enabled", true)
 	viper.SetDefault("analysis.browse_workers", 1)
 	viper.SetDefault("analysis.browse_queue_size", 128)
-	viper.SetDefault("analysis.include_videos", false)
+	viper.SetDefault("analysis.include_videos", true)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)
