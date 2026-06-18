@@ -24,8 +24,10 @@ vars:
 tasks:
   build:
     desc: Build the project
-    deps: [test, lint]
     cmds:
+      - task: update-clip-labels
+      - task: test
+      - task: lint
       - task: build-ocr
       - task: build-frontend
       - task: build-go
@@ -195,6 +197,11 @@ tasks:
     cmds:
       - mkdir -p models
       - uv run --with transformers --with torch --with pyyaml --with numpy python scripts/export-clip-labels.py
+    sources:
+      - scripts/clip-labels.yaml
+      - scripts/export-clip-labels.py
+    generates:
+      - models/clip-labels.json
 
   build-ocr:
     desc: Compile the macOS Vision OCR helper (sampo-ocr) used by OCR on darwin
