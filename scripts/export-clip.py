@@ -96,13 +96,14 @@ def compute_text_embeddings(model, tokenizer, labels):
         embedding = text_embeds.squeeze(0).numpy()
         embedding = embedding / np.linalg.norm(embedding)
 
-        results.append(
-            {
-                "name": name,
-                "prompt": prompt,
-                "embedding": embedding.tolist(),
-            }
-        )
+        entry = {
+            "name": name,
+            "prompt": prompt,
+            "embedding": embedding.tolist(),
+        }
+        if label_def.get("group"):
+            entry["group"] = label_def["group"]
+        results.append(entry)
         print(f"  {name}: {prompt}")
 
     return results

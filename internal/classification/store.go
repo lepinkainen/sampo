@@ -166,17 +166,19 @@ func (s *Store) getTags(rootID, relPath string) ([]TagScore, error) {
 	return tags, rows.Err()
 }
 
-// IsStale checks if a file has changed since its last classification.
-func (s *Store) IsStale(rootID, relPath string, mtime int64, size int64) bool {
+// IsStale checks if a file has changed (mtime/size) or was classified with a
+// different model version since its last classification.
+func (s *Store) IsStale(rootID, relPath string, mtime int64, size int64, modelVer string) bool {
 	var storedMtime, storedSize int64
+	var storedModelVer string
 	err := s.db.QueryRow(
-		`SELECT mtime, size FROM classifications WHERE root_id = ? AND rel_path = ?`,
+		`SELECT mtime, size, model_ver FROM classifications WHERE root_id = ? AND rel_path = ?`,
 		rootID, relPath,
-	).Scan(&storedMtime, &storedSize)
+	).Scan(&storedMtime, &storedSize, &storedModelVer)
 	if err != nil {
 		return true
 	}
-	return storedMtime != mtime || storedSize != size
+	return storedMtime != mtime || storedSize != size || storedModelVer != modelVer
 }
 
 // dirPrefix normalizes a directory path for prefix matching.

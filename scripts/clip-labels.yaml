@@ -1,36 +1,52 @@
 labels:
   - name: bikini
     prompt: "a photo of a person wearing a bikini"
+    group: attire
   - name: swimsuit
     prompt: "a photo of a person wearing a swimsuit"
+    group: attire
   - name: nudity
     prompt: "a photo containing nudity"
+    group: attire
   - name: lingerie
     prompt: "a photo of a person wearing lingerie or underwear"
+    group: attire
   - name: formal_wear
     prompt: "a photo of a person wearing formal clothing such as a suit or dress"
+    group: attire
   - name: casual
     prompt: "a photo of a person wearing casual everyday clothing"
+    group: attire
   - name: sportswear
     prompt: "a photo of a person wearing athletic or sportswear"
+    group: attire
   - name: uniform
     prompt: "a photo of a person wearing a uniform"
+    group: attire
   - name: costume
     prompt: "a photo of a person wearing a costume or cosplay"
+    group: attire
   - name: winter_clothing
     prompt: "a photo of a person wearing heavy winter clothing"
+    group: attire
   - name: "evening_dress"
     prompt: "a photo of a person wearing an evening dress"
+    group: attire
   - name: beach
     prompt: "a photo taken at a beach"
+    group: location
   - name: pool
     prompt: "a photo taken at a swimming pool"
+    group: location
   - name: nature
     prompt: "a photo of nature or a landscape"
+    group: location
   - name: urban
     prompt: "a photo of an urban setting or city"
+    group: location
   - name: indoor
     prompt: "a photo taken indoors"
+    group: location
   - name: food
     prompt: "a photo of food or a meal"
   - name: animal

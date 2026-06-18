@@ -217,11 +217,12 @@ export async function getClassification(
 export async function startClassifyScan(
 	rootId: string,
 	path: string,
+	force = false,
 ): Promise<ScanStatus> {
 	const res = await fetch(`${BASE}/api/classify/scan`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ rootId, path }),
+		body: JSON.stringify({ rootId, path, force }),
 	});
 	if (!res.ok) throw new Error(`Classification scan failed: ${res.statusText}`);
 	return res.json();
