@@ -15,6 +15,7 @@ dist/
 # IDE files
 .vscode/
 .idea/
+.claude/skills/playwright-cli/
 *.swp
 *.swo
 *~
