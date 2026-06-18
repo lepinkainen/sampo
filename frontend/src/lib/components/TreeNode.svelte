@@ -32,7 +32,7 @@ let dragOver = $state(false);
 const isSelected = $derived(selectedPath === `${rootId}:${entry.path}`);
 
 async function toggle() {
-	if (!entry.isDir && !entry.isZip) {
+	if (!entry.isDir) {
 		onSelect(rootId, entry.path, false);
 		return;
 	}
@@ -41,7 +41,7 @@ async function toggle() {
 		loading = true;
 		try {
 			children = sortEntries(await fetchDirectory(rootId, entry.path)).filter(
-				(e) => e.isDir || e.isZip,
+				(e) => e.isDir,
 			);
 		} catch (e) {
 			console.error('Failed to load directory', e);
@@ -108,7 +108,7 @@ async function handleDrop(e: DragEvent) {
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
 	>
-		{#if entry.isDir || entry.isZip}
+		{#if entry.isDir}
 			<span class="w-4 shrink-0 text-gray-500">
 				{#if loading}
 					<Loader size={14} class="animate-spin" />

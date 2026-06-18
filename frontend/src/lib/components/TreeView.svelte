@@ -37,7 +37,7 @@ async function toggleRoot(rootId: string) {
 		if (!rootChildren[rootId]) {
 			try {
 				const entries = sortEntries(await fetchDirectory(rootId, '/'));
-				rootChildren[rootId] = entries.filter((e) => e.isDir || e.isZip);
+				rootChildren[rootId] = entries.filter((e) => e.isDir);
 			} catch (e) {
 				console.error('Failed to load root', rootId, e);
 			}
