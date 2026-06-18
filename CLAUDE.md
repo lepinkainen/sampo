@@ -21,7 +21,7 @@ task dev-logs       # Show background log file locations
 task dev-frontend   # SvelteKit dev server (port 5173, proxies API to :8080)
 task dev-go         # Go backend only (port 8080)
 task clean          # Remove build artifacts
-task download-model       # Download YOLOv8n and export to ONNX
+task download-model       # Download YOLO11n and export to ONNX
 task download-clip-model  # Export CLIP ViT-B/32 to ONNX + pre-compute text embeddings
 ```
 
@@ -87,8 +87,8 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 Both detection and classification are optional — enabled via `config.yaml` `detection:` and `classification:` sections. Models live in `models/` (gitignored); download with `task download-model` / `task download-clip-model`.
 
 - **ONNX Runtime** (`internal/onnxenv/`): shared lazy init via `sync.Once`. Auto-detects library path per platform (Homebrew on ARM64 macOS, `/usr/lib` on Linux). Override with `ORT_LIB_PATH` env var. Uses CoreML execution provider on macOS
-- **Person detection** (`internal/detection/`): YOLOv8n model. Scanner for batch directory processing, SQLite-backed result cache
-- **Image classification** (`internal/classification/`): CLIP ViT-B/32 vision encoder. Text embeddings pre-computed at export time from `scripts/clip-labels.yaml` (18 labels: clothing, locations, etc.). Scanner + SQLite store. Classifies by cosine similarity against label embeddings
+- **Person detection** (`internal/detection/`): YOLO11n model (output `[1,84,8400]`, same layout as YOLOv8). Scanner for batch directory processing, SQLite-backed result cache
+- **Image classification** (`internal/classification/`): CLIP ViT-B/32 vision encoder. Text embeddings pre-computed at export time from `scripts/clip-labels.yaml` (18 labels: clothing, locations, etc.). Scanner + SQLite store. Classifies by cosine similarity against label embeddings. Upgrade options researched (not yet adopted): **SigLIP 2 FixRes** (best zero-shot, multilingual, ONNX via `onnx-community/siglip2-*-ONNX`; requires SigLIP preprocessing + sigmoid scoring rewrite) or OpenCLIP/EVA-CLIP (same code shape)
 
 ### API
 

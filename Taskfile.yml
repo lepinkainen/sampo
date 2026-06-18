@@ -173,12 +173,12 @@ tasks:
       - pnpm run dev -- --host 127.0.0.1 --port 5173
 
   download-model:
-    desc: Download YOLOv8n and export to ONNX for person detection
+    desc: Download YOLO11n and export to ONNX for person detection
     cmds:
       - mkdir -p models
-      - uv run --with ultralytics --with "onnx>=1.12.0,<2.0.0" --with onnxslim --with onnxruntime python -c "from ultralytics import YOLO; model = YOLO('yolov8n.pt'); model.export(format='onnx', imgsz=640)" && mv yolov8n.onnx models/yolov8n.onnx && rm -f yolov8n.pt
+      - uv run --with ultralytics --with "onnx>=1.12.0,<2.0.0" --with onnxslim --with onnxruntime python -c "from ultralytics import YOLO; model = YOLO('yolo11n.pt'); model.export(format='onnx', imgsz=640)" && mv yolo11n.onnx models/yolo11n.onnx && rm -f yolo11n.pt
     status:
-      - test -f models/yolov8n.onnx
+      - test -f models/yolo11n.onnx
 
   download-clip-model:
     desc: Export CLIP ViT-B/32 image encoder to ONNX and pre-compute text embeddings

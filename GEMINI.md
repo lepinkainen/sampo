@@ -6,7 +6,7 @@ Sampo is a full-stack file manager with AI-powered media analysis capabilities, 
 
 - **Backend**: Go (v1.26+) using the `chi` router and `viper` for configuration.
 - **Frontend**: Svelte 5 (SvelteKit) with TypeScript, Tailwind CSS 4, and Lucide icons.
-- **AI/ML**: ONNX Runtime-based pipeline for person detection (YOLOv8n) and image classification (CLIP ViT-B/32).
+- **AI/ML**: ONNX Runtime-based pipeline for person detection (YOLO11n) and image classification (CLIP ViT-B/32).
 - **Architecture**: A two-process application where the Go backend serves a SvelteKit SPA from disk (static adapter).
 - **Database**: SQLite is used for caching ML analysis results (stored in `.cache/`).
 
@@ -29,7 +29,7 @@ The project uses `go-task` for automation. Key commands include:
 - `task lint`: Lints both Go (golangci-lint) and Frontend (Biome) code.
 
 ### ML Setup
-- `task download-model`: Downloads and exports the YOLOv8n model to ONNX.
+- `task download-model`: Downloads and exports the YOLO11n model to ONNX.
 - `task download-clip-model`: Exports the CLIP model to ONNX and pre-computes text embeddings.
 
 ## Development Conventions

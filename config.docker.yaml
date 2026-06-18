@@ -10,8 +10,8 @@ roots:
 
 detection:
   enabled: true
-  model_path: "/app/models/yolov8n.onnx"
-  model_version: "v8n-1.0"
+  model_path: "/app/models/yolo11n.onnx"
+  model_version: "v11n-1.0"
   threshold: 0.5
   workers: 2
 
