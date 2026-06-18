@@ -15,13 +15,35 @@ linters:
     - misspell
     - gocritic
     - revive
+    - errorlint
+    - bodyclose
+    - contextcheck
+    - sqlclosecheck
+    - noctx
+    - gosec
+    - unparam
+    - gocyclo
   exclusions:
     paths:
       - llm-shared
+    rules:
+      - linters:
+          - noctx
+        path: internal/(classification|detection)/store\.go
+        text: "must not be called"
+      - linters:
+          - gosec
+        text: "G(301|304|703):"
+      - linters:
+          - gosec
+        path: internal/(thumbnail|videoframe)/.*\.go
+        text: "G(122|204):"
   settings:
     govet:
       enable:
         - shadow
+    gocyclo:
+      min-complexity: 40
     gocritic:
       enabled-tags:
         - diagnostic

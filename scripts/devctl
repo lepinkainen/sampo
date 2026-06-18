@@ -11,6 +11,7 @@ BACKEND_LOG_FILE="$RUN_DIR/$BACKEND_NAME.log"
 FRONTEND_LOG_FILE="$RUN_DIR/$FRONTEND_NAME.log"
 BACKEND_BIN="$RUN_DIR/sampo-dev"
 BACKEND_URL="http://127.0.0.1:8080/health"
+BACKEND_WHOAMI_URL="http://127.0.0.1:8080/whoami"
 FRONTEND_URL="http://localhost:5173"
 BACKEND_MATCH="$BACKEND_BIN"
 FRONTEND_MATCH="pnpm run dev"
@@ -117,6 +118,20 @@ wait_for_http() {
   done
 }
 
+backend_identity() {
+  curl -fsS "$BACKEND_WHOAMI_URL" 2>/dev/null || true
+}
+
+check_backend_port_available() {
+  local identity
+  identity=$(backend_identity)
+  if [[ -n "$identity" ]]; then
+    log "error: backend port already serves /whoami: $identity"
+    log "stop that service first, or use scripts/devctl status to inspect known dev services"
+    return 1
+  fi
+}
+
 start_service() {
   local service="$1"
   local pid_file log_file cmd pid
@@ -125,6 +140,9 @@ start_service() {
     pid=$(read_pid "$service")
     log "$service already running (pid $pid)"
     return 0
+  fi
+  if [[ "$service" == "backend" ]]; then
+    check_backend_port_available
   fi
 
   pid_file=$(service_pid_file "$service")
@@ -179,6 +197,9 @@ stop_service() {
   fi
 
   if kill -0 "$pid" 2>/dev/null; then
+    if [[ "$service" == "backend" ]]; then
+      log "backend /whoami before stop: $(backend_identity)"
+    fi
     kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     pkill -TERM -P "$pid" 2>/dev/null || true
     for _ in {1..10}; do

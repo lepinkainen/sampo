@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -203,7 +204,7 @@ func (c *Coordinator) processImage(j job, analyzePath string) {
 }
 
 func (c *Coordinator) processVideo(j job) {
-	framePaths, cleanup, err := videoframe.ExtractFrames(c.frameDir, j.fullPath, videoAnalysisFrames)
+	framePaths, cleanup, err := videoframe.ExtractFrames(context.Background(), c.frameDir, j.fullPath, videoAnalysisFrames)
 	if err != nil {
 		c.logger.Warn("browse analysis video frame extraction failed", "path", j.relPath, "error", err)
 		return

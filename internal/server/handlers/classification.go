@@ -52,7 +52,7 @@ func (h *Handler) ClassifyFile(w http.ResponseWriter, r *http.Request) {
 	// For video files, extract a frame to analyze
 	classifyPath := fullPath
 	if filesystem.DetectMediaType(fullPath) == "video" {
-		framePath, cleanup, extractErr := videoframe.ExtractFrame(h.frameDir, fullPath)
+		framePath, cleanup, extractErr := videoframe.ExtractFrame(r.Context(), h.frameDir, fullPath)
 		if extractErr != nil {
 			h.logger.Error("video frame extraction failed", "error", extractErr, "path", relPath)
 			http.Error(w, "Video frame extraction failed", http.StatusInternalServerError)

@@ -159,5 +159,13 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 func (s *Server) ListenAndServe() error {
 	addr := fmt.Sprintf(":%d", s.cfg.Server.Port)
 	s.logger.Info("starting server", "addr", addr)
-	return http.ListenAndServe(addr, s.router)
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           s.router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return httpServer.ListenAndServe()
 }

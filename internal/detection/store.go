@@ -2,6 +2,7 @@ package detection
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -75,7 +76,7 @@ func (s *Store) Get(rootID, relPath string) (*Result, error) {
 
 	var r Result
 	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.HasPerson, &r.Confidence, &r.ModelVer, &r.ScannedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

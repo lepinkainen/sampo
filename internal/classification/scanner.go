@@ -143,7 +143,7 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 					if ctx.Err() != nil {
 						return
 					}
-					s.processItem(item)
+					s.processItem(ctx, item)
 				}
 			}()
 		}
@@ -167,10 +167,10 @@ type scanItem struct {
 	mediaType string
 }
 
-func (s *Scanner) processItem(item scanItem) {
+func (s *Scanner) processItem(ctx context.Context, item scanItem) {
 	classifyPath := item.fullPath
 	if item.mediaType == "video" {
-		framePath, cleanup, err := videoframe.ExtractFrame(s.frameDir, item.fullPath)
+		framePath, cleanup, err := videoframe.ExtractFrame(ctx, s.frameDir, item.fullPath)
 		if err != nil {
 			s.logger.Error("video frame extraction failed", "path", item.relPath, "error", err)
 			current := s.status.Load()

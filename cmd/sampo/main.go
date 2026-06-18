@@ -11,14 +11,20 @@ import (
 )
 
 // Set at build time.
-var version = "dev"
+var (
+	version   = "dev"
+	gitHash   = "unknown"
+	buildTime = "unknown"
+)
 
 func main() {
 	logger := slog.New(humanlog.NewHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
 
-	// Set version for whoami endpoint
+	// Set build metadata for whoami endpoint.
 	handlers.Version = version
+	handlers.GitHash = gitHash
+	handlers.BuildTime = buildTime
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -27,13 +27,13 @@ let {
 	ondragstart,
 }: Props = $props();
 
-let imgLoading = $state(entry.hasThumb);
+let imgLoading = $state(false);
 let imgError = $state(false);
-let lastThumbKey = $state(`${rootId}:${entry.path}:${entry.hasThumb}`);
+let lastThumbKey = $state('');
 let imgEl: HTMLImageElement | undefined = $state();
+let thumbKey = $derived(`${rootId}:${entry.path}:${entry.hasThumb}`);
 
 $effect(() => {
-	const thumbKey = `${rootId}:${entry.path}:${entry.hasThumb}`;
 	if (thumbKey === lastThumbKey) {
 		return;
 	}

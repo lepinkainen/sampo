@@ -1,11 +1,13 @@
 package videoframe
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ExtractFrame extracts a single full-resolution frame from a video file at
@@ -13,7 +15,7 @@ import (
 // temporary JPEG is written — use a dedicated app-managed directory rather
 // than the OS temp dir so leftover files are discoverable and cleanable.
 // The returned cleanup function returns an error if removal fails.
-func ExtractFrame(dir, videoPath string) (framePath string, cleanup func() error, err error) {
+func ExtractFrame(ctx context.Context, dir, videoPath string) (framePath string, cleanup func() error, err error) {
 	if _, lookErr := exec.LookPath("ffmpeg"); lookErr != nil {
 		return "", nil, fmt.Errorf("ffmpeg not found in PATH: %w", lookErr)
 	}
@@ -28,7 +30,7 @@ func ExtractFrame(dir, videoPath string) (framePath string, cleanup func() error
 	}
 	_ = tmp.Close()
 
-	seekPos := SeekPosition(videoPath)
+	seekPos := SeekPosition(ctx, videoPath)
 
 	args := []string{
 		"-ss", seekPos,
@@ -39,7 +41,9 @@ func ExtractFrame(dir, videoPath string) (framePath string, cleanup func() error
 		tmp.Name(),
 	}
 
-	cmd := exec.Command("ffmpeg", args...)
+	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, "ffmpeg", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = os.Remove(tmp.Name())
@@ -73,8 +77,8 @@ func CleanDir(dir string) error {
 
 // SeekPosition probes video duration and returns a timestamp string at ~10%.
 // Falls back to "1" if probing fails.
-func SeekPosition(videoPath string) string {
-	duration, err := ProbeDuration(videoPath)
+func SeekPosition(ctx context.Context, videoPath string) string {
+	duration, err := ProbeDuration(ctx, videoPath)
 	if err != nil || duration <= 0 {
 		return "1"
 	}
@@ -111,7 +115,7 @@ func EvenlySpacedPositions(duration float64, count int) []float64 {
 // positions across the video. Returns the paths of successfully extracted
 // frames and a cleanup function that removes all of them. At least one frame
 // must succeed or an error is returned.
-func ExtractFrames(dir, videoPath string, count int) (framePaths []string, cleanup func() error, err error) {
+func ExtractFrames(ctx context.Context, dir, videoPath string, count int) (framePaths []string, cleanup func() error, err error) {
 	if _, lookErr := exec.LookPath("ffmpeg"); lookErr != nil {
 		return nil, nil, fmt.Errorf("ffmpeg not found in PATH: %w", lookErr)
 	}
@@ -119,7 +123,7 @@ func ExtractFrames(dir, videoPath string, count int) (framePaths []string, clean
 		return nil, nil, fmt.Errorf("creating frame dir: %w", mkdirErr)
 	}
 
-	duration, _ := ProbeDuration(videoPath)
+	duration, _ := ProbeDuration(ctx, videoPath)
 	positions := EvenlySpacedPositions(duration, count)
 
 	var paths []string
@@ -138,8 +142,11 @@ func ExtractFrames(dir, videoPath string, count int) (framePaths []string, clean
 			"-y",
 			tmp.Name(),
 		}
-		cmd := exec.Command("ffmpeg", args...)
-		if _, runErr := cmd.CombinedOutput(); runErr != nil {
+		cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		cmd := exec.CommandContext(cmdCtx, "ffmpeg", args...)
+		_, runErr := cmd.CombinedOutput()
+		cancel()
+		if runErr != nil {
 			_ = os.Remove(tmp.Name())
 			continue
 		}
@@ -163,7 +170,7 @@ func ExtractFrames(dir, videoPath string, count int) (framePaths []string, clean
 }
 
 // ProbeDuration uses ffprobe to get the video duration in seconds.
-func ProbeDuration(videoPath string) (float64, error) {
+func ProbeDuration(ctx context.Context, videoPath string) (float64, error) {
 	args := []string{
 		"-v", "error",
 		"-show_entries", "format=duration",
@@ -171,7 +178,9 @@ func ProbeDuration(videoPath string) (float64, error) {
 		videoPath,
 	}
 
-	cmd := exec.Command("ffprobe", args...)
+	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, "ffprobe", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe failed: %w", err)
