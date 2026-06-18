@@ -22,6 +22,9 @@ import {
 	findDuplicates,
 	getAnalysisSettings,
 	setAnalysisSettings,
+	getCachedDirectory,
+	invalidateDirectoryCache,
+	invalidateParentDirectoryCache,
 } from '$lib/api';
 import type {
 	ScanStatus,
@@ -86,6 +89,7 @@ let {
 let pathSegments = $derived(path.split('/').filter(Boolean));
 let entries = $state<FileEntry[]>([]);
 let loading = $state(false);
+let backgroundValidating = $state(false);
 let loadingSlow = $state(false);
 let loadingSlowTimer: ReturnType<typeof setTimeout> | null = null;
 let error = $state<string | null>(null);
@@ -185,6 +189,18 @@ let gridClass = $derived.by(() => {
 let selectedEntries = $derived(
 	displayEntries.filter((e) => selection.has(e.path)),
 );
+
+let selectedDetailsTags = $derived.by(() => {
+	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
+	if (!sel) return [];
+	if (
+		classificationResult?.rootId === rootId &&
+		classificationResult.relPath === sel.path
+	) {
+		return classificationResult.tags;
+	}
+	return sel.tags ?? [];
+});
 
 let lastDetailsThumbKey = $state('');
 let lastSelectionDetailsKey = $state('');
@@ -391,7 +407,21 @@ async function loadDirectory(
 		selection.clear();
 		savedScrollTop = 0;
 	}
-	if (!silent) {
+
+	const filterOpts: { filter?: string; tag?: string } = {};
+	if (filterPeople) filterOpts.filter = 'no-people';
+	if (filterTag) filterOpts.tag = filterTag;
+
+	// Check if cached entries exist
+	const cached = getCachedDirectory(rid, p, filterOpts);
+	if (cached) {
+		entries = sortEntries(cached);
+	}
+
+	// Determine if we show the fullscreen loading skeleton
+	const showVisualLoader = !silent && !cached;
+
+	if (showVisualLoader) {
 		latestVisibleLoadId = requestId;
 		loading = true;
 		loadingSlow = false;
@@ -399,29 +429,33 @@ async function loadDirectory(
 		loadingSlowTimer = setTimeout(() => {
 			loadingSlow = true;
 		}, 3000);
+	} else if (!silent) {
+		backgroundValidating = true;
 	}
+
 	error = null;
 	try {
-		const opts: { filter?: string; tag?: string } = {};
-		if (filterPeople) opts.filter = 'no-people';
-		if (filterTag) opts.tag = filterTag;
 		const result = await fetchDirectory(
 			rid,
 			p,
-			Object.keys(opts).length > 0 ? opts : undefined,
+			Object.keys(filterOpts).length > 0 ? filterOpts : undefined,
 		);
 		if (requestId !== loadRequestId) return;
 		entries = sortEntries(result);
 	} catch (e) {
 		if (requestId !== loadRequestId) return;
-		error = e instanceof Error ? e.message : 'Failed to load directory';
-		if (!silent) {
+		if (entries.length === 0) {
+			error = e instanceof Error ? e.message : 'Failed to load directory';
 			entries = [];
+		} else {
+			toastComponent?.show(
+				e instanceof Error
+					? `Failed to refresh: ${e.message}`
+					: 'Failed to refresh folder contents',
+				'error',
+			);
 		}
 	} finally {
-		// Clear the loading indicator when the load that owns it finishes,
-		// even if a silent refresh has since bumped loadRequestId. Skip only
-		// when a newer non-silent load has taken over the indicator.
 		if (!silent && requestId === latestVisibleLoadId) {
 			loading = false;
 			loadingSlow = false;
@@ -430,6 +464,7 @@ async function loadDirectory(
 				loadingSlowTimer = null;
 			}
 		}
+		backgroundValidating = false;
 	}
 }
 
@@ -566,6 +601,7 @@ async function handleDelete() {
 		) {
 			clipboard.clear();
 		}
+		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path);
 	} catch (e) {
 		toastComponent?.show(
@@ -598,7 +634,13 @@ async function handlePaste() {
 				'success',
 			);
 		}
-		if (clipboard.mode === 'cut') clipboard.clear();
+		if (clipboard.mode === 'cut') {
+			for (const item of clipboard.items) {
+				invalidateParentDirectoryCache(item.rootId, item.path);
+			}
+			clipboard.clear();
+		}
+		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path);
 	} catch (e) {
 		toastComponent?.show(
@@ -614,6 +656,7 @@ async function handleRename(newName: string) {
 	try {
 		await renameFile(rootId, entry.path, newName);
 		toastComponent?.show(`Renamed to "${newName}"`, 'success');
+		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path);
 	} catch (e) {
 		toastComponent?.show(
@@ -647,6 +690,12 @@ function handleDrop(e: DragEvent) {
 				`${payload.mode === 'copy' ? 'Copied' : 'Moved'} ${payload.paths.length} item(s)`,
 				'success',
 			);
+			if (payload.mode === 'move') {
+				for (const p of payload.paths) {
+					invalidateParentDirectoryCache(payload.rootId, p);
+				}
+			}
+			invalidateDirectoryCache(rootId, path);
 			await loadDirectory(rootId, path);
 		});
 	} catch {
@@ -784,6 +833,7 @@ function startPollingScanStatus() {
 					'success',
 				);
 				// Reload to reflect new detection badges (and filter if active)
+				invalidateDirectoryCache(rootId, path);
 				loadDirectory(rootId, path);
 			}
 		} catch {
@@ -923,6 +973,7 @@ function startPollingClassifyStatus() {
 					`Classification complete: ${classifyScanStatus.completed} images processed`,
 					'success',
 				);
+				invalidateDirectoryCache(rootId, path);
 				loadDirectory(rootId, path);
 			}
 		} catch {
@@ -1008,6 +1059,9 @@ async function handleFindDuplicates() {
 								<span>{segment}</span>
 							{/if}
 						{/each}
+						{#if backgroundValidating}
+							<LoaderCircle size={14} class="animate-spin text-gray-500 ml-2 inline-block align-middle" />
+						{/if}
 					</div>
 				{/if}
 
@@ -1394,11 +1448,11 @@ async function handleFindDuplicates() {
 									<div class="text-gray-300 font-mono text-xs">{sel.crc32}</div>
 								{/if}
 
-								{#if classificationResult?.tags && classificationResult.tags.length > 0}
+								{#if selectedDetailsTags.length > 0}
 									<div class="col-span-2 border-t border-gray-800 pt-2">
 										<div class="text-gray-500 mb-1">Tags</div>
 										<div class="flex flex-wrap gap-1">
-											{#each classificationResult.tags as tag}
+											{#each selectedDetailsTags as tag}
 												<span class="rounded bg-purple-600/80 px-1.5 py-0.5 text-xs text-white" title={`${(tag.score * 100).toFixed(0)}%`}>
 													{tag.label} <span class="text-purple-300">{(tag.score * 100).toFixed(0)}%</span>
 												</span>

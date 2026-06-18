@@ -20,6 +20,44 @@ export async function fetchRoots(): Promise<Root[]> {
 	return res.json();
 }
 
+// Simple in-memory directory cache
+const directoryCache = new Map<string, FileEntry[]>();
+
+function getCacheKey(
+	rootId: string,
+	path: string,
+	options?: { filter?: string; tag?: string },
+): string {
+	return `${rootId}:${path}:${options?.filter || ''}:${options?.tag || ''}`;
+}
+
+export function getCachedDirectory(
+	rootId: string,
+	path: string,
+	options?: { filter?: string; tag?: string },
+): FileEntry[] | null {
+	return directoryCache.get(getCacheKey(rootId, path, options)) || null;
+}
+
+export function invalidateDirectoryCache(rootId: string, path: string) {
+	const prefix = `${rootId}:${path}:`;
+	for (const key of directoryCache.keys()) {
+		if (key.startsWith(prefix)) {
+			directoryCache.delete(key);
+		}
+	}
+}
+
+export function invalidateParentDirectoryCache(
+	rootId: string,
+	filePath: string,
+) {
+	const parts = filePath.split('/');
+	parts.pop();
+	const parentPath = parts.join('/') || '/';
+	invalidateDirectoryCache(rootId, parentPath);
+}
+
 export async function fetchDirectory(
 	rootId: string,
 	path: string,
@@ -33,7 +71,9 @@ export async function fetchDirectory(
 	if (qs) url += `?${qs}`;
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`Failed to fetch directory: ${res.statusText}`);
-	return res.json();
+	const entries = await res.json();
+	directoryCache.set(getCacheKey(rootId, path, options), entries);
+	return entries;
 }
 
 export function thumbnailUrl(rootId: string, path: string): string {
