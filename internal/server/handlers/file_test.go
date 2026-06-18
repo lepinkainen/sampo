@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/sampo/internal/classification"
 	"github.com/lepinkainen/sampo/internal/config"
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/ocr"
@@ -176,6 +177,40 @@ func serveAllWithChi(h *handlers.Handler, method, path string) *httptest.Respons
 	return rr
 }
 
+func TestListDirectory_ClassificationTagsReflectReplacement(t *testing.T) {
+	h, dir := setupTestHandler(t)
+
+	if err := os.WriteFile(filepath.Join(dir, "subdir", "tagged.jpg"), []byte("fake image"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := classification.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	h.SetClassification(store, nil, nil)
+
+	putHandlerClassificationResult(t, store, "subdir/tagged.jpg", []classification.TagScore{
+		{Label: "legacy", Score: 0.9},
+		{Label: "stale", Score: 0.8},
+	})
+	putHandlerClassificationResult(t, store, "subdir/tagged.jpg", []classification.TagScore{
+		{Label: "fresh", Score: 0.95},
+	})
+
+	rr := serveAllWithChi(h, "GET", "/api/tree/root-0/subdir")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	entries := decodeFileEntries(t, rr)
+	tags := tagsFor(entries, "subdir/tagged.jpg")
+	if len(tags) != 1 || tags[0].Label != "fresh" {
+		t.Fatalf("tags = %#v, want only fresh", tags)
+	}
+}
+
 func TestListDirectory_OCRTextUsesCanonicalRelPath(t *testing.T) {
 	h, dir := setupTestHandler(t)
 
@@ -216,6 +251,21 @@ func TestListDirectory_OCRTextUsesCanonicalRelPath(t *testing.T) {
 	}
 }
 
+func putHandlerClassificationResult(t *testing.T, store *classification.Store, relPath string, tags []classification.TagScore) {
+	t.Helper()
+	if err := store.Put(&classification.Result{
+		RootID:    "root-0",
+		RelPath:   relPath,
+		Mtime:     1,
+		Size:      1,
+		ModelVer:  "test-model",
+		ScannedAt: time.Now().UTC(),
+		Tags:      tags,
+	}); err != nil {
+		t.Fatalf("Put classification result: %v", err)
+	}
+}
+
 func putHandlerOCRResult(t *testing.T, store *ocr.Store, relPath, text string) {
 	t.Helper()
 	if err := store.Put(&ocr.Result{
@@ -239,6 +289,15 @@ func decodeFileEntries(t *testing.T, rr *httptest.ResponseRecorder) []filesystem
 		t.Fatalf("decode entries: %v", err)
 	}
 	return entries
+}
+
+func tagsFor(entries []filesystem.FileEntry, relPath string) []filesystem.TagScore {
+	for _, entry := range entries {
+		if entry.Path == relPath {
+			return entry.Tags
+		}
+	}
+	return nil
 }
 
 func ocrTextFor(entries []filesystem.FileEntry, relPath string) string {
