@@ -48,6 +48,7 @@ import {
 	UserX,
 	ScanSearch,
 	Sparkles,
+	RefreshCw,
 	Tag,
 	Search,
 	X,
@@ -716,6 +717,29 @@ async function handleClassifyScan() {
 	}
 }
 
+async function handleReclassifyAll() {
+	if (
+		!confirm(
+			'Re-classify every image in this root from scratch? This replaces all existing tags and may take a while.',
+		)
+	) {
+		return;
+	}
+	try {
+		classifyScanStatus = await startClassifyScan(rootId, '', true);
+		toastComponent?.show(
+			`Re-classifying ${classifyScanStatus.total} images...`,
+			'success',
+		);
+		startPollingClassifyStatus();
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'Re-classification failed',
+			'error',
+		);
+	}
+}
+
 function startPollingClassifyStatus() {
 	if (classifyPollTimer) clearInterval(classifyPollTimer);
 	classifyPollTimer = setInterval(async () => {
@@ -922,6 +946,14 @@ async function handleFindDuplicates() {
 						onclick={handleClassifyScan}
 					>
 						<Sparkles size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Re-classify entire root from scratch (replaces all tags)"
+						disabled={classifyScanStatus?.running === true}
+						onclick={handleReclassifyAll}
+					>
+						<RefreshCw size={16} />
 					</button>
 					<button
 						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"

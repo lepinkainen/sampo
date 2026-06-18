@@ -39,6 +39,7 @@ type LabelsFile struct {
 type Label struct {
 	Name      string    `json:"name"`
 	Prompt    string    `json:"prompt"`
+	Group     string    `json:"group,omitempty"`
 	Embedding []float32 `json:"embedding"`
 }
 
@@ -194,13 +195,28 @@ func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, s
 	// L2-normalize the image embedding
 	normalized := l2Normalize(embedding)
 
-	// Compute cosine similarity against each label embedding
+	// Compute cosine similarity against each label embedding.
+	// For grouped labels (e.g. mutually-exclusive attire), keep only the
+	// highest-scoring tag per group. Ungrouped labels all pass through.
 	var tags []TagScore
+	bestByGroup := make(map[string]int) // group -> index into tags
 	for _, label := range c.labels {
 		score := cosineSimilarity(normalized, label.Embedding)
-		if score >= c.threshold {
-			tags = append(tags, TagScore{Label: label.Name, Score: score})
+		if score < c.threshold {
+			continue
 		}
+		if label.Group == "" {
+			tags = append(tags, TagScore{Label: label.Name, Score: score})
+			continue
+		}
+		if idx, ok := bestByGroup[label.Group]; ok {
+			if score > tags[idx].Score {
+				tags[idx] = TagScore{Label: label.Name, Score: score}
+			}
+			continue
+		}
+		bestByGroup[label.Group] = len(tags)
+		tags = append(tags, TagScore{Label: label.Name, Score: score})
 	}
 
 	return &Result{

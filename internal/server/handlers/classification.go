@@ -86,6 +86,8 @@ func (h *Handler) ClassifyFile(w http.ResponseWriter, r *http.Request) {
 type classifyScanRequest struct {
 	RootID string `json:"rootId"`
 	Path   string `json:"path"`
+	// Force triggers a full recursive rescan that ignores cached results.
+	Force bool `json:"force"`
 }
 
 // StartClassifyScan handles POST /api/classify/scan — starts a background classification scan.
@@ -101,7 +103,7 @@ func (h *Handler) StartClassifyScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.classScanner.ScanDirectory(req.RootID, req.Path); err != nil {
+	if err := h.classScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil {
 		h.logger.Error("starting classification scan", "error", err)
 		http.Error(w, "Failed to start scan", http.StatusInternalServerError)
 		return

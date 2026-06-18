@@ -40,6 +40,11 @@ updates:
       interval: weekly
       day: monday
       time: "04:00"
+    # Match pnpm's minPackageAge=3d (frontend/.npmrc): don't open PRs for
+    # versions younger than the supply-chain cooldown, else the generated
+    # lockfile fails pnpm's policy check.
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: deps
       include: scope

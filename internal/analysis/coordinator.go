@@ -98,7 +98,7 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 	}
 
 	needDetect := c.detectionStore != nil && c.detector != nil && c.detectionStore.IsStale(rootID, relPath, mtime, size)
-	needClassify := c.classStore != nil && c.classifier != nil && c.classStore.IsStale(rootID, relPath, mtime, size)
+	needClassify := c.classStore != nil && c.classifier != nil && c.classStore.IsStale(rootID, relPath, mtime, size, c.classifier.ModelVersion())
 	if !needDetect && !needClassify {
 		return false
 	}

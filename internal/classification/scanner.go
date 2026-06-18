@@ -53,7 +53,12 @@ func NewScanner(store *Store, classifier *Classifier, roots *filesystem.RootMana
 
 // ScanDirectory starts a background classification scan of images in a directory.
 // Returns immediately. Only one scan runs at a time.
-func (s *Scanner) ScanDirectory(rootID, relPath string) error {
+//
+// When force is false, only the immediate directory level is scanned and files
+// whose cached result is still fresh are skipped. When force is true, the scan
+// recurses into subdirectories and reclassifies every image, replacing any
+// existing results — a full rescan from scratch.
+func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -74,42 +79,10 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
-	var files []scanItem
-	entries, err := os.ReadDir(fullPath)
+	files, err := s.collectFiles(rootID, root.Path, fullPath, relPath, force)
 	if err != nil {
 		cancel()
 		return err
-	}
-
-	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		mediaType := filesystem.DetectMediaType(e.Name())
-		if mediaType != "image" && mediaType != "video" {
-			continue
-		}
-
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-
-		entryRelPath := filepath.Join(relPath, e.Name())
-		entryFullPath := filepath.Join(root.Path, entryRelPath)
-
-		if !s.store.IsStale(rootID, entryRelPath, info.ModTime().Unix(), info.Size()) {
-			continue
-		}
-
-		files = append(files, scanItem{
-			rootID:    rootID,
-			relPath:   entryRelPath,
-			fullPath:  entryFullPath,
-			mtime:     info.ModTime().Unix(),
-			size:      info.Size(),
-			mediaType: mediaType,
-		})
 	}
 
 	status := &ScanStatus{
@@ -156,6 +129,73 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 	}()
 
 	return nil
+}
+
+// collectFiles gathers the images/videos to classify. When force is true it
+// walks recursively and includes every file; otherwise it lists only the
+// immediate directory level and skips files with fresh cached results.
+func (s *Scanner) collectFiles(rootID, rootPath, fullPath, relPath string, force bool) ([]scanItem, error) {
+	var files []scanItem
+
+	add := func(name string, info os.FileInfo) {
+		mediaType := filesystem.DetectMediaType(name)
+		if mediaType != "image" && mediaType != "video" {
+			return
+		}
+		entryRelPath := filepath.Join(relPath, strings.TrimPrefix(name, fullPath))
+		entryRelPath = filepath.Clean(entryRelPath)
+		if !force && !s.store.IsStale(rootID, entryRelPath, info.ModTime().Unix(), info.Size(), s.classifier.ModelVersion()) {
+			return
+		}
+		files = append(files, scanItem{
+			rootID:    rootID,
+			relPath:   entryRelPath,
+			fullPath:  filepath.Join(rootPath, entryRelPath),
+			mtime:     info.ModTime().Unix(),
+			size:      info.Size(),
+			mediaType: mediaType,
+		})
+	}
+
+	if force {
+		err := filepath.WalkDir(fullPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil // skip unreadable entries
+			}
+			if strings.HasPrefix(d.Name(), ".") {
+				if d.IsDir() && path != fullPath {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			info, infoErr := d.Info()
+			if infoErr != nil {
+				return nil
+			}
+			add(path, info)
+			return nil
+		})
+		return files, err
+	}
+
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		info, infoErr := e.Info()
+		if infoErr != nil {
+			continue
+		}
+		add(filepath.Join(fullPath, e.Name()), info)
+	}
+	return files, nil
 }
 
 type scanItem struct {
