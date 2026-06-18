@@ -10,17 +10,11 @@ import (
 	"sync/atomic"
 
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/scanstatus"
 )
 
 // ScanStatus reports the progress of a unified background analysis scan.
-type ScanStatus struct {
-	Running   bool   `json:"running"`
-	RootID    string `json:"rootId,omitempty"`
-	Path      string `json:"path,omitempty"`
-	Total     int64  `json:"total"`
-	Completed int64  `json:"completed"`
-	Errors    int64  `json:"errors"`
-}
+type ScanStatus = scanstatus.Snapshot
 
 // Scanner runs a unified directory scan that loads each file once and runs every
 // enabled analyzer (detection, classification, OCR) on it, via the Coordinator.
@@ -33,7 +27,7 @@ type Scanner struct {
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
-	status atomic.Pointer[ScanStatus]
+	status atomic.Pointer[scanstatus.State]
 }
 
 // NewScanner creates a unified analysis scanner.
@@ -47,7 +41,7 @@ func NewScanner(coord *Coordinator, roots *filesystem.RootManager, workers int, 
 		workers: workers,
 		logger:  logger,
 	}
-	s.status.Store(&ScanStatus{})
+	s.status.Store(scanstatus.NewIdle())
 	return s
 }
 
@@ -85,17 +79,11 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 		return err
 	}
 
-	status := &ScanStatus{
-		Running: true,
-		RootID:  rootID,
-		Path:    relPath,
-		Total:   int64(len(files)),
-	}
+	status := scanstatus.New(rootID, relPath, int64(len(files)))
 	s.status.Store(status)
 
 	if len(files) == 0 {
-		status.Running = false
-		s.status.Store(status)
+		status.Complete()
 		cancel()
 		return nil
 	}
@@ -117,17 +105,13 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 						return
 					}
 					s.coord.Analyze(ctx, item.rootID, item.relPath, item.fullPath, item.mediaType, item.mtime, item.size, force)
-					current := s.status.Load()
-					atomic.AddInt64(&current.Completed, 1)
+					status.AddCompleted(1)
 				}
 			}()
 		}
 		wg.Wait()
 
-		current := s.status.Load()
-		done := *current
-		done.Running = false
-		s.status.Store(&done)
+		status.Complete()
 	}()
 
 	return nil
@@ -207,7 +191,7 @@ func (s *Scanner) collectFiles(rootID, rootPath, fullPath, relPath string, force
 
 // Status returns the current scan status.
 func (s *Scanner) Status() ScanStatus {
-	return *s.status.Load()
+	return s.status.Load().Snapshot()
 }
 
 // Stop cancels any running scan.

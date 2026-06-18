@@ -26,6 +26,8 @@ task download-clip-model  # Export CLIP ViT-B/32 to ONNX + pre-compute text embe
 task build-ocr            # macOS only: compile Vision OCR helper to bin/sampo-ocr
 ```
 
+- `task build` must always pass at the end of a task.
+
 Run a single Go test:
 ```bash
 go test ./internal/filesystem/ -run TestResolvePath

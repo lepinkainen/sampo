@@ -10,18 +10,12 @@ import (
 	"sync/atomic"
 
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/scanstatus"
 	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 // ScanStatus reports the progress of a background OCR scan.
-type ScanStatus struct {
-	Running   bool   `json:"running"`
-	RootID    string `json:"rootId,omitempty"`
-	Path      string `json:"path,omitempty"`
-	Total     int64  `json:"total"`
-	Completed int64  `json:"completed"`
-	Errors    int64  `json:"errors"`
-}
+type ScanStatus = scanstatus.Snapshot
 
 // Scanner manages background OCR scanning.
 type Scanner struct {
@@ -34,7 +28,7 @@ type Scanner struct {
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
-	status atomic.Pointer[ScanStatus]
+	status atomic.Pointer[scanstatus.State]
 }
 
 // NewScanner creates a background OCR scanner.
@@ -47,7 +41,7 @@ func NewScanner(store *Store, recognizer *Recognizer, roots *filesystem.RootMana
 		workers:    workers,
 		logger:     logger,
 	}
-	s.status.Store(&ScanStatus{})
+	s.status.Store(scanstatus.NewIdle())
 	return s
 }
 
@@ -84,17 +78,11 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 		return err
 	}
 
-	status := &ScanStatus{
-		Running: true,
-		RootID:  rootID,
-		Path:    relPath,
-		Total:   int64(len(files)),
-	}
+	status := scanstatus.New(rootID, relPath, int64(len(files)))
 	s.status.Store(status)
 
 	if len(files) == 0 {
-		status.Running = false
-		s.status.Store(status)
+		status.Complete()
 		cancel()
 		return nil
 	}
@@ -115,16 +103,13 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 					if ctx.Err() != nil {
 						return
 					}
-					s.processItem(ctx, item)
+					s.processItem(ctx, status, item)
 				}
 			}()
 		}
 		wg.Wait()
 
-		current := s.status.Load()
-		done := *current
-		done.Running = false
-		s.status.Store(&done)
+		status.Complete()
 	}()
 
 	return nil
@@ -206,13 +191,13 @@ type scanItem struct {
 	mediaType string
 }
 
-func (s *Scanner) processItem(ctx context.Context, item scanItem) {
+func (s *Scanner) processItem(ctx context.Context, status *scanstatus.State, item scanItem) {
 	ocrPath := item.fullPath
 	if item.mediaType == "video" {
 		framePath, cleanup, err := videoframe.ExtractFrame(ctx, s.frameDir, item.fullPath)
 		if err != nil {
 			s.logger.Error("video frame extraction failed", "path", item.relPath, "error", err)
-			s.recordError()
+			status.RecordError()
 			return
 		}
 		defer func() {
@@ -226,32 +211,23 @@ func (s *Scanner) processItem(ctx context.Context, item scanItem) {
 	result, err := s.recognizer.Recognize(ctx, nil, ocrPath, item.rootID, item.relPath, item.mtime, item.size)
 	if err != nil {
 		s.logger.Error("ocr failed", "path", item.relPath, "error", err)
-		s.recordError()
+		status.RecordError()
 		return
 	}
 
 	if err := s.store.Put(result); err != nil {
 		s.logger.Error("storing ocr result", "path", item.relPath, "error", err)
-		current := s.status.Load()
-		atomic.AddInt64(&current.Errors, 1)
+		status.AddError(1)
 	}
 
-	current := s.status.Load()
-	atomic.AddInt64(&current.Completed, 1)
+	status.AddCompleted(1)
 
 	s.logger.Debug("ocr complete", "path", item.relPath, "chars", len(result.Text))
 }
 
-// recordError increments both the error and completed counters for a failed item.
-func (s *Scanner) recordError() {
-	current := s.status.Load()
-	atomic.AddInt64(&current.Errors, 1)
-	atomic.AddInt64(&current.Completed, 1)
-}
-
 // Status returns the current scan status.
 func (s *Scanner) Status() ScanStatus {
-	return *s.status.Load()
+	return s.status.Load().Snapshot()
 }
 
 // Stop cancels any running scan.
