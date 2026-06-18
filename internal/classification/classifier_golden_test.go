@@ -16,14 +16,14 @@ import (
 //
 // This is a regression guard for the "everything tagged animal" bug: CLIP raw
 // cosines cluster near ~0.2, so a flat threshold let noise labels leak. With
-// per-group softmax scoring a person photo must surface "person", not "animal".
+// per-group softmax scoring a single-person photo must surface "solo", not "animal".
 var goldenCases = []struct {
 	file   string
 	want   string
 	reject []string
 }{
-	{file: "person_lincoln.jpg", want: "person", reject: []string{"animal", "vehicle"}},
-	{file: "person_einstein.jpg", want: "person", reject: []string{"animal", "vehicle"}},
+	{file: "person_lincoln.jpg", want: "solo", reject: []string{"animal", "vehicle"}},
+	{file: "person_einstein.jpg", want: "solo", reject: []string{"animal", "vehicle"}},
 	{file: "animal_eagle.jpg", want: "animal", reject: []string{"person", "vehicle"}},
 	{file: "vehicle_car.jpg", want: "vehicle", reject: []string{"person", "animal"}},
 }

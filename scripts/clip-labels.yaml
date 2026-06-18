@@ -32,6 +32,60 @@ labels:
   - name: "evening_dress"
     prompt: "a photo of a person wearing an evening dress"
     group: attire
+  - name: fetish_wear
+    prompt: "a photo of a person wearing fetish or BDSM clothing such as latex, leather, harnesses, or straps"
+    group: attire
+  - name: micro_bikini
+    prompt: "a photo of a person wearing a micro bikini or sling bikini"
+    group: attire
+  - name: bodysuit
+    prompt: "a photo of a person wearing a bodysuit, catsuit, or leotard"
+    group: attire
+  - name: transparent_clothing
+    prompt: "a photo of a person wearing sheer, see-through, or wet clothing"
+    group: attire
+  - name: nude_or_topless
+    prompt: "a photo of a topless or fully nude person"
+    group: attire
+  - name: stockings_garter
+    prompt: "a photo of a person wearing stockings, garter belt, or thigh highs"
+    group: attire
+  - name: muscular
+    prompt: "a photo of a muscular or athletic person"
+    group: body
+  - name: curvy
+    prompt: "a photo of a curvy or voluptuous person with large breasts and hips"
+    group: body
+  - name: petite
+    prompt: "a photo of a petite or small person"
+    group: body
+  - name: futanari
+    prompt: "a photo of a futanari or woman with a penis"
+    group: body
+  - name: large_penis
+    prompt: "a photo featuring a very large penis or hyper endowment"
+    group: body
+  - name: big_breasts
+    prompt: "a photo of a person with very large breasts"
+    group: body
+  - name: explicit_pose
+    prompt: "a photo of a person in an explicit sexual pose or spreading"
+    group: action
+  - name: masturbation
+    prompt: "a photo of a person masturbating"
+    group: action
+  - name: penetration
+    prompt: "a photo showing sexual penetration or insertion"
+    group: action
+  - name: oral
+    prompt: "a photo of oral sex or a person performing fellatio"
+    group: action
+  - name: bondage
+    prompt: "a photo of a person in bondage or shibari"
+    group: action
+  - name: public_exposure
+    prompt: "a photo of public nudity or exhibitionism"
+    group: action
   - name: beach
     prompt: "a photo taken at a beach"
     group: location
@@ -47,6 +101,15 @@ labels:
   - name: indoor
     prompt: "a photo taken indoors"
     group: location
+  - name: gym_locker
+    prompt: "a photo taken in a gym or locker room"
+    group: location
+  - name: bedroom
+    prompt: "a photo taken in a bedroom"
+    group: location
+  - name: shower
+    prompt: "a photo taken in a shower or wet environment"
+    group: location
   - name: person
     prompt: "a photo of a person"
     group: subject
@@ -59,3 +122,21 @@ labels:
   - name: vehicle
     prompt: "a photo of a vehicle such as a car, motorcycle, or bicycle"
     group: subject
+  - name: solo
+    prompt: "a photo of one person only"
+    group: people_count
+  - name: couple
+    prompt: "a photo of two people together"
+    group: people_count
+  - name: group
+    prompt: "a photo of a group of three or more people"
+    group: people_count
+  - name: closeup
+    prompt: "a close-up photo focusing on body parts"
+    group: style
+  - name: artistic_nude
+    prompt: "an artistic or tasteful nude photo"
+    group: style
+  - name: hardcore
+    prompt: "a hardcore explicit sexual photo"
+    group: style
