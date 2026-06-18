@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   BUILD_DIR: build
-  PROJECT_NAME: filemanager
+  PROJECT_NAME: sampo
   VERSION:
     sh: |
       tag=$(git describe --tags 2>/dev/null || echo "dev")
@@ -83,7 +83,7 @@ tasks:
     desc: Build Go project
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -v -ldflags="-X main.version={{.VERSION}}" -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} ./cmd/filemanager
+      - go build -v -ldflags="-X main.version={{.VERSION}}" -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} ./cmd/sampo
     sources:
       - ./**/*.go
 
@@ -157,7 +157,7 @@ tasks:
   dev-go:
     desc: Start Go development server
     cmds:
-      - go run ./cmd/filemanager
+      - go run ./cmd/sampo
 
   dev-frontend:
     desc: Start frontend dev server

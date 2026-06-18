@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/lepinkainen/filemanager/internal/analysis"
+	"github.com/lepinkainen/sampo/internal/analysis"
 )
 
 type analysisSettingsResponse struct {

@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/lepinkainen/filemanager/internal/config"
-	"github.com/lepinkainen/filemanager/internal/server"
-	"github.com/lepinkainen/filemanager/internal/server/handlers"
 	"github.com/lepinkainen/humanlog"
+	"github.com/lepinkainen/sampo/internal/config"
+	"github.com/lepinkainen/sampo/internal/server"
+	"github.com/lepinkainen/sampo/internal/server/handlers"
 )
 
 // Set at build time.

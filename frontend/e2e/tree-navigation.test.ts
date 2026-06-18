@@ -4,8 +4,8 @@ test.describe('Tree view and navigation', () => {
 	test('page loads and shows roots in tree view', async ({ page }) => {
 		await page.goto('/');
 
-		// "File Manager" header should be visible
-		await expect(page.getByText('File Manager')).toBeVisible();
+		// "Sampo" header should be visible
+		await expect(page.getByText('Sampo')).toBeVisible();
 
 		// "Sample" root should be visible in the tree
 		await expect(page.getByText('Sample')).toBeVisible();

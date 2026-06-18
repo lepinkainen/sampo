@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lepinkainen/filemanager/internal/videoframe"
+	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 func TestGenerateVideoThumbnail(t *testing.T) {

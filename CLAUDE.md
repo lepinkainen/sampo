@@ -69,7 +69,7 @@ Two-process full-stack app: **Go backend** (chi router, port 8080) + **SvelteKit
 
 ### Backend (Go)
 
-- **Entry point:** `cmd/filemanager/main.go` — loads config, creates `os.DirFS("frontend/build")` for serving the SPA
+- **Entry point:** `cmd/sampo/main.go` — loads config, creates `os.DirFS("frontend/build")` for serving the SPA
 - **Config:** `config.yaml` loaded via Viper — defines server port, cache dir, and filesystem roots
 - **RootManager** (`internal/filesystem/roots.go`): manages multiple mounted directory roots. Each root gets an ID (`root-0`, `root-1`, etc.). All path resolution goes through `ResolvePath()` which prevents traversal via `filepath.Clean` + prefix checking + symlink resolution
 - **Thumbnail pipeline** (`internal/thumbnail/`): on-demand generation with disk cache. Cache key = SHA256(rootID + path + mtime + size). Images use `disintegration/imaging` (JPEG output, 300px). Videos use ffmpeg exec

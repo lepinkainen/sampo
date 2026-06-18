@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lepinkainen/filemanager/internal/config"
+	"github.com/lepinkainen/sampo/internal/config"
 )
 
 func TestNewRootManager(t *testing.T) {

@@ -1,6 +1,6 @@
 # GEMINI.md
 
-This project is a full-stack file manager with AI-powered media analysis capabilities, including person detection and image classification.
+Sampo is a full-stack file manager with AI-powered media analysis capabilities, including person detection and image classification.
 
 ## Project Overview
 
@@ -35,7 +35,7 @@ The project uses `go-task` for automation. Key commands include:
 ## Development Conventions
 
 ### Backend (Go)
-- **Entry Point**: `cmd/filemanager/main.go`.
+- **Entry Point**: `cmd/sampo/main.go`.
 - **Configuration**: Managed via `config.yaml` and `internal/config/config.go`.
 - **Path Resolution**: All filesystem access must go through `internal/filesystem/roots.go` to ensure safety and prevent directory traversal.
 - **Linting**: Standard Go tools (`goimports`, `go vet`) plus `golangci-lint`.

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/disintegration/imaging"
-	"github.com/lepinkainen/filemanager/internal/videoframe"
+	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 const videoThumbnailFrameCount = 4
@@ -34,7 +34,7 @@ func GenerateVideoThumbnail(srcPath, dstPath string) error {
 		duration = 0
 	}
 
-	tempDir, err := os.MkdirTemp("", "filemanager-video-thumb-*")
+	tempDir, err := os.MkdirTemp("", "sampo-video-thumb-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}

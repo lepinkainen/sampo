@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"sync/atomic"
 
-	"github.com/lepinkainen/filemanager/internal/analysis"
-	"github.com/lepinkainen/filemanager/internal/classification"
-	"github.com/lepinkainen/filemanager/internal/detection"
-	"github.com/lepinkainen/filemanager/internal/filesystem"
-	"github.com/lepinkainen/filemanager/internal/thumbnail"
+	"github.com/lepinkainen/sampo/internal/analysis"
+	"github.com/lepinkainen/sampo/internal/classification"
+	"github.com/lepinkainen/sampo/internal/detection"
+	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
 
 // Handler holds dependencies for HTTP handlers.

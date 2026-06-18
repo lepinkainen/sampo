@@ -5,7 +5,7 @@ let { children } = $props();
 </script>
 
 <svelte:head>
-	<title>File Manager</title>
+	<title>Sampo</title>
 </svelte:head>
 
 {@render children()}

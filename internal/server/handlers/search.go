@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/filesystem"
 )
 
 const searchResultLimit = 500

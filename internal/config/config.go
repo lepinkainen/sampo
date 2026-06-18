@@ -59,7 +59,7 @@ func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
-	viper.AddConfigPath("/etc/filemanager")
+	viper.AddConfigPath("/etc/sampo")
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("cache.dir", ".cache")

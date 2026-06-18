@@ -1,4 +1,4 @@
-module github.com/lepinkainen/filemanager
+module github.com/lepinkainen/sampo
 
 go 1.26.1
 

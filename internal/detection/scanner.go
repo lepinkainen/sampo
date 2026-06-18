@@ -9,8 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lepinkainen/filemanager/internal/filesystem"
-	"github.com/lepinkainen/filemanager/internal/videoframe"
+	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 // ScanStatus reports the progress of a background scan.

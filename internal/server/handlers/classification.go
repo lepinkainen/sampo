@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lepinkainen/filemanager/internal/filesystem"
-	"github.com/lepinkainen/filemanager/internal/videoframe"
+	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 // ClassifyFile handles GET /api/classify/{rootID}/* — runs classification on a single image.

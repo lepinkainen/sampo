@@ -6,9 +6,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lepinkainen/filemanager/internal/classification"
-	"github.com/lepinkainen/filemanager/internal/detection"
-	"github.com/lepinkainen/filemanager/internal/videoframe"
+	"github.com/lepinkainen/sampo/internal/classification"
+	"github.com/lepinkainen/sampo/internal/detection"
+	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 // Coordinator schedules low-priority background analysis triggered by browsing.

@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lepinkainen/filemanager/internal/filesystem"
-	"github.com/lepinkainen/filemanager/internal/thumbnail"
+	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
 
 // GetThumbnail returns a cached thumbnail or generates one on demand.

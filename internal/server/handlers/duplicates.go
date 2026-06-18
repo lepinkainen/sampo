@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lepinkainen/filemanager/internal/classification"
+	"github.com/lepinkainen/sampo/internal/classification"
 )
 
 // duplicatesResponse is the JSON response for the duplicates endpoint.

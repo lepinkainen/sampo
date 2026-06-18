@@ -3,7 +3,7 @@ package thumbnail
 import (
 	"errors"
 
-	"github.com/lepinkainen/filemanager/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/filesystem"
 )
 
 // ErrNoImages is returned when a directory contains no image files.

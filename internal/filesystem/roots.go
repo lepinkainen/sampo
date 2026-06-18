@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lepinkainen/filemanager/internal/config"
+	"github.com/lepinkainen/sampo/internal/config"
 )
 
 // Root represents a mounted directory root.

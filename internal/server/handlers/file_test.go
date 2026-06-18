@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lepinkainen/filemanager/internal/config"
-	"github.com/lepinkainen/filemanager/internal/filesystem"
-	"github.com/lepinkainen/filemanager/internal/server/handlers"
-	"github.com/lepinkainen/filemanager/internal/thumbnail"
+	"github.com/lepinkainen/sampo/internal/config"
+	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/server/handlers"
+	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
 
 func setupTestHandler(t *testing.T) (*handlers.Handler, string) {

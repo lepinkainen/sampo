@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/lepinkainen/filemanager/internal/server/handlers"
+	"github.com/lepinkainen/sampo/internal/server/handlers"
 )
 
 func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {

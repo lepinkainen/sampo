@@ -6,7 +6,8 @@
 *.dylib
 *.test
 *.out
-filemanager
+/filemanager
+/sampo
 
 # Build artifacts
 build/
