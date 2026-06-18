@@ -57,13 +57,13 @@ WORKDIR /app
 COPY --from=ort-downloader /opt/onnxruntime/ /opt/onnxruntime/
 ENV ORT_LIB_PATH=/opt/onnxruntime/libonnxruntime.so
 
-COPY --from=go-builder /out/sampo ./sampo
-COPY --from=frontend-builder /app/frontend/build ./frontend/build
-COPY config.docker.yaml ./config.yaml
+COPY --chown=sampo:sampo --from=go-builder /out/sampo ./sampo
+COPY --chown=sampo:sampo --from=frontend-builder /app/frontend/build ./frontend/build
+COPY --chown=sampo:sampo config.docker.yaml ./config.yaml
 # Bake ML models into the image so it runs without external mounts.
-COPY models/ ./models/
+COPY --chown=sampo:sampo models/ ./models/
 RUN mkdir -p /cache /data \
-    && chown -R sampo:sampo /app /cache /data
+    && chown sampo:sampo /app /cache /data
 USER sampo
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
