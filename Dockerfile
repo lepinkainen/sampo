@@ -8,8 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm run build
 
-FROM golang:1.26-alpine AS go-builder
-RUN apk add --no-cache ca-certificates gcc git musl-dev tzdata
+FROM golang:1.26-bookworm AS go-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -26,17 +25,44 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -o /out/sampo \
     ./cmd/sampo
 
+# Download a pinned ONNX Runtime shared library for the target arch.
+FROM debian:bookworm-slim AS ort-downloader
+ARG TARGETARCH
+ARG ORT_VERSION=1.24.1
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar \
+    && rm -rf /var/lib/apt/lists/*
+RUN case "${TARGETARCH}" in \
+        amd64) ORT_ARCH=x64 ;; \
+        arm64) ORT_ARCH=aarch64 ;; \
+        *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ORT_VERSION}.tgz" \
+        -o /tmp/ort.tgz \
+    && mkdir -p /tmp/ort \
+    && tar -xzf /tmp/ort.tgz -C /tmp/ort --strip-components=1 \
+    && mkdir -p /opt/onnxruntime \
+    && cp -a /tmp/ort/lib/. /opt/onnxruntime/
+
 FROM scratch AS binary-export
 COPY --from=go-builder /out/sampo /sampo
 
-FROM alpine:3.22
-RUN apk add --no-cache ca-certificates ffmpeg tzdata wget \
-    && adduser -D -u 1000 sampo
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates ffmpeg tzdata wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -u 1000 -m -d /home/sampo -s /usr/sbin/nologin sampo
 WORKDIR /app
+
+# ONNX Runtime shared library (resolved via ORT_LIB_PATH below).
+COPY --from=ort-downloader /opt/onnxruntime/ /opt/onnxruntime/
+ENV ORT_LIB_PATH=/opt/onnxruntime/libonnxruntime.so
+
 COPY --from=go-builder /out/sampo ./sampo
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 COPY config.docker.yaml ./config.yaml
-RUN mkdir -p /cache /data /app/models \
+# Bake ML models into the image so it runs without external mounts.
+COPY models/ ./models/
+RUN mkdir -p /cache /data \
     && chown -R sampo:sampo /app /cache /data
 USER sampo
 EXPOSE 8080

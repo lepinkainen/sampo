@@ -6,7 +6,6 @@
 build/
 filemanager
 sampo
-models/
 test-results/
 .playwright-cli/
 server.log

@@ -9,14 +9,14 @@ roots:
     path: "/data"
 
 detection:
-  enabled: false
+  enabled: true
   model_path: "/app/models/yolov8n.onnx"
   model_version: "v8n-1.0"
   threshold: 0.5
   workers: 2
 
 classification:
-  enabled: false
+  enabled: true
   model_path: "/app/models/clip-vit-b32-image.onnx"
   labels_path: "/app/models/clip-labels.json"
   model_version: "clip-vit-b32-1.0"

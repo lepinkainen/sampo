@@ -14,9 +14,11 @@ services:
     volumes:
       - ./data:/data
       - sampo-cache:/cache
-      # Optional custom config:
+      - ./testdata:/testdata
+      - /Users/shrike/Downloads:/downloads
+      # Optional custom config (overrides baked config.docker.yaml):
       # - ./config.yaml:/app/config.yaml:ro
-      # Optional local ONNX models:
+      # Optional override of baked-in ONNX models:
       # - ./models:/app/models:ro
     restart: unless-stopped
     healthcheck:
