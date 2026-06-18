@@ -2,8 +2,16 @@ import type { DuplicatesResponse, FileEntry, Root, TagScore } from './types';
 
 const BASE = '';
 
+function normalizeRelPath(path: string): string {
+	return path.split('/').filter(Boolean).join('/');
+}
+
 function encodePath(path: string): string {
 	return path.split('/').map(encodeURIComponent).join('/');
+}
+
+function encodeOCRPath(path: string): string {
+	return normalizeRelPath(path).split('/').map(encodeURIComponent).join('/');
 }
 
 export async function fetchRoots(): Promise<Root[]> {
@@ -255,8 +263,14 @@ export interface OCRResult {
 }
 
 // runOCR fetches the OCR result for an image, computing it on first request.
-export async function runOCR(rootId: string, path: string): Promise<OCRResult> {
-	const res = await fetch(`${BASE}/api/ocr/${rootId}/${encodePath(path)}`);
+export async function runOCR(
+	rootId: string,
+	path: string,
+	force = false,
+): Promise<OCRResult> {
+	let url = `${BASE}/api/ocr/${rootId}/${encodeOCRPath(path)}`;
+	if (force) url += '?force=true';
+	const res = await fetch(url);
 	if (!res.ok) throw new Error(`OCR failed: ${res.statusText}`);
 	return res.json();
 }

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"path"
 	"strings"
 	"time"
 )
@@ -45,6 +46,20 @@ type Result struct {
 	ScannedAt time.Time   `json:"scannedAt"`
 	Text      string      `json:"text"`
 	Blocks    []TextBlock `json:"blocks"`
+}
+
+// NormalizeRelPath returns the canonical OCR cache key for a root-relative path.
+// OCR rows never keep a leading slash; the root directory itself is "".
+func NormalizeRelPath(relPath string) string {
+	relPath = strings.ReplaceAll(relPath, "\\", "/")
+	if relPath == "" || relPath == "." || relPath == "/" {
+		return ""
+	}
+	cleaned := path.Clean("/" + relPath)
+	if cleaned == "/" || cleaned == "." {
+		return ""
+	}
+	return strings.TrimPrefix(cleaned, "/")
 }
 
 // Engine is a platform-specific OCR backend. Implementations live in
@@ -111,7 +126,7 @@ func (r *Recognizer) Recognize(ctx context.Context, img image.Image, imagePath, 
 
 	return &Result{
 		RootID:    rootID,
-		RelPath:   relPath,
+		RelPath:   NormalizeRelPath(relPath),
 		Mtime:     mtime,
 		Size:      size,
 		ModelVer:  r.modelVer,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/ocr"
 )
 
 // ListDirectory returns the contents of a directory within a root.
@@ -122,7 +123,7 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 			h.logger.Error("getting dir ocr text", "error", err)
 		} else if len(dirText) > 0 {
 			for i := range entries {
-				if text, ok := dirText[entries[i].Path]; ok {
+				if text, ok := dirText[ocr.NormalizeRelPath(entries[i].Path)]; ok {
 					entries[i].OCRText = text
 				}
 			}

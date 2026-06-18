@@ -187,6 +187,7 @@ let selectedEntries = $derived(
 );
 
 let lastDetailsThumbKey = $state('');
+let lastSelectionDetailsKey = $state('');
 
 $effect(() => {
 	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
@@ -297,40 +298,65 @@ $effect(() => {
 });
 
 $effect(() => {
+	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
+	const selectionKey = sel
+		? `${rootId}:${sel.path}:${sel.isDir}:${sel.mediaType}`
+		: '';
+	if (selectionKey === lastSelectionDetailsKey) {
+		return;
+	}
+	lastSelectionDetailsKey = selectionKey;
+
 	detectionResult = null;
 	classificationResult = null;
 	ocrResult = null;
 	ocrError = null;
 	diskUsage = null;
-	if (selectedEntries.length === 1) {
-		const sel = selectedEntries[0];
-		// Seed OCR display from cached listing text (no recompute on select).
-		if (sel.ocrText) {
-			ocrResult = {
-				rootId,
-				relPath: sel.path,
-				text: sel.ocrText,
-				blocks: [],
-				modelVer: '',
-				scannedAt: '',
-			};
-		}
-		if (sel.mediaType === 'image') {
-			getDetection(rootId, sel.path)
-				.then((r) => (detectionResult = r))
-				.catch(() => (detectionResult = null));
-			getClassification(rootId, sel.path)
-				.then((r) => (classificationResult = r))
-				.catch(() => (classificationResult = null));
-		}
-		if (sel.isDir) {
-			diskUsageLoading = true;
-			getDiskUsage(rootId, sel.path)
-				.then((r) => (diskUsage = r))
-				.catch(() => (diskUsage = null))
-				.finally(() => (diskUsageLoading = false));
-		}
+	if (!sel) {
+		return;
 	}
+
+	// Seed OCR display from cached listing text (no recompute on select).
+	if (sel.ocrText) {
+		ocrResult = {
+			rootId,
+			relPath: sel.path,
+			text: sel.ocrText,
+			blocks: [],
+			modelVer: '',
+			scannedAt: '',
+		};
+	}
+	if (sel.mediaType === 'image') {
+		getDetection(rootId, sel.path)
+			.then((r) => (detectionResult = r))
+			.catch(() => (detectionResult = null));
+		getClassification(rootId, sel.path)
+			.then((r) => (classificationResult = r))
+			.catch(() => (classificationResult = null));
+	}
+	if (sel.isDir) {
+		diskUsageLoading = true;
+		getDiskUsage(rootId, sel.path)
+			.then((r) => (diskUsage = r))
+			.catch(() => (diskUsage = null))
+			.finally(() => (diskUsageLoading = false));
+	}
+});
+
+$effect(() => {
+	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
+	if (!sel?.ocrText || ocrResult) {
+		return;
+	}
+	ocrResult = {
+		rootId,
+		relPath: sel.path,
+		text: sel.ocrText,
+		blocks: [],
+		modelVer: '',
+		scannedAt: '',
+	};
 });
 
 $effect(() => {
@@ -787,7 +813,8 @@ async function handleRunOCR(entry: FileEntry) {
 	ocrLoading = true;
 	ocrError = null;
 	try {
-		ocrResult = await runOCR(rootId, entry.path);
+		const force = Boolean(ocrResult || entry.ocrText);
+		ocrResult = await runOCR(rootId, entry.path, force);
 		// Reflect the result on the cached entry so it persists across reselects.
 		entry.ocrText = ocrResult.text;
 		if (!ocrResult.text) {
@@ -1390,7 +1417,7 @@ async function handleFindDuplicates() {
 												disabled={ocrLoading}
 												title="Extract text from this image"
 											>
-												{ocrLoading ? 'Running…' : ocrResult?.text ? 'Re-run OCR' : 'Run OCR'}
+												{ocrLoading ? 'Running…' : ocrResult ? 'Re-run OCR' : 'Run OCR'}
 											</button>
 										</div>
 										{#if ocrError}

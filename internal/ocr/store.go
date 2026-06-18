@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -14,6 +15,19 @@ import (
 // Store manages OCR results in SQLite.
 type Store struct {
 	db *sql.DB
+}
+
+type storedRow struct {
+	RootID      string
+	RelPath     string
+	Canonical   string
+	Mtime       int64
+	Size        int64
+	ModelVer    string
+	ScannedAt   time.Time
+	Text        string
+	BlocksJSON  string
+	NeedsChange bool
 }
 
 // NewStore opens or creates the OCR database.
@@ -50,7 +64,89 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("migrating ocr db: %w", err)
 	}
+	if err := normalizeExistingRelPaths(db); err != nil {
+		return fmt.Errorf("normalizing ocr paths: %w", err)
+	}
 	return nil
+}
+
+func normalizeExistingRelPaths(db *sql.DB) error {
+	rows, err := db.Query(
+		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at, text, blocks FROM ocr`,
+	)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	byKey := make(map[string]storedRow)
+	changed := false
+	for rows.Next() {
+		var row storedRow
+		scanErr := rows.Scan(&row.RootID, &row.RelPath, &row.Mtime, &row.Size, &row.ModelVer, &row.ScannedAt, &row.Text, &row.BlocksJSON)
+		if scanErr != nil {
+			return scanErr
+		}
+		row.Canonical = NormalizeRelPath(row.RelPath)
+		row.NeedsChange = row.RelPath != row.Canonical
+		changed = changed || row.NeedsChange
+
+		key := row.RootID + "\x00" + row.Canonical
+		if existing, ok := byKey[key]; !ok || betterStoredRow(row, existing) {
+			if ok {
+				changed = true
+			}
+			byKey[key] = row
+		}
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		_ = rows.Close()
+		return rowsErr
+	}
+	if closeErr := rows.Close(); closeErr != nil {
+		return closeErr
+	}
+	if !changed {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, execErr := tx.Exec(`DELETE FROM ocr`); execErr != nil {
+		return execErr
+	}
+	stmt, err := tx.Prepare(
+		`INSERT INTO ocr (root_id, rel_path, mtime, size, model_ver, scanned_at, text, blocks)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stmt.Close() }()
+
+	for _, row := range byKey {
+		if _, err := stmt.Exec(row.RootID, row.Canonical, row.Mtime, row.Size, row.ModelVer, row.ScannedAt, row.Text, row.BlocksJSON); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func betterStoredRow(candidate, existing storedRow) bool {
+	if candidate.ScannedAt.After(existing.ScannedAt) {
+		return true
+	}
+	if existing.ScannedAt.After(candidate.ScannedAt) {
+		return false
+	}
+	if !candidate.NeedsChange && existing.NeedsChange {
+		return true
+	}
+	return false
 }
 
 // Put inserts or replaces an OCR result.
@@ -60,10 +156,11 @@ func (s *Store) Put(result *Result) error {
 		return fmt.Errorf("marshaling blocks: %w", err)
 	}
 
+	relPath := NormalizeRelPath(result.RelPath)
 	_, err = s.db.Exec(
 		`INSERT OR REPLACE INTO ocr (root_id, rel_path, mtime, size, model_ver, scanned_at, text, blocks)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		result.RootID, result.RelPath, result.Mtime, result.Size, result.ModelVer,
+		result.RootID, relPath, result.Mtime, result.Size, result.ModelVer,
 		result.ScannedAt, result.Text, string(blocksJSON),
 	)
 	if err != nil {
@@ -74,6 +171,7 @@ func (s *Store) Put(result *Result) error {
 
 // Get retrieves an OCR result for a single file, or nil if not present.
 func (s *Store) Get(rootID, relPath string) (*Result, error) {
+	relPath = NormalizeRelPath(relPath)
 	row := s.db.QueryRow(
 		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at, text, blocks
 		 FROM ocr WHERE root_id = ? AND rel_path = ?`,
@@ -89,6 +187,7 @@ func (s *Store) Get(rootID, relPath string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying ocr: %w", err)
 	}
+	r.RelPath = NormalizeRelPath(r.RelPath)
 	if err := json.Unmarshal([]byte(blocksJSON), &r.Blocks); err != nil {
 		return nil, fmt.Errorf("unmarshaling blocks: %w", err)
 	}
@@ -100,6 +199,7 @@ func (s *Store) Get(rootID, relPath string) (*Result, error) {
 func (s *Store) IsStale(rootID, relPath string, mtime, size int64, modelVer string) bool {
 	var storedMtime, storedSize int64
 	var storedModelVer string
+	relPath = NormalizeRelPath(relPath)
 	err := s.db.QueryRow(
 		`SELECT mtime, size, model_ver FROM ocr WHERE root_id = ? AND rel_path = ?`,
 		rootID, relPath,
@@ -112,10 +212,11 @@ func (s *Store) IsStale(rootID, relPath string, mtime, size int64, modelVer stri
 
 // dirPrefix normalizes a directory path for prefix matching.
 func dirPrefix(dirPath string) string {
-	if dirPath != "" && !strings.HasSuffix(dirPath, "/") {
-		return dirPath + "/"
+	dirPath = NormalizeRelPath(dirPath)
+	if dirPath == "" {
+		return ""
 	}
-	return dirPath
+	return dirPath + "/"
 }
 
 // SearchByText returns rel paths whose recognized text contains the query
@@ -140,15 +241,21 @@ func (s *Store) SearchByText(rootID, dirPath, query string) ([]string, error) {
 		if err := rows.Scan(&relPath); err != nil {
 			return nil, err
 		}
-		paths = append(paths, relPath)
+		paths = append(paths, NormalizeRelPath(relPath))
 	}
 	return paths, rows.Err()
 }
 
 // isDirectChild returns true if relPath is a direct child under prefix (not nested).
 func isDirectChild(relPath, prefix string) bool {
-	rel := strings.TrimPrefix(relPath, prefix)
-	return !strings.Contains(rel, "/")
+	relPath = NormalizeRelPath(relPath)
+	if prefix != "" {
+		if !strings.HasPrefix(relPath, prefix) {
+			return false
+		}
+		relPath = strings.TrimPrefix(relPath, prefix)
+	}
+	return relPath != "" && !strings.Contains(relPath, "/")
 }
 
 // GetDirText returns a map of relPath -> recognized text for scanned direct
@@ -173,7 +280,7 @@ func (s *Store) GetDirText(rootID, dirPath string) (map[string]string, error) {
 			return nil, err
 		}
 		if isDirectChild(relPath, prefix) {
-			result[relPath] = text
+			result[NormalizeRelPath(relPath)] = text
 		}
 	}
 	return result, rows.Err()
@@ -182,6 +289,7 @@ func (s *Store) GetDirText(rootID, dirPath string) (map[string]string, error) {
 // GetText returns the recognized text for a single file (empty if none).
 func (s *Store) GetText(rootID, relPath string) (string, error) {
 	var text string
+	relPath = NormalizeRelPath(relPath)
 	err := s.db.QueryRow(
 		`SELECT text FROM ocr WHERE root_id = ? AND rel_path = ?`,
 		rootID, relPath,

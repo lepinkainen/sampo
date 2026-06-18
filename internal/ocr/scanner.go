@@ -127,7 +127,7 @@ func (s *Scanner) collectFiles(rootID, rootPath, fullPath, relPath string, force
 			return
 		}
 		entryRelPath := filepath.Join(relPath, strings.TrimPrefix(name, fullPath))
-		entryRelPath = filepath.Clean(entryRelPath)
+		entryRelPath = NormalizeRelPath(filepath.Clean(entryRelPath))
 		if !force && !s.store.IsStale(rootID, entryRelPath, info.ModTime().Unix(), info.Size(), s.recognizer.ModelVersion()) {
 			return
 		}

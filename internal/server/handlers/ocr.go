@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/sampo/internal/filesystem"
@@ -32,15 +33,26 @@ func (h *Handler) OCRFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return cached result if present.
-	existing, err := h.ocrStore.Get(rootID, relPath)
-	if err != nil {
-		h.logger.Error("checking ocr store", "error", err)
+	force := false
+	if raw := r.URL.Query().Get("force"); raw != "" {
+		force, err = strconv.ParseBool(raw)
+		if err != nil {
+			http.Error(w, "Bad force parameter", http.StatusBadRequest)
+			return
+		}
 	}
-	if existing != nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(existing)
-		return
+
+	// Return cached result if present unless caller explicitly asks to recompute.
+	if !force {
+		existing, getErr := h.ocrStore.Get(rootID, relPath)
+		if getErr != nil {
+			h.logger.Error("checking ocr store", "error", getErr)
+		}
+		if existing != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(existing)
+			return
+		}
 	}
 
 	info, err := os.Stat(fullPath)

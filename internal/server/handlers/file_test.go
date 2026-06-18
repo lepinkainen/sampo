@@ -1,16 +1,19 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/sampo/internal/config"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/server/handlers"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
@@ -171,6 +174,80 @@ func serveAllWithChi(h *handlers.Handler, method, path string) *httptest.Respons
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	return rr
+}
+
+func TestListDirectory_OCRTextUsesCanonicalRelPath(t *testing.T) {
+	h, dir := setupTestHandler(t)
+
+	cacheDir := filepath.Join(dir, ".ocr-cache")
+	if err := os.Mkdir(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	store, err := ocr.NewStore(cacheDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	h.SetOCR(store, nil, nil)
+
+	if err := os.WriteFile(filepath.Join(dir, "subdir", "test.txt"), []byte("nested"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	putHandlerOCRResult(t, store, "test.txt", "root text")
+	putHandlerOCRResult(t, store, "subdir/test.txt", "nested text")
+
+	rr := serveAllWithChi(h, "GET", "/api/tree/root-0/")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	entries := decodeFileEntries(t, rr)
+	if got := ocrTextFor(entries, "/test.txt"); got != "root text" {
+		t.Fatalf("root OCR text = %q, want root text (entries %#v)", got, entries)
+	}
+
+	rr = serveAllWithChi(h, "GET", "/api/tree/root-0/subdir")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	entries = decodeFileEntries(t, rr)
+	if got := ocrTextFor(entries, "subdir/test.txt"); got != "nested text" {
+		t.Fatalf("nested OCR text = %q, want nested text (entries %#v)", got, entries)
+	}
+}
+
+func putHandlerOCRResult(t *testing.T, store *ocr.Store, relPath, text string) {
+	t.Helper()
+	if err := store.Put(&ocr.Result{
+		RootID:    "root-0",
+		RelPath:   relPath,
+		Mtime:     1,
+		Size:      1,
+		ModelVer:  "test-model",
+		ScannedAt: time.Now().UTC(),
+		Text:      text,
+		Blocks:    []ocr.TextBlock{{Text: text}},
+	}); err != nil {
+		t.Fatalf("Put OCR result: %v", err)
+	}
+}
+
+func decodeFileEntries(t *testing.T, rr *httptest.ResponseRecorder) []filesystem.FileEntry {
+	t.Helper()
+	var entries []filesystem.FileEntry
+	if err := json.Unmarshal(rr.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("decode entries: %v", err)
+	}
+	return entries
+}
+
+func ocrTextFor(entries []filesystem.FileEntry, relPath string) string {
+	for _, entry := range entries {
+		if entry.Path == relPath {
+			return entry.OCRText
+		}
+	}
+	return ""
 }
 
 func TestServeFile_AmpersandInDir(t *testing.T) {
