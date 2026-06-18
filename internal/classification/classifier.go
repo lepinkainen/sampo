@@ -30,10 +30,15 @@ var (
 
 // LabelsFile is the JSON format for pre-computed label embeddings.
 type LabelsFile struct {
-	Model  string  `json:"model"`
-	Dim    int     `json:"dim"`
-	Labels []Label `json:"labels"`
+	Model      string  `json:"model"`
+	Dim        int     `json:"dim"`
+	LogitScale float32 `json:"logitScale,omitempty"`
+	Labels     []Label `json:"labels"`
 }
+
+// defaultLogitScale is CLIP's trained temperature (exp(logit_scale) ≈ 100 for
+// openai/clip-vit-base-patch32). Used when the labels file predates the field.
+const defaultLogitScale = 100.0
 
 // Label holds a pre-computed text embedding for a classification label.
 type Label struct {
@@ -70,6 +75,7 @@ type Classifier struct {
 	outputTensor *ort.Tensor[float32]
 	labels       []Label
 	threshold    float32
+	logitScale   float32
 	modelVer     string
 	logger       *slog.Logger
 }
@@ -131,12 +137,18 @@ func NewClassifier(modelPath, labelsPath string, threshold float32, modelVer str
 		return nil, fmt.Errorf("creating CLIP ONNX session: %w", err)
 	}
 
+	logitScale := labelsFile.LogitScale
+	if logitScale == 0 {
+		logitScale = defaultLogitScale
+	}
+
 	return &Classifier{
 		session:      session,
 		inputTensor:  inputTensor,
 		outputTensor: outputTensor,
 		labels:       labelsFile.Labels,
 		threshold:    threshold,
+		logitScale:   logitScale,
 		modelVer:     modelVer,
 		logger:       logger,
 	}, nil
@@ -195,29 +207,7 @@ func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, s
 	// L2-normalize the image embedding
 	normalized := l2Normalize(embedding)
 
-	// Compute cosine similarity against each label embedding.
-	// For grouped labels (e.g. mutually-exclusive attire), keep only the
-	// highest-scoring tag per group. Ungrouped labels all pass through.
-	var tags []TagScore
-	bestByGroup := make(map[string]int) // group -> index into tags
-	for _, label := range c.labels {
-		score := cosineSimilarity(normalized, label.Embedding)
-		if score < c.threshold {
-			continue
-		}
-		if label.Group == "" {
-			tags = append(tags, TagScore{Label: label.Name, Score: score})
-			continue
-		}
-		if idx, ok := bestByGroup[label.Group]; ok {
-			if score > tags[idx].Score {
-				tags[idx] = TagScore{Label: label.Name, Score: score}
-			}
-			continue
-		}
-		bestByGroup[label.Group] = len(tags)
-		tags = append(tags, TagScore{Label: label.Name, Score: score})
-	}
+	tags := c.scoreLabels(normalized)
 
 	return &Result{
 		RootID:    rootID,
@@ -230,6 +220,90 @@ func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, s
 		SHA256:    sha256Hex,
 		CRC32:     crc32Hex,
 	}, nil
+}
+
+// scoreLabels turns an L2-normalized image embedding into tags.
+//
+// Labels are scored CLIP-style: cosine similarity scaled by logit_scale, then
+// softmax. Raw CLIP cosines all cluster near ~0.2 regardless of match, so a
+// flat cosine threshold lets noise labels (animal, vehicle) leak. Softmax
+// blows the spread open — a real match dominates, junk collapses toward zero.
+//
+// Grouped labels (e.g. mutually-exclusive "attire", "subject") softmax within
+// their group and emit at most one tag: the argmax, if its probability clears
+// the threshold. Spurious groups self-suppress because a near-uniform softmax
+// keeps every member below threshold. Ungrouped labels each softmax alone,
+// which is always 1.0, so they fall back to a raw-cosine threshold check.
+func (c *Classifier) scoreLabels(normalized []float32) []TagScore {
+	type scored struct {
+		label  Label
+		cosine float32
+	}
+	groups := make(map[string][]scored)
+	var order []string // preserve first-seen group order
+	for _, label := range c.labels {
+		if _, ok := groups[label.Group]; !ok {
+			order = append(order, label.Group)
+		}
+		groups[label.Group] = append(groups[label.Group], scored{
+			label:  label,
+			cosine: cosineSimilarity(normalized, label.Embedding),
+		})
+	}
+
+	var tags []TagScore
+	for _, group := range order {
+		members := groups[group]
+
+		// Ungrouped: each label stands alone, judged on raw cosine.
+		if group == "" {
+			for _, m := range members {
+				if m.cosine >= c.threshold {
+					tags = append(tags, TagScore{Label: m.label.Name, Score: m.cosine})
+				}
+			}
+			continue
+		}
+
+		// Grouped: softmax over scaled cosines, keep the argmax if confident.
+		logits := make([]float32, len(members))
+		for i, m := range members {
+			logits[i] = m.cosine * c.logitScale
+		}
+		probs := softmax(logits)
+
+		best := 0
+		for i := range probs {
+			if probs[i] > probs[best] {
+				best = i
+			}
+		}
+		if probs[best] >= c.threshold {
+			tags = append(tags, TagScore{Label: members[best].label.Name, Score: probs[best]})
+		}
+	}
+	return tags
+}
+
+// softmax returns the softmax of v, numerically stabilized by subtracting max.
+func softmax(v []float32) []float32 {
+	maxV := float32(math.Inf(-1))
+	for _, x := range v {
+		if x > maxV {
+			maxV = x
+		}
+	}
+	out := make([]float32, len(v))
+	var sum float64
+	for i, x := range v {
+		e := math.Exp(float64(x - maxV))
+		out[i] = float32(e)
+		sum += e
+	}
+	for i := range out {
+		out[i] = float32(float64(out[i]) / sum)
+	}
+	return out
 }
 
 // ModelVersion returns the model version string.

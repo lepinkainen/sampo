@@ -47,9 +47,15 @@ labels:
   - name: indoor
     prompt: "a photo taken indoors"
     group: location
+  - name: person
+    prompt: "a photo of a person"
+    group: subject
   - name: food
     prompt: "a photo of food or a meal"
+    group: subject
   - name: animal
     prompt: "a photo of an animal"
+    group: subject
   - name: vehicle
     prompt: "a photo of a vehicle such as a car, motorcycle, or bicycle"
+    group: subject

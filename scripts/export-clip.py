@@ -143,6 +143,7 @@ def main():
     output = {
         "model": "clip-vit-base-patch32",
         "dim": dim,
+        "logitScale": model.logit_scale.exp().item(),
         "labels": label_embeddings,
     }
 
