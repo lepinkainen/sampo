@@ -3,7 +3,13 @@ import { onMount } from 'svelte';
 import { fetchDirectory, fetchRoots, moveFiles, copyFiles } from '$lib/api';
 import type { FileEntry, Root } from '$lib/types';
 import { sortEntries } from '$lib/utils';
-import { Folder, FolderOpen, ChevronDown, ChevronRight } from '@lucide/svelte';
+import {
+	Folder,
+	FolderOpen,
+	ChevronDown,
+	ChevronRight,
+	Loader,
+} from '@lucide/svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -17,6 +23,7 @@ let { selectedPath, onSelect, onRefresh }: Props = $props();
 let roots = $state<Root[]>([]);
 let rootChildren = $state<Record<string, FileEntry[]>>({});
 let expandedRoots = $state<Set<string>>(new Set());
+let loadingRoots = $state<Set<string>>(new Set());
 let loading = $state(true);
 let dragOverRoot = $state<string | null>(null);
 
@@ -35,12 +42,16 @@ async function toggleRoot(rootId: string) {
 		expandedRoots = new Set(expandedRoots);
 	} else {
 		if (!rootChildren[rootId]) {
+			loadingRoots.add(rootId);
+			loadingRoots = new Set(loadingRoots);
 			try {
 				const entries = sortEntries(await fetchDirectory(rootId, '/'));
 				rootChildren[rootId] = entries.filter((e) => e.isDir);
 			} catch (e) {
 				console.error('Failed to load root', rootId, e);
 			}
+			loadingRoots.delete(rootId);
+			loadingRoots = new Set(loadingRoots);
 		}
 		expandedRoots.add(rootId);
 		expandedRoots = new Set(expandedRoots);
@@ -108,7 +119,9 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 					ondrop={(e) => handleRootDrop(e, root.id)}
 				>
 					<span class="w-4 shrink-0 text-gray-500">
-						{#if expandedRoots.has(root.id)}
+						{#if loadingRoots.has(root.id)}
+							<Loader size={14} class="animate-spin" />
+						{:else if expandedRoots.has(root.id)}
 							<ChevronDown size={14} />
 						{:else}
 							<ChevronRight size={14} />
