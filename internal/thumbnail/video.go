@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/lepinkainen/sampo/internal/videoframe"
@@ -29,7 +31,7 @@ func GenerateVideoThumbnail(srcPath, dstPath string) error {
 		return fmt.Errorf("creating thumbnail dir: %w", err)
 	}
 
-	duration, err := videoframe.ProbeDuration(srcPath)
+	duration, err := videoframe.ProbeDuration(context.Background(), srcPath)
 	if err != nil || duration <= 0 {
 		duration = 0
 	}
@@ -153,7 +155,9 @@ func extractFrameAt(srcPath, dstPath string, seconds float64) error {
 		dstPath,
 	}
 
-	cmd := exec.Command("ffmpeg", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = os.Remove(dstPath)

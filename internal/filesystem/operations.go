@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,7 +80,7 @@ func CopyFile(src, dst string) (string, error) {
 	}
 
 	dst, err = resolveConflict(src, dst)
-	if err == errIdentical {
+	if errors.Is(err, errIdentical) {
 		return dst, nil // no copy needed
 	}
 	if err != nil {
@@ -114,7 +115,7 @@ func resolveConflict(src, dst string) (string, error) {
 	return autoRename(dst), nil
 }
 
-var errIdentical = fmt.Errorf("files are identical")
+var errIdentical = errors.New("files are identical")
 
 func copyFileData(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
@@ -180,7 +181,7 @@ func MoveFile(src, dst string) (string, error) {
 	// Handle conflict for files
 	if !srcInfo.IsDir() {
 		dst, err = resolveConflict(src, dst)
-		if err == errIdentical {
+		if errors.Is(err, errIdentical) {
 			// Identical — just delete source
 			return dst, os.Remove(src)
 		}

@@ -2,6 +2,7 @@ package classification
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -126,7 +127,7 @@ func (s *Store) Get(rootID, relPath string) (*Result, error) {
 	var r Result
 	var sha256Val, crc32Val sql.NullString
 	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.ModelVer, &r.ScannedAt, &sha256Val, &crc32Val)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

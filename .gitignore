@@ -60,6 +60,9 @@ models/
 # Cache
 .cache/
 
+# Docker/local data
+data/
+
 # Config (copy config.example.yaml to config.yaml)
 config.yaml
 

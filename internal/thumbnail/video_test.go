@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"context"
 	"image/jpeg"
 	"os"
 	"os/exec"
@@ -69,7 +70,7 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 
 func TestGetSeekPosition(t *testing.T) {
 	// With no valid file, should fallback to "1"
-	pos := videoframe.SeekPosition("/nonexistent/file.mp4")
+	pos := videoframe.SeekPosition(context.Background(), "/nonexistent/file.mp4")
 	if pos != "1" {
 		t.Errorf("expected fallback '1', got %q", pos)
 	}

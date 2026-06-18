@@ -9,10 +9,18 @@ interface Props {
 
 let { currentName, onConfirm, onCancel }: Props = $props();
 
-let newName = $state(currentName);
+let newName = $state('');
+let lastCurrentName = $state('');
 let inputEl: HTMLInputElement | undefined = $state();
 
 let isDisabled = $derived(newName.trim() === '' || newName === currentName);
+
+$effect(() => {
+	if (currentName !== lastCurrentName) {
+		newName = currentName;
+		lastCurrentName = currentName;
+	}
+});
 
 $effect(() => {
 	if (inputEl) {

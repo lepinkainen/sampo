@@ -8,10 +8,18 @@ vars:
       tag=$(git describe --tags 2>/dev/null || echo "dev")
       commit=$(git log -n 1 --format=%h 2>/dev/null || echo "none")
       if [ "$tag" = "dev" ]; then
-        echo "dev-$(date '+%Y-%m-%d_%H:%M:%S')"
+        echo "dev-$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       else
         echo "$tag-$commit"
       fi
+  GIT_HASH:
+    sh: git log -n 1 --format=%H 2>/dev/null || echo unknown
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%dT%H:%M:%SZ'
+  GO_LDFLAGS: >-
+    -X main.version={{.VERSION}}
+    -X main.gitHash={{.GIT_HASH}}
+    -X main.buildTime={{.BUILD_TIME}}
 
 tasks:
   build:
@@ -22,14 +30,11 @@ tasks:
       - task: build-go
 
   build-linux:
-    desc: Build for Linux
+    desc: Build Linux binary via Docker (required because ONNX Runtime uses CGO)
     deps: [test, lint]
-    env:
-      GOOS: linux
-      GOARCH: amd64
     cmds:
-      - task: build-frontend
-      - task: build-go
+      - mkdir -p {{.BUILD_DIR}}/linux
+      - docker build --platform linux/amd64 --target binary-export --output type=local,dest={{.BUILD_DIR}}/linux --build-arg VERSION={{.VERSION}} --build-arg GIT_HASH={{.GIT_HASH}} --build-arg BUILD_TIME={{.BUILD_TIME}} .
 
   build-ci:
     desc: Build for CI/CD (build only)
@@ -83,24 +88,25 @@ tasks:
     desc: Build Go project
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -v -ldflags="-X main.version={{.VERSION}}" -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} ./cmd/sampo
+      - go build -v -ldflags="{{.GO_LDFLAGS}}" -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} ./cmd/sampo
     sources:
       - ./**/*.go
 
   test-go:
     desc: Run Go tests
     cmds:
-      - go test $(go list ./... | grep -v llm-shared)
+      - go test $(go list ./... | rg -v '/llm-shared(/|$)')
 
   test-go-ci:
     desc: Run Go tests with coverage for CI
     cmds:
-      - go test -tags=ci -cover -v $(go list ./... | grep -v llm-shared)
+      - go test -tags=ci -cover -v $(go list ./... | rg -v '/llm-shared(/|$)')
 
   test-frontend:
     desc: Run frontend type checking and diagnostics
     dir: frontend
     cmds:
+      - pnpm install --frozen-lockfile
       - pnpm exec svelte-kit sync
       - pnpm exec svelte-check --tsconfig ./tsconfig.json
 
@@ -108,13 +114,14 @@ tasks:
     desc: Lint Go code
     cmds:
       - fd -e go --exclude llm-shared -x goimports -w {}
-      - go vet $(go list ./... | grep -v llm-shared)
+      - go vet $(go list ./... | rg -v '/llm-shared(/|$)')
       - golangci-lint run
 
   lint-frontend:
     desc: Lint and check frontend code
     dir: frontend
     cmds:
+      - pnpm install --frozen-lockfile
       - pnpm exec biome check .
 
   # Frontend tasks
@@ -122,7 +129,7 @@ tasks:
     desc: Build SvelteKit frontend
     dir: frontend
     cmds:
-      - pnpm install
+      - pnpm install --frozen-lockfile
       - pnpm run build
 
   dev:
