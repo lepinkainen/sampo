@@ -247,6 +247,13 @@ $effect(() => {
 		) {
 			return;
 		}
+		// Only refresh while background analysis is actually producing new
+		// results. Idle folders (e.g. no images to analyze) would otherwise
+		// re-list the directory forever.
+		const browse = analysisSettings?.browseStatus;
+		if (!browse || (!browse.running && browse.queued === 0)) {
+			return;
+		}
 		loadDirectory(rootId, path, { preserveSelection: true, silent: true });
 	}, 2000);
 
@@ -720,13 +727,13 @@ async function handleClassifyScan() {
 async function handleReclassifyAll() {
 	if (
 		!confirm(
-			'Re-classify every image in this root from scratch? This replaces all existing tags and may take a while.',
+			'Re-classify every image in this folder and its subfolders from scratch? This replaces all existing tags and may take a while.',
 		)
 	) {
 		return;
 	}
 	try {
-		classifyScanStatus = await startClassifyScan(rootId, '', true);
+		classifyScanStatus = await startClassifyScan(rootId, path, true);
 		toastComponent?.show(
 			`Re-classifying ${classifyScanStatus.total} images...`,
 			'success',
@@ -949,7 +956,7 @@ async function handleFindDuplicates() {
 					</button>
 					<button
 						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Re-classify entire root from scratch (replaces all tags)"
+						title="Re-classify this folder and subfolders from scratch (replaces all tags)"
 						disabled={classifyScanStatus?.running === true}
 						onclick={handleReclassifyAll}
 					>
