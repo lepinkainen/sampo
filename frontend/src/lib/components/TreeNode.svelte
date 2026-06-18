@@ -27,9 +27,20 @@ let {
 let expanded = $state(false);
 let children = $state<FileEntry[]>([]);
 let loading = $state(false);
+let loadingSlow = $state(false);
+let loadingTimer: ReturnType<typeof setTimeout> | null = null;
 let dragOver = $state(false);
 
 const isSelected = $derived(selectedPath === `${rootId}:${entry.path}`);
+
+$effect(() => {
+	return () => {
+		if (loadingTimer) {
+			clearTimeout(loadingTimer);
+			loadingTimer = null;
+		}
+	};
+});
 
 async function toggle() {
 	if (!entry.isDir) {
@@ -38,7 +49,13 @@ async function toggle() {
 	}
 
 	if (!expanded) {
+		if (loading) return;
 		loading = true;
+		loadingSlow = false;
+		if (loadingTimer) clearTimeout(loadingTimer);
+		loadingTimer = setTimeout(() => {
+			loadingSlow = true;
+		}, 3000);
 		try {
 			children = sortEntries(await fetchDirectory(rootId, entry.path)).filter(
 				(e) => e.isDir,
@@ -46,7 +63,12 @@ async function toggle() {
 		} catch (e) {
 			console.error('Failed to load directory', e);
 		}
+		if (loadingTimer) {
+			clearTimeout(loadingTimer);
+			loadingTimer = null;
+		}
 		loading = false;
+		loadingSlow = false;
 	}
 
 	expanded = !expanded;
@@ -126,6 +148,9 @@ async function handleDrop(e: DragEvent) {
 			<FileIcon {entry} open={expanded} size={16} />
 		</span>
 		<span class="truncate">{entry.name}</span>
+		{#if loadingSlow}
+			<span class="ml-1 shrink-0 text-xs text-amber-400">(network drive...)</span>
+		{/if}
 	</button>
 
 	{#if expanded && children.length > 0}

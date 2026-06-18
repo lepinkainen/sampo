@@ -79,6 +79,8 @@ let {
 let pathSegments = $derived(path.split('/').filter(Boolean));
 let entries = $state<FileEntry[]>([]);
 let loading = $state(false);
+let loadingSlow = $state(false);
+let loadingSlowTimer: ReturnType<typeof setTimeout> | null = null;
 let error = $state<string | null>(null);
 let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
 let savedScrollTop = $state(0);
@@ -105,6 +107,7 @@ let analysisSettingsSaving = $state(false);
 let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let loadRequestId = 0;
+let latestVisibleLoadId = 0;
 let detailsThumbLoading = $state(false);
 let detailsThumbError = $state(false);
 let detailsImgEl: HTMLImageElement | undefined = $state();
@@ -224,6 +227,10 @@ $effect(() => {
 			clearInterval(analysisPollTimer);
 			analysisPollTimer = null;
 		}
+		if (loadingSlowTimer) {
+			clearTimeout(loadingSlowTimer);
+			loadingSlowTimer = null;
+		}
 	};
 });
 
@@ -322,7 +329,13 @@ async function loadDirectory(
 		savedScrollTop = 0;
 	}
 	if (!silent) {
+		latestVisibleLoadId = requestId;
 		loading = true;
+		loadingSlow = false;
+		if (loadingSlowTimer) clearTimeout(loadingSlowTimer);
+		loadingSlowTimer = setTimeout(() => {
+			loadingSlow = true;
+		}, 3000);
 	}
 	error = null;
 	try {
@@ -342,9 +355,18 @@ async function loadDirectory(
 		if (!silent) {
 			entries = [];
 		}
-	}
-	if (requestId === loadRequestId && !silent) {
-		loading = false;
+	} finally {
+		// Clear the loading indicator when the load that owns it finishes,
+		// even if a silent refresh has since bumped loadRequestId. Skip only
+		// when a newer non-silent load has taken over the indicator.
+		if (!silent && requestId === latestVisibleLoadId) {
+			loading = false;
+			loadingSlow = false;
+			if (loadingSlowTimer) {
+				clearTimeout(loadingSlowTimer);
+				loadingSlowTimer = null;
+			}
+		}
 	}
 }
 
@@ -1059,8 +1081,21 @@ async function handleFindDuplicates() {
 				ondragover={handleDragOver}
 			>
 				{#if loading || (searchActive && searchLoading)}
-					<div class="flex h-full items-center justify-center">
-						<p class="text-gray-500">Loading...</p>
+					<div class="flex h-full flex-col items-center justify-center gap-4 px-4">
+						<div class="flex flex-wrap justify-center gap-3">
+							{#each Array(8)}
+								<div class="h-32 w-44 animate-pulse rounded-lg bg-gray-800"></div>
+							{/each}
+						</div>
+						<div class="text-center">
+							<p class="text-gray-500">
+								<LoaderCircle size={16} class="mr-2 inline animate-spin" />
+								Loading...
+							</p>
+							{#if loadingSlow}
+								<p class="mt-1 text-sm text-amber-400">Still loading — network drives may respond slowly</p>
+							{/if}
+						</div>
 					</div>
 				{:else if error}
 					<div class="flex h-full items-center justify-center">
