@@ -14,6 +14,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/config"
 	"github.com/lepinkainen/sampo/internal/detection"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/onnxenv"
 	"github.com/lepinkainen/sampo/internal/server/handlers"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
@@ -74,6 +75,8 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	var detector *detection.Detector
 	var classStore *classification.Store
 	var classifier *classification.Classifier
+	var ocrStore *ocr.Store
+	var recognizer *ocr.Recognizer
 
 	// Initialize shared ONNX environment if any ML feature is enabled
 	if cfg.Detection.Enabled || cfg.Classification.Enabled {
@@ -129,12 +132,34 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		logger.Info("classification enabled", "model", cfg.Classification.ModelPath, "threshold", cfg.Classification.Threshold)
 	}
 
-	if cfg.Detection.Enabled || cfg.Classification.Enabled {
+	// Conditionally initialize OCR. The backend is platform-gated in
+	// internal/ocr (Vision binary on macOS, unsupported elsewhere for now), so a
+	// recognizer build failure disables the feature instead of killing startup.
+	if cfg.OCR.Enabled {
+		rec, ocrErr := ocr.NewRecognizer(cfg.OCR.BinaryPath, cfg.OCR.ModelVersion, logger)
+		if ocrErr != nil {
+			logger.Warn("OCR enabled but unavailable on this platform, skipping", "error", ocrErr)
+		} else {
+			store, storeErr := ocr.NewStore(cfg.Cache.Dir)
+			if storeErr != nil {
+				return nil, fmt.Errorf("initializing ocr store: %w", storeErr)
+			}
+			ocrStore = store
+			recognizer = rec
+			ocrScanner := ocr.NewScanner(ocrStore, recognizer, rootMgr, frameDir, cfg.OCR.Workers, logger)
+			h.SetOCR(ocrStore, recognizer, ocrScanner)
+			logger.Info("OCR enabled", "binary", cfg.OCR.BinaryPath, "version", recognizer.ModelVersion())
+		}
+	}
+
+	if cfg.Detection.Enabled || cfg.Classification.Enabled || ocrStore != nil {
 		coordinator := analysis.NewCoordinator(
 			detStore,
 			detector,
 			classStore,
 			classifier,
+			ocrStore,
+			recognizer,
 			frameDir,
 			cfg.Analysis.BrowseWorkers,
 			cfg.Analysis.BrowseQueueSize,
@@ -142,6 +167,11 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 			logger,
 		)
 		h.SetBrowseCoordinator(coordinator)
+
+		// Unified scan: one walk, every enabled analyzer per file. Re-analyze uses this.
+		analysisScanner := analysis.NewScanner(coordinator, rootMgr, cfg.Analysis.BrowseWorkers, logger)
+		h.SetAnalysisScanner(analysisScanner)
+
 		logger.Info("browse analysis configured",
 			"autoEnabled", cfg.Analysis.AutoBrowseEnabled,
 			"workers", cfg.Analysis.BrowseWorkers,

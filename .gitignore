@@ -12,6 +12,7 @@
 # Build artifacts
 build/
 dist/
+bin/
 
 # IDE files
 .vscode/

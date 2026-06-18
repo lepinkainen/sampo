@@ -3,7 +3,7 @@ import { thumbnailUrl } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
-import { Folder, User } from '@lucide/svelte';
+import { Folder, ScanText, User } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -107,15 +107,22 @@ $effect(() => {
 				{/each}
 			</div>
 		{/if}
-		{#if entry.isDir && entry.hasThumb && !imgError}
-			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
-				<Folder size={14} />
-			</span>
-		{:else if entry.hasPerson === true}
-			<span class="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white">
-				<User size={14} />
-			</span>
-		{/if}
+		<div class="absolute bottom-1 right-1 flex items-center gap-0.5">
+			{#if entry.ocrText}
+				<span class="rounded bg-black/60 p-0.5 text-white" title="Contains text (OCR)">
+					<ScanText size={14} />
+				</span>
+			{/if}
+			{#if entry.isDir && entry.hasThumb && !imgError}
+				<span class="rounded bg-black/60 p-0.5 text-white">
+					<Folder size={14} />
+				</span>
+			{:else if entry.hasPerson === true}
+				<span class="rounded bg-black/60 p-0.5 text-white">
+					<User size={14} />
+				</span>
+			{/if}
+		</div>
 	</div>
 	<div class="p-2">
 		<p class="truncate text-sm text-gray-200" title={entry.name}>{entry.name}</p>

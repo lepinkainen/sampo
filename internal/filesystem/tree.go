@@ -26,6 +26,7 @@ type FileEntry struct {
 	HasThumb  bool       `json:"hasThumb"`
 	HasPerson *bool      `json:"hasPerson,omitempty"`
 	Tags      []TagScore `json:"tags,omitempty"`
+	OCRText   string     `json:"ocrText,omitempty"`
 	SHA256    *string    `json:"sha256,omitempty"`
 	CRC32     *string    `json:"crc32,omitempty"`
 }

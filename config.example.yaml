@@ -25,3 +25,12 @@ classification:
   model_version: "clip-vit-b32-1.0"
   threshold: 0.2
   workers: 2
+
+# OCR text extraction (opt-in). Backend is platform-gated:
+#   macOS  — Vision-framework helper; run `task build-ocr` to compile bin/sampo-ocr
+#   Linux  — no backend yet (self-disables); generic ONNX backend planned
+ocr:
+  enabled: false
+  binary_path: "bin/sampo-ocr"
+  model_version: "vision-1.0"
+  workers: 2

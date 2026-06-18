@@ -234,6 +234,75 @@ export async function getClassifyScanStatus(): Promise<ScanStatus> {
 	return res.json();
 }
 
+// OCR API
+
+export interface OCRTextBlock {
+	text: string;
+	confidence: number;
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+export interface OCRResult {
+	rootId: string;
+	relPath: string;
+	text: string;
+	blocks: OCRTextBlock[];
+	modelVer: string;
+	scannedAt: string;
+}
+
+// runOCR fetches the OCR result for an image, computing it on first request.
+export async function runOCR(rootId: string, path: string): Promise<OCRResult> {
+	const res = await fetch(`${BASE}/api/ocr/${rootId}/${encodePath(path)}`);
+	if (!res.ok) throw new Error(`OCR failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function startOCRScan(
+	rootId: string,
+	path: string,
+	force = false,
+): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/ocr/scan`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path, force }),
+	});
+	if (!res.ok) throw new Error(`OCR scan failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function getOCRScanStatus(): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/ocr/status`);
+	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
+	return res.json();
+}
+
+// Unified analysis API — one pass, every enabled analyzer (detection + tags + OCR).
+
+export async function startAnalyzeScan(
+	rootId: string,
+	path: string,
+	force = false,
+): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/analyze/scan`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path, force }),
+	});
+	if (!res.ok) throw new Error(`Analysis scan failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function getAnalyzeScanStatus(): Promise<ScanStatus> {
+	const res = await fetch(`${BASE}/api/analyze/status`);
+	if (!res.ok) throw new Error(`Status failed: ${res.statusText}`);
+	return res.json();
+}
+
 // Search API
 
 export async function searchFiles(

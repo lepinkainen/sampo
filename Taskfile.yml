@@ -26,6 +26,7 @@ tasks:
     desc: Build the project
     deps: [test, lint]
     cmds:
+      - task: build-ocr
       - task: build-frontend
       - task: build-go
 
@@ -194,6 +195,19 @@ tasks:
     cmds:
       - mkdir -p models
       - uv run --with transformers --with torch --with pyyaml --with numpy python scripts/export-clip-labels.py
+
+  build-ocr:
+    desc: Compile the macOS Vision OCR helper (sampo-ocr) used by OCR on darwin
+    platforms: [darwin]
+    cmds:
+      - mkdir -p bin
+      - swiftc -O scripts/sampo-ocr.swift -o bin/sampo-ocr
+    sources:
+      - scripts/sampo-ocr.swift
+    generates:
+      - bin/sampo-ocr
+    status:
+      - test -f bin/sampo-ocr
 
   docker-build:
     desc: Build Docker image

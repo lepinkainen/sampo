@@ -183,13 +183,20 @@ func (c *Classifier) Classify(imagePath string, rootID, relPath string, mtime, s
 		c.logger.Warn("failed to compute file hashes", "path", imagePath, "error", hashErr)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	img, err := imaging.Open(imagePath)
 	if err != nil {
 		return nil, fmt.Errorf("opening image %s: %w", imagePath, err)
 	}
+
+	return c.ClassifyImage(img, sha256Hex, crc32Hex, rootID, relPath, mtime, size)
+}
+
+// ClassifyImage runs CLIP classification on an already-decoded image, with file
+// hashes supplied by the caller. Callers running several analyzers on one file
+// decode + hash it once and share it here instead of re-reading per analyzer.
+func (c *Classifier) ClassifyImage(img image.Image, sha256Hex, crc32Hex string, rootID, relPath string, mtime, size int64) (*Result, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	// CLIP preprocessing: resize shortest side to 224, center crop 224x224
 	preprocessed := clipPreprocess(img)

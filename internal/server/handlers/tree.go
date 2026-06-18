@@ -115,6 +115,20 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Enrich entries with recognized text from OCR store
+	if h.ocrStore != nil {
+		dirText, err := h.ocrStore.GetDirText(rootID, relPath)
+		if err != nil {
+			h.logger.Error("getting dir ocr text", "error", err)
+		} else if len(dirText) > 0 {
+			for i := range entries {
+				if text, ok := dirText[entries[i].Path]; ok {
+					entries[i].OCRText = text
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		slog.Error("encoding directory response", "error", err)

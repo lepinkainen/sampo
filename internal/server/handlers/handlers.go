@@ -8,6 +8,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/classification"
 	"github.com/lepinkainen/sampo/internal/detection"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
 
@@ -23,7 +24,11 @@ type Handler struct {
 	classStore        *classification.Store
 	classifier        *classification.Classifier
 	classScanner      *classification.Scanner
+	ocrStore          *ocr.Store
+	ocrRecognizer     *ocr.Recognizer
+	ocrScanner        *ocr.Scanner
 	browseCoordinator *analysis.Coordinator
+	analysisScanner   *analysis.Scanner
 	autoBrowseEnabled atomic.Bool
 }
 
@@ -51,9 +56,21 @@ func (h *Handler) SetClassification(store *classification.Store, classifier *cla
 	h.classScanner = scanner
 }
 
+// SetOCR configures optional OCR components.
+func (h *Handler) SetOCR(store *ocr.Store, recognizer *ocr.Recognizer, scanner *ocr.Scanner) {
+	h.ocrStore = store
+	h.ocrRecognizer = recognizer
+	h.ocrScanner = scanner
+}
+
 // SetBrowseCoordinator configures optional browse-triggered background analysis.
 func (h *Handler) SetBrowseCoordinator(coordinator *analysis.Coordinator) {
 	h.browseCoordinator = coordinator
+}
+
+// SetAnalysisScanner configures the unified (load-once, run-all) analysis scanner.
+func (h *Handler) SetAnalysisScanner(scanner *analysis.Scanner) {
+	h.analysisScanner = scanner
 }
 
 // SetAutoBrowseEnabled updates the runtime browse-triggered analysis flag.

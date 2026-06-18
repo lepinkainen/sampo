@@ -2,7 +2,7 @@
 import type { FileEntry } from '$lib/types';
 import { formatSize, formatDate } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
-import { User } from '@lucide/svelte';
+import { ScanText, User } from '@lucide/svelte';
 import { thumbnailUrl } from '$lib/api';
 
 interface Props {
@@ -122,6 +122,9 @@ function sortIndicator(key: SortKey): string {
 					<td class="px-2 py-1.5 text-gray-200">
 						<div class="flex items-center gap-2">
 							<span class="truncate" title={entry.name}>{entry.name}</span>
+							{#if entry.ocrText}
+								<span class="text-amber-400 shrink-0" title="Contains text (OCR)"><ScanText size={12} /></span>
+							{/if}
 							{#if entry.hasPerson === true}
 								<span class="text-orange-400 shrink-0"><User size={12} /></span>
 							{/if}

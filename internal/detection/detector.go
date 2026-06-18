@@ -82,13 +82,19 @@ func NewDetector(modelPath string, threshold float32, modelVer string, logger *s
 
 // Detect runs person detection on an image file.
 func (d *Detector) Detect(imagePath string, rootID, relPath string, mtime int64, size int64) (*Result, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	img, err := imaging.Open(imagePath)
 	if err != nil {
 		return nil, fmt.Errorf("opening image %s: %w", imagePath, err)
 	}
+	return d.DetectImage(img, rootID, relPath, mtime, size)
+}
+
+// DetectImage runs person detection on an already-decoded image. Callers that
+// run several analyzers on the same file decode it once and share it here,
+// avoiding a redundant per-analyzer file read + decode.
+func (d *Detector) DetectImage(img image.Image, rootID, relPath string, mtime int64, size int64) (*Result, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
 	// Resize to 640x640 maintaining aspect ratio with letterboxing
 	resized := imaging.Fit(img, inputSize, inputSize, imaging.Lanczos)

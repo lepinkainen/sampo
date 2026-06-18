@@ -12,6 +12,11 @@ import {
 	startClassifyScan,
 	getClassifyScanStatus,
 	getClassification,
+	runOCR,
+	startOCRScan,
+	getOCRScanStatus,
+	startAnalyzeScan,
+	getAnalyzeScanStatus,
 	searchFiles,
 	getDiskUsage,
 	findDuplicates,
@@ -22,6 +27,7 @@ import type {
 	ScanStatus,
 	DetectionResult,
 	ClassificationResult,
+	OCRResult,
 	DiskUsage,
 	AnalysisSettings,
 } from '$lib/api';
@@ -49,6 +55,7 @@ import {
 	ScanSearch,
 	Sparkles,
 	RefreshCw,
+	ScanText,
 	Tag,
 	Search,
 	X,
@@ -102,6 +109,13 @@ let detectionResult = $state<DetectionResult | null>(null);
 let classifyScanStatus = $state<ScanStatus | null>(null);
 let classifyPollTimer: ReturnType<typeof setInterval> | null = null;
 let classificationResult = $state<ClassificationResult | null>(null);
+let ocrResult = $state<OCRResult | null>(null);
+let ocrLoading = $state(false);
+let ocrError = $state<string | null>(null);
+let ocrScanStatus = $state<ScanStatus | null>(null);
+let ocrScanPollTimer: ReturnType<typeof setInterval> | null = null;
+let analyzeScanStatus = $state<ScanStatus | null>(null);
+let analyzePollTimer: ReturnType<typeof setInterval> | null = null;
 let analysisSettings = $state<AnalysisSettings | null>(null);
 let analysisSettingsSaving = $state(false);
 let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -215,6 +229,14 @@ $effect(() => {
 			clearInterval(classifyPollTimer);
 			classifyPollTimer = null;
 		}
+		if (ocrScanPollTimer) {
+			clearInterval(ocrScanPollTimer);
+			ocrScanPollTimer = null;
+		}
+		if (analyzePollTimer) {
+			clearInterval(analyzePollTimer);
+			analyzePollTimer = null;
+		}
 		if (autoRefreshTimer) {
 			clearInterval(autoRefreshTimer);
 			autoRefreshTimer = null;
@@ -250,6 +272,8 @@ $effect(() => {
 			searchLoading ||
 			scanStatus?.running ||
 			classifyScanStatus?.running ||
+			ocrScanStatus?.running ||
+			analyzeScanStatus?.running ||
 			(searchActive && !!searchQuery.trim())
 		) {
 			return;
@@ -275,9 +299,22 @@ $effect(() => {
 $effect(() => {
 	detectionResult = null;
 	classificationResult = null;
+	ocrResult = null;
+	ocrError = null;
 	diskUsage = null;
 	if (selectedEntries.length === 1) {
 		const sel = selectedEntries[0];
+		// Seed OCR display from cached listing text (no recompute on select).
+		if (sel.ocrText) {
+			ocrResult = {
+				rootId,
+				relPath: sel.path,
+				text: sel.ocrText,
+				blocks: [],
+				modelVer: '',
+				scannedAt: '',
+			};
+		}
 		if (sel.mediaType === 'image') {
 			getDetection(rootId, sel.path)
 				.then((r) => (detectionResult = r))
@@ -746,27 +783,105 @@ async function handleClassifyScan() {
 	}
 }
 
-async function handleReclassifyAll() {
+async function handleRunOCR(entry: FileEntry) {
+	ocrLoading = true;
+	ocrError = null;
+	try {
+		ocrResult = await runOCR(rootId, entry.path);
+		// Reflect the result on the cached entry so it persists across reselects.
+		entry.ocrText = ocrResult.text;
+		if (!ocrResult.text) {
+			toastComponent?.show('No text found in image', 'success');
+		}
+	} catch (e) {
+		ocrError = e instanceof Error ? e.message : 'OCR failed';
+		toastComponent?.show(ocrError, 'error');
+	} finally {
+		ocrLoading = false;
+	}
+}
+
+async function handleOCRScan() {
+	try {
+		ocrScanStatus = await startOCRScan(rootId, path);
+		toastComponent?.show(
+			`Running OCR on ${ocrScanStatus.total} files...`,
+			'success',
+		);
+		startPollingOCRScanStatus();
+	} catch (e) {
+		toastComponent?.show(
+			e instanceof Error ? e.message : 'OCR scan failed',
+			'error',
+		);
+	}
+}
+
+function startPollingOCRScanStatus() {
+	if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
+	ocrScanPollTimer = setInterval(async () => {
+		try {
+			ocrScanStatus = await getOCRScanStatus();
+			if (!ocrScanStatus.running) {
+				if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
+				ocrScanPollTimer = null;
+				toastComponent?.show(
+					`OCR complete: ${ocrScanStatus.completed} files processed`,
+					'success',
+				);
+				loadDirectory(rootId, path);
+			}
+		} catch {
+			if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
+			ocrScanPollTimer = null;
+		}
+	}, 1000);
+}
+
+// Re-analyze: one pass over the folder that loads each file once and runs every
+// enabled analyzer (detection + tags + OCR), replacing all existing results.
+async function handleReanalyzeAll() {
 	if (
 		!confirm(
-			'Re-classify every image in this folder and its subfolders from scratch? This replaces all existing tags and may take a while.',
+			'Re-analyze every image in this folder and its subfolders from scratch? This runs detection, tagging, and OCR, replacing all existing results, and may take a while.',
 		)
 	) {
 		return;
 	}
 	try {
-		classifyScanStatus = await startClassifyScan(rootId, path, true);
+		analyzeScanStatus = await startAnalyzeScan(rootId, path, true);
 		toastComponent?.show(
-			`Re-classifying ${classifyScanStatus.total} images...`,
+			`Re-analyzing ${analyzeScanStatus.total} files...`,
 			'success',
 		);
-		startPollingClassifyStatus();
+		startPollingAnalyzeStatus();
 	} catch (e) {
 		toastComponent?.show(
-			e instanceof Error ? e.message : 'Re-classification failed',
+			e instanceof Error ? e.message : 'Re-analysis failed',
 			'error',
 		);
 	}
+}
+
+function startPollingAnalyzeStatus() {
+	if (analyzePollTimer) clearInterval(analyzePollTimer);
+	analyzePollTimer = setInterval(async () => {
+		try {
+			analyzeScanStatus = await getAnalyzeScanStatus();
+			if (!analyzeScanStatus.running) {
+				if (analyzePollTimer) clearInterval(analyzePollTimer);
+				analyzePollTimer = null;
+				toastComponent?.show(
+					`Analysis complete: ${analyzeScanStatus.completed} files processed`,
+					'success',
+				);
+				loadDirectory(rootId, path);
+			}
+		} catch {
+			if (analyzePollTimer) clearInterval(analyzePollTimer);
+			analyzePollTimer = null;
+		}
+	}, 1000);
 }
 
 function startPollingClassifyStatus() {
@@ -978,9 +1093,17 @@ async function handleFindDuplicates() {
 					</button>
 					<button
 						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Re-classify this folder and subfolders from scratch (replaces all tags)"
-						disabled={classifyScanStatus?.running === true}
-						onclick={handleReclassifyAll}
+						title="Run OCR on this folder (extract text from images)"
+						disabled={ocrScanStatus?.running === true}
+						onclick={handleOCRScan}
+					>
+						<ScanText size={16} />
+					</button>
+					<button
+						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+						title="Re-analyze this folder and subfolders from scratch — runs detection, tagging, and OCR in one pass (replaces all results)"
+						disabled={analyzeScanStatus?.running === true}
+						onclick={handleReanalyzeAll}
 					>
 						<RefreshCw size={16} />
 					</button>
@@ -1021,6 +1144,16 @@ async function handleFindDuplicates() {
 				{#if classifyScanStatus?.running}
 					<span class="text-xs text-purple-400">
 						Classifying {classifyScanStatus.completed}/{classifyScanStatus.total}
+					</span>
+				{/if}
+				{#if ocrScanStatus?.running}
+					<span class="text-xs text-amber-400">
+						OCR {ocrScanStatus.completed}/{ocrScanStatus.total}
+					</span>
+				{/if}
+				{#if analyzeScanStatus?.running}
+					<span class="text-xs text-emerald-400">
+						Analyzing {analyzeScanStatus.completed}/{analyzeScanStatus.total}
 					</span>
 				{/if}
 				{#if selection.size > 0}
@@ -1244,6 +1377,37 @@ async function handleFindDuplicates() {
 												</span>
 											{/each}
 										</div>
+									</div>
+								{/if}
+
+								{#if !sel.isDir && (sel.mediaType === 'image' || sel.mediaType === 'video')}
+									<div class="col-span-2 border-t border-gray-800 pt-2">
+										<div class="mb-1 flex items-center justify-between">
+											<span class="text-gray-500">OCR text</span>
+											<button
+												class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-200 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+												onclick={() => handleRunOCR(sel)}
+												disabled={ocrLoading}
+												title="Extract text from this image"
+											>
+												{ocrLoading ? 'Running…' : ocrResult?.text ? 'Re-run OCR' : 'Run OCR'}
+											</button>
+										</div>
+										{#if ocrError}
+											<p class="text-xs text-red-400">{ocrError}</p>
+										{:else if ocrResult && ocrResult.blocks.length > 0}
+											<div class="flex flex-col gap-0.5">
+												{#each ocrResult.blocks as block}
+													<span class="rounded bg-gray-800 px-1.5 py-0.5 text-xs break-all text-gray-200">{block.text}</span>
+												{/each}
+											</div>
+										{:else if ocrResult?.text}
+											<p class="text-xs break-words whitespace-pre-wrap text-gray-200">{ocrResult.text}</p>
+										{:else if ocrResult}
+											<p class="text-xs text-gray-500">No text found</p>
+										{:else}
+											<p class="text-xs text-gray-600">Not analyzed yet</p>
+										{/if}
 									</div>
 								{/if}
 							</div>

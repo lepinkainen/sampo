@@ -19,6 +19,7 @@ export interface FileEntry {
 	hasThumb: boolean;
 	hasPerson?: boolean | null;
 	tags?: TagScore[] | null;
+	ocrText?: string | null;
 	sha256?: string | null;
 	crc32?: string | null;
 }

@@ -23,6 +23,7 @@ task dev-go         # Go backend only (port 8080)
 task clean          # Remove build artifacts
 task download-model       # Download YOLO11n and export to ONNX
 task download-clip-model  # Export CLIP ViT-B/32 to ONNX + pre-compute text embeddings
+task build-ocr            # macOS only: compile Vision OCR helper to bin/sampo-ocr
 ```
 
 Run a single Go test:
@@ -90,6 +91,21 @@ Both detection and classification are optional — enabled via `config.yaml` `de
 - **Person detection** (`internal/detection/`): YOLO11n model (output `[1,84,8400]`, same layout as YOLOv8). Scanner for batch directory processing, SQLite-backed result cache
 - **Image classification** (`internal/classification/`): CLIP ViT-B/32 vision encoder. Text embeddings pre-computed at export time from `scripts/clip-labels.yaml` (20 labels: clothing, locations, subject, etc.). Scanner + SQLite store. Scoring: cosine similarity scaled by `logit_scale` (~100, exported into `clip-labels.json`) then **per-group softmax** — each label `group:` (attire, location, subject) emits at most its argmax tag if the softmax prob clears the threshold. This replaced a flat raw-cosine threshold, which leaked noise tags (raw CLIP cosines all cluster ~0.2) — see `classifier_golden_test.go` for the regression guard. Upgrade options researched (not yet adopted): **SigLIP 2 FixRes** (best zero-shot, multilingual, ONNX via `onnx-community/siglip2-*-ONNX`; requires SigLIP preprocessing + sigmoid scoring rewrite) or OpenCLIP/EVA-CLIP (same code shape)
 
+### OCR Pipeline (platform-gated, not ONNX)
+
+Optional — enabled via `config.yaml` `ocr:` section. Extracts text from images/video frames into SQLite (`ocr.db`) so `/api/search` can match recognized text. Mirrors the classification package shape (Scanner + Store + single-file handler), but the recognition **backend is selected at compile time via build tags** in `internal/ocr/` — this is deliberate so each platform only links the deps it can satisfy:
+
+- **darwin** (`engine_darwin.go`, `//go:build darwin`): shells out to the `sampo-ocr` helper binary (built from `scripts/sampo-ocr.swift` with `task build-ocr` → `bin/sampo-ocr`), which uses Apple's **Vision framework** (`VNRecognizeTextRequest`). Efficient, on-device, no models to download. Same exec-a-binary pattern as the ffmpeg thumbnail path.
+- **other** (`engine_other.go`, `//go:build !darwin`): no backend yet — `NewEngine` returns `ErrUnsupported` and the feature **self-disables** (server logs a warning, skips wiring) rather than failing startup. This is the seam where a generic ONNX backend (planned: **RapidOCR/PaddleOCR** — DBNet text detection + SVTR/CRNN recognition, both ONNX-exportable, reusing `internal/onnxenv`) plugs in for Linux/Docker deploy.
+
+Search integration: `internal/ocr/store.go` `SearchByText` (case-insensitive LIKE on recognized text, scoped to a dir) feeds search phase 3; `FileEntry.OCRText` enriches results. Tree listings are enriched via `GetDirText` so OCR'd images carry `ocrText` (frontend shows a `[=]` badge + the text in the detail panel).
+
+### Unified analysis (load once, run all)
+
+`internal/analysis/coordinator.go` is the single per-file analysis path. `loadImage` reads + decodes + hashes the file **once**, then `processImage` hands the same in-memory `image.Image` (and SHA256/CRC32) to every analyzer via `detector.DetectImage`, `classifier.ClassifyImage`, and `recognizer.Recognize`. The path-based `Detect`/`Classify` methods remain as thin wrappers for standalone single-file/scan callers. Both the browse queue (`Enqueue`, auto-analysis while browsing) and the bulk `analysis.Scanner` (`internal/analysis/scanner.go`) funnel through `Coordinator.process` / `Coordinator.Analyze`, so a new analyzer added to the coordinator lights up everywhere. The **"Re-analyze"** toolbar action (`POST /api/analyze/scan` with `force`) walks a folder once and re-runs every enabled analyzer — this replaced the OCR-blind, classification-only "re-classify". Per-analyzer standalone scans still exist (`/api/detect/scan`, `/api/classify/scan`, `/api/ocr/scan`) for running just one. Video: frames are extracted once, then each frame is decoded once and run through all analyzers; OCR over frames unions distinct recognized blocks (`aggregateOCR`).
+
+**OCR backend + the shared image:** the OCR `Engine.Recognize(ctx, img image.Image, imagePath string)` takes both the shared decode and the path. The macOS Vision backend is a subprocess that can only take a path, so it ignores `img` and re-reads the file (an accepted exception — it can't use an in-memory image anyway). The planned in-process ONNX/Docker backend (`engine_other.go`) MUST use `img` when non-nil to reuse the single decode and avoid re-reading; it only decodes `imagePath` itself when `img` is nil (standalone callers pass nil). So on Docker, detection + classification + OCR all run off the same byte-level load.
+
 ### API
 
 | Endpoint | Purpose |
@@ -107,7 +123,12 @@ Both detection and classification are optional — enabled via `config.yaml` `de
 | `GET /api/classify/{rootID}/*path` | Classify single image (or get cached result) |
 | `POST /api/classify/scan` | Start background classification scan |
 | `GET /api/classify/status` | Poll classification scan progress |
-| `GET /api/search/{rootID}?q=<query>&path=<scope>` | Search files by name and classification tags |
+| `GET /api/ocr/{rootID}/*path` | OCR single image (or get cached result) |
+| `POST /api/ocr/scan` | Start background OCR scan |
+| `GET /api/ocr/status` | Poll OCR scan progress |
+| `POST /api/analyze/scan` | Start unified scan (one pass: detection + tags + OCR) |
+| `GET /api/analyze/status` | Poll unified scan progress |
+| `GET /api/search/{rootID}?q=<query>&path=<scope>` | Search files by name, classification tags, and OCR text |
 | `GET /api/usage/{rootID}/*path` | Disk usage stats (total size, file/dir counts) |
 | `GET /api/duplicates/{rootID}/*path` | Find duplicate files by SHA256 checksum |
 | `GET /whoami` | App version info |

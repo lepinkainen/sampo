@@ -29,14 +29,14 @@ linters:
     rules:
       - linters:
           - noctx
-        path: internal/(classification|detection)/store\.go
+        path: internal/(classification|detection|ocr)/store\.go
         text: "must not be called"
       - linters:
           - gosec
         text: "G(301|304|703):"
       - linters:
           - gosec
-        path: internal/(thumbnail|videoframe)/.*\.go
+        path: internal/(thumbnail|videoframe|ocr)/.*\.go
         text: "G(122|204):"
   settings:
     govet:

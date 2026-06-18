@@ -31,6 +31,18 @@ type ClassificationConfig struct {
 	Workers      int     `mapstructure:"workers"`
 }
 
+// OCRConfig holds optical character recognition settings.
+//
+// The backend is selected at compile time by build tags in internal/ocr:
+// macOS shells out to BinaryPath (the Vision-framework `sampo-ocr` helper);
+// other platforms have no backend yet and self-disable.
+type OCRConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	BinaryPath   string `mapstructure:"binary_path"`
+	ModelVersion string `mapstructure:"model_version"`
+	Workers      int    `mapstructure:"workers"`
+}
+
 // AnalysisConfig holds browse-triggered automatic analysis settings.
 type AnalysisConfig struct {
 	AutoBrowseEnabled bool `mapstructure:"auto_browse_enabled"`
@@ -51,6 +63,7 @@ type Config struct {
 	Roots          []RootConfig         `mapstructure:"roots"`
 	Detection      DetectionConfig      `mapstructure:"detection"`
 	Classification ClassificationConfig `mapstructure:"classification"`
+	OCR            OCRConfig            `mapstructure:"ocr"`
 	Analysis       AnalysisConfig       `mapstructure:"analysis"`
 }
 
@@ -75,6 +88,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("classification.model_version", "clip-vit-b32-1.0")
 	viper.SetDefault("classification.threshold", 0.2)
 	viper.SetDefault("classification.workers", 2)
+	viper.SetDefault("ocr.enabled", false)
+	viper.SetDefault("ocr.binary_path", "bin/sampo-ocr")
+	viper.SetDefault("ocr.model_version", "vision-1.0")
+	viper.SetDefault("ocr.workers", 2)
 	viper.SetDefault("analysis.auto_browse_enabled", true)
 	viper.SetDefault("analysis.browse_workers", 1)
 	viper.SetDefault("analysis.browse_queue_size", 128)

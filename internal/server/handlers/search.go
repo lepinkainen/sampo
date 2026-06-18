@@ -100,32 +100,17 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.logger.Error("searching by tag", "error", err)
 		} else {
-			root, rootErr := h.roots.Get(rootID)
-			if rootErr == nil {
-				for _, relPath := range tagPaths {
-					if seen[relPath] || len(results) >= searchResultLimit {
-						continue
-					}
-					// Resolve to full path for file info
-					entryFullPath := filepath.Join(root.Path, relPath)
-					info, infoErr := os.Stat(entryFullPath)
-					if infoErr != nil {
-						continue
-					}
-					mediaType := filesystem.DetectMediaType(filepath.Base(relPath))
-					entry := filesystem.FileEntry{
-						Name:      filepath.Base(relPath),
-						Path:      relPath,
-						IsDir:     false,
-						Size:      info.Size(),
-						ModTime:   info.ModTime(),
-						MediaType: mediaType,
-						HasThumb:  mediaType == "image" || mediaType == "video",
-					}
-					results = append(results, entry)
-					seen[relPath] = true
-				}
-			}
+			results = h.appendPathMatches(rootID, tagPaths, results, seen)
+		}
+	}
+
+	// Phase 3: OCR text match (if OCR store is available)
+	if h.ocrStore != nil && len(results) < searchResultLimit {
+		ocrPaths, err := h.ocrStore.SearchByText(rootID, scopePath, queryLower)
+		if err != nil {
+			h.logger.Error("searching by ocr text", "error", err)
+		} else {
+			results = h.appendPathMatches(rootID, ocrPaths, results, seen)
 		}
 	}
 
@@ -145,6 +130,17 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Enrich results with recognized text from OCR store
+	if h.ocrStore != nil {
+		for i := range results {
+			text, err := h.ocrStore.GetText(rootID, results[i].Path)
+			if err != nil {
+				continue
+			}
+			results[i].OCRText = text
+		}
+	}
+
 	// Enrich with detection data
 	if h.detectionStore != nil {
 		for i := range results {
@@ -159,4 +155,36 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(results); err != nil {
 		h.logger.Error("encoding search response", "error", err)
 	}
+}
+
+// appendPathMatches appends file entries for store-matched rel paths (from tag
+// or OCR-text search), skipping already-seen paths and respecting the result
+// limit. Paths that no longer exist on disk are silently dropped.
+func (h *Handler) appendPathMatches(rootID string, paths []string, results []filesystem.FileEntry, seen map[string]bool) []filesystem.FileEntry {
+	root, err := h.roots.Get(rootID)
+	if err != nil {
+		return results
+	}
+	for _, relPath := range paths {
+		if seen[relPath] || len(results) >= searchResultLimit {
+			continue
+		}
+		entryFullPath := filepath.Join(root.Path, relPath)
+		info, infoErr := os.Stat(entryFullPath)
+		if infoErr != nil {
+			continue
+		}
+		mediaType := filesystem.DetectMediaType(filepath.Base(relPath))
+		results = append(results, filesystem.FileEntry{
+			Name:      filepath.Base(relPath),
+			Path:      relPath,
+			IsDir:     false,
+			Size:      info.Size(),
+			ModTime:   info.ModTime(),
+			MediaType: mediaType,
+			HasThumb:  mediaType == "image" || mediaType == "video",
+		})
+		seen[relPath] = true
+	}
+	return results
 }

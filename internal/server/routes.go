@@ -43,6 +43,15 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Post("/api/classify/scan", h.StartClassifyScan)
 	s.router.Get("/api/classify/status", h.ClassifyScanStatus)
 
+	// OCR (returns 503 if not enabled)
+	s.router.Get("/api/ocr/{rootID}/*", h.OCRFile)
+	s.router.Post("/api/ocr/scan", h.StartOCRScan)
+	s.router.Get("/api/ocr/status", h.OCRScanStatus)
+
+	// Unified analysis: one pass, every enabled analyzer (returns 503 if none enabled)
+	s.router.Post("/api/analyze/scan", h.StartAnalyzeScan)
+	s.router.Get("/api/analyze/status", h.AnalyzeScanStatus)
+
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))
 	s.router.Handle("/*", spaHandler(frontendFS, fileServer))
