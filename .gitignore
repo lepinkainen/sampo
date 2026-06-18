@@ -55,6 +55,9 @@ test-results/
 frontend/test-results/
 .playwright-cli/
 
+# Rodney browser sessions
+.rodney/
+
 # ONNX models
 models/
 
