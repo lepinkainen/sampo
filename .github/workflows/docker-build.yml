@@ -20,6 +20,26 @@ jobs:
         with:
           submodules: recursive
       - uses: docker/setup-buildx-action@v4
+      # Cache the exported ML models so they only get rebuilt when the export
+      # scripts or model versions change. Models are gitignored, so they must
+      # be present on disk before the Docker build copies them into the image.
+      - name: Cache ML models
+        id: models-cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: models-${{ hashFiles('scripts/export-clip.py', 'scripts/clip-labels.yaml', 'Taskfile.yml') }}
+      - uses: astral-sh/setup-uv@v6
+        if: steps.models-cache.outputs.cache-hit != 'true'
+      - uses: go-task/setup-task@v2
+        if: steps.models-cache.outputs.cache-hit != 'true'
+        with:
+          version: 3.x
+      - name: Export ML models
+        if: steps.models-cache.outputs.cache-hit != 'true'
+        run: |
+          task download-model
+          task download-clip-model
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
         with:
@@ -45,3 +65,5 @@ jobs:
             VERSION=${{ github.ref_name }}
             GIT_HASH=${{ github.sha }}
             BUILD_TIME=${{ github.event.repository.updated_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
