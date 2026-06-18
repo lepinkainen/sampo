@@ -1,18 +1,25 @@
 labels:
+  # Attire
   - name: bikini
     prompt: "a photo of a person wearing a bikini"
     group: attire
+  - name: micro_bikini
+    prompt: "a photo of a person wearing a micro bikini or sling bikini"
+    group: attire
   - name: swimsuit
     prompt: "a photo of a person wearing a swimsuit"
-    group: attire
-  - name: nudity
-    prompt: "a photo containing nudity"
     group: attire
   - name: lingerie
     prompt: "a photo of a person wearing lingerie or underwear"
     group: attire
   - name: formal_wear
     prompt: "a photo of a person wearing formal clothing such as a suit or dress"
+    group: attire
+  - name: evening_dress
+    prompt: "a photo of a person wearing an evening dress"
+    group: attire
+  - name: mini_dress
+    prompt: "a photo of a person wearing a mini dress"
     group: attire
   - name: casual
     prompt: "a photo of a person wearing casual everyday clothing"
@@ -23,77 +30,65 @@ labels:
   - name: uniform
     prompt: "a photo of a person wearing a uniform"
     group: attire
-  - name: costume
+  - name: cosplay
     prompt: "a photo of a person wearing a costume or cosplay"
     group: attire
   - name: winter_clothing
     prompt: "a photo of a person wearing heavy winter clothing"
     group: attire
-  - name: "evening_dress"
-    prompt: "a photo of a person wearing an evening dress"
-    group: attire
   - name: fetish_wear
-    prompt: "a photo of a person wearing fetish or BDSM clothing such as latex, leather, harnesses, or straps"
-    group: attire
-  - name: micro_bikini
-    prompt: "a photo of a person wearing a micro bikini or sling bikini"
+    prompt: "a photo of a person wearing leather, latex, or strappy clothing"
     group: attire
   - name: bodysuit
-    prompt: "a photo of a person wearing a bodysuit, catsuit, or leotard"
+    prompt: "a photo of a person wearing a bodysuit or catsuit"
     group: attire
   - name: transparent_clothing
-    prompt: "a photo of a person wearing sheer, see-through, or wet clothing"
+    prompt: "a photo of a person wearing sheer or see-through clothing"
     group: attire
-  - name: nude_or_topless
-    prompt: "a photo of a topless or fully nude person"
+  - name: stockings
+    prompt: "a photo of a person wearing stockings or thigh highs"
     group: attire
-  - name: stockings_garter
-    prompt: "a photo of a person wearing stockings, garter belt, or thigh highs"
-    group: attire
+
+  # Body & Appearance
   - name: muscular
     prompt: "a photo of a muscular or athletic person"
     group: body
   - name: curvy
-    prompt: "a photo of a curvy or voluptuous person with large breasts and hips"
+    prompt: "a photo of a curvy or voluptuous person"
+    group: body
+  - name: athletic
+    prompt: "a photo of a person with an athletic build"
     group: body
   - name: petite
-    prompt: "a photo of a petite or small person"
+    prompt: "a photo of a petite or slim person"
     group: body
-  - name: futanari
-    prompt: "a photo of a futanari or woman with a penis"
+  - name: breasts_visible
+    prompt: "a photo of a person with visible cleavage or bare upper body"
     group: body
-  - name: large_penis
-    prompt: "a photo featuring a very large penis or hyper endowment"
-    group: body
-  - name: big_breasts
-    prompt: "a photo of a person with very large breasts"
-    group: body
+  - name: nudity
+    prompt: "a photo containing nudity"
+    group: attire
+
+  # Pose & Activity
   - name: explicit_pose
-    prompt: "a photo of a person in an explicit sexual pose or spreading"
-    group: action
-  - name: masturbation
-    prompt: "a photo of a person masturbating"
-    group: action
-  - name: penetration
-    prompt: "a photo showing sexual penetration or insertion"
-    group: action
-  - name: oral
-    prompt: "a photo of oral sex or a person performing fellatio"
-    group: action
-  - name: bondage
-    prompt: "a photo of a person in bondage or shibari"
-    group: action
-  - name: public_exposure
-    prompt: "a photo of public nudity or exhibitionism"
-    group: action
+    prompt: "a photo of a person in an explicit, provocative or artistic pose"
+    group: pose
+  - name: dynamic_pose
+    prompt: "a photo of a person in a dynamic or energetic pose"
+    group: pose
+  - name: closeup_pose
+    prompt: "a close-up photo focusing on a person"
+    group: pose
+
+  # Location
   - name: beach
     prompt: "a photo taken at a beach"
     group: location
   - name: pool
     prompt: "a photo taken at a swimming pool"
     group: location
-  - name: nature
-    prompt: "a photo of nature or a landscape"
+  - name: outdoor
+    prompt: "a photo taken outdoors in a natural setting such as a park or forest"
     group: location
   - name: urban
     prompt: "a photo of an urban setting or city"
@@ -101,20 +96,22 @@ labels:
   - name: indoor
     prompt: "a photo taken indoors"
     group: location
-  - name: gym_locker
-    prompt: "a photo taken in a gym or locker room"
+  - name: gym
+    prompt: "a photo taken in a gym or fitness setting"
     group: location
   - name: bedroom
     prompt: "a photo taken in a bedroom"
     group: location
-  - name: shower
-    prompt: "a photo taken in a shower or wet environment"
+  - name: bathroom
+    prompt: "a photo taken in a bathroom or shower area"
     group: location
+  - name: office
+    prompt: "a photo taken in an office or workplace setting"
+    group: location
+
+  # Subject
   - name: person
     prompt: "a photo of a person"
-    group: subject
-  - name: food
-    prompt: "a photo of food or a meal"
     group: subject
   - name: animal
     prompt: "a photo of an animal"
@@ -122,6 +119,11 @@ labels:
   - name: vehicle
     prompt: "a photo of a vehicle such as a car, motorcycle, or bicycle"
     group: subject
+  - name: food
+    prompt: "a photo of food or a meal"
+    group: subject
+
+  # People & Composition
   - name: solo
     prompt: "a photo of one person only"
     group: people_count
@@ -131,12 +133,20 @@ labels:
   - name: group
     prompt: "a photo of a group of three or more people"
     group: people_count
+
+  # Style & Technical
   - name: closeup
     prompt: "a close-up photo focusing on body parts"
     group: style
-  - name: artistic_nude
-    prompt: "an artistic or tasteful nude photo"
+  - name: artistic
+    prompt: "an artistic or tasteful photo"
     group: style
-  - name: hardcore
-    prompt: "a hardcore explicit sexual photo"
+  - name: professional
+    prompt: "a professionally shot photo"
+    group: style
+  - name: candid
+    prompt: "a candid or amateur photo"
+    group: style
+  - name: black_and_white
+    prompt: "a black and white photo"
     group: style
