@@ -57,7 +57,28 @@ match a `/data/<name>` container path you map. Photo shares mount `ro`.
 5. Add **Path** mappings from the table above (Cache rw, Config ro, one share
    per root ro).
 6. **ADVANCED VIEW** → Extra Parameters `--user 99:100`.
-7. Apply, then open `http://<unraid-ip>:8086/`.
+7. **ADVANCED VIEW** → **WebUI** → `http://[IP]:[PORT:8080]` so the unraid
+   container's WebUI link opens the right port (see below).
+8. Apply, then open `http://<unraid-ip>:<host-port>/`.
+
+## WebUI link (unraid container icon)
+
+The **WebUI** field (ADVANCED VIEW) sets where unraid's "WebUI" container menu
+points. Use the `[PORT:nnnn]` token so it follows your published host port:
+
+```
+http://[IP]:[PORT:8080]
+```
+
+`[IP]` resolves to the server, `[PORT:8080]` resolves to whatever host port you
+mapped container `8080` to. Pick a free host port — `8080` and the common
+alternates may already be taken by other containers; e.g. `8089` works:
+
+```
+http://[IP]:[PORT:8089]
+```
+
+with the Port mapping host `8089` → container `8080`.
 
 ## Multiple roots
 
