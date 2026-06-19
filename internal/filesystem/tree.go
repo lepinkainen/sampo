@@ -61,6 +61,10 @@ var archiveExts = map[string]bool{
 	".zip": true,
 }
 
+var pdfExts = map[string]bool{
+	".pdf": true,
+}
+
 // DetectMediaType returns the media type based on file extension.
 func DetectMediaType(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
@@ -71,6 +75,8 @@ func DetectMediaType(name string) string {
 		return "video"
 	case archiveExts[ext]:
 		return "archive"
+	case pdfExts[ext]:
+		return "pdf"
 	default:
 		return "other"
 	}
@@ -160,7 +166,7 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			mediaType = DetectMediaType(e.Name())
 		}
 
-		hasThumb := mediaType == "image" || mediaType == "video"
+		hasThumb := mediaType == "image" || mediaType == "video" || mediaType == "pdf"
 		if e.IsDir() {
 			hasThumb = HasImageFile(filepath.Join(dirPath, e.Name()))
 		}

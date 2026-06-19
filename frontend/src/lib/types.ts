@@ -15,7 +15,7 @@ export interface FileEntry {
 	isZip: boolean;
 	size: number;
 	modTime: string;
-	mediaType: 'image' | 'video' | 'archive' | 'other';
+	mediaType: 'image' | 'video' | 'archive' | 'pdf' | 'other';
 	hasThumb: boolean;
 	hasPerson?: boolean | null;
 	tags?: TagScore[] | null;

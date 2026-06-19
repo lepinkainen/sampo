@@ -112,6 +112,7 @@ tasks:
       - pnpm install --frozen-lockfile
       - pnpm exec svelte-kit sync
       - pnpm exec svelte-check --tsconfig ./tsconfig.json
+      - pnpm run test:unit
 
   lint-go:
     desc: Lint Go code
@@ -193,12 +194,14 @@ tasks:
       - test -f models/clip-labels.json
 
   update-clip-labels:
-    desc: Regenerate CLIP text embeddings from clip-labels.yaml (without re-exporting ONNX model)
+    desc: Regenerate CLIP text embeddings from clip-labels.yaml and optional local labels (without re-exporting ONNX model)
     cmds:
       - mkdir -p models
       - uv run --with transformers --with torch --with pyyaml --with numpy python scripts/export-clip-labels.py
     sources:
       - scripts/clip-labels.yaml
+      - scripts/clip-labels.local.yaml
+      - scripts/clip_labels.py
       - scripts/export-clip-labels.py
     generates:
       - models/clip-labels.json

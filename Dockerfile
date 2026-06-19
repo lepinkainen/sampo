@@ -48,7 +48,7 @@ COPY --from=go-builder /out/sampo /sampo
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates ffmpeg tzdata wget \
+        ca-certificates ffmpeg poppler-utils tzdata wget \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -u 1000 -m -d /home/sampo -s /usr/sbin/nologin sampo
 WORKDIR /app

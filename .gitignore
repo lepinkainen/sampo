@@ -29,6 +29,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+__pycache__/
+*.py[cod]
 
 # Logs
 *.log
@@ -60,6 +62,9 @@ frontend/test-results/
 
 # ONNX models
 models/
+
+# Local/private CLIP labels
+scripts/clip-labels.local.yaml
 
 # Cache
 .cache/

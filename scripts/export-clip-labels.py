@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Regenerate CLIP text embeddings from clip-labels.yaml.
+"""Regenerate CLIP text embeddings from CLIP label YAML files.
 
-This is a lightweight alternative to export-clip.py that only recomputes
-the text embeddings without re-exporting the ONNX image encoder.
+Loads scripts/clip-labels.yaml plus optional private
+scripts/clip-labels.local.yaml when present. This is a lightweight alternative
+to export-clip.py that only recomputes the text embeddings without re-exporting
+the ONNX image encoder.
 
 Usage:
     uv run --with transformers --with torch --with pyyaml --with numpy \
@@ -11,17 +13,15 @@ Usage:
 
 import json
 import os
-import sys
 
 import numpy as np
 import torch
-import yaml
+from clip_labels import load_label_definitions
 from transformers import CLIPModel, CLIPTokenizerFast
 
 MODEL_NAME = "openai/clip-vit-base-patch32"
 OUTPUT_DIR = "models"
 LABELS_PATH = os.path.join(OUTPUT_DIR, "clip-labels.json")
-LABELS_YAML = os.path.join("scripts", "clip-labels.yaml")
 
 
 def compute_text_embeddings(model, tokenizer, labels):
@@ -57,17 +57,7 @@ def compute_text_embeddings(model, tokenizer, labels):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    if not os.path.exists(LABELS_YAML):
-        print(f"Error: {LABELS_YAML} not found", file=sys.stderr)
-        sys.exit(1)
-
-    with open(LABELS_YAML) as f:
-        label_config = yaml.safe_load(f)
-
-    labels = label_config.get("labels", [])
-    if not labels:
-        print("Error: no labels defined", file=sys.stderr)
-        sys.exit(1)
+    labels = load_label_definitions()
 
     print(f"Loading {MODEL_NAME} (text encoder only)...")
     model = CLIPModel.from_pretrained(MODEL_NAME)

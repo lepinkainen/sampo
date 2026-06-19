@@ -62,6 +62,8 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		err = thumbnail.GenerateImageThumbnail(fullPath, dstPath)
 	case "video":
 		err = thumbnail.GenerateVideoThumbnail(fullPath, dstPath)
+	case "pdf":
+		err = thumbnail.GeneratePdfThumbnail(fullPath, dstPath)
 	default:
 		http.Error(w, "No thumbnail available", http.StatusNotFound)
 		return
