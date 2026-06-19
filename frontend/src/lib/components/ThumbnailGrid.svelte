@@ -26,7 +26,7 @@ import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
 import { createClipboard } from '$lib/clipboard.svelte';
-import { createScan } from '$lib/scans.svelte';
+import { createScan, makeReloadAfterScan } from '$lib/scans.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 import ListView from './ListView.svelte';
@@ -106,10 +106,15 @@ let showDuplicates = $state(false);
 
 const toast = (msg: string, kind: 'success' | 'error') =>
 	toastComponent?.show(msg, kind);
-const reloadAfterScan = (invalidate: boolean) => (rid: string, p: string) => {
-	if (invalidate) invalidateDirectoryCache(rid, p);
-	loadDirectory(rid, p);
-};
+const reloadAfterScan = (invalidate: boolean) =>
+	makeReloadAfterScan(
+		{
+			invalidate: invalidateDirectoryCache,
+			reload: loadDirectory,
+			current: () => ({ rootId, path }),
+		},
+		invalidate,
+	);
 
 // Background scans share one start → poll → reload flow (see scans.svelte.ts).
 const detectScan = createScan({

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScanStatus } from './api';
-import { createScan } from './scans.svelte';
+import { createScan, makeReloadAfterScan } from './scans.svelte';
 
 function status(over: Partial<ScanStatus> = {}): ScanStatus {
 	return { running: true, total: 3, completed: 0, errors: 0, ...over };
@@ -87,5 +87,70 @@ describe('createScan', () => {
 		scan.dispose();
 		await vi.advanceTimersByTimeAsync(5000);
 		expect(poll).not.toHaveBeenCalled();
+	});
+});
+
+describe('makeReloadAfterScan', () => {
+	it('invalidates and reloads when scanned path is still current', () => {
+		const invalidate = vi.fn();
+		const reload = vi.fn();
+		const onComplete = makeReloadAfterScan({
+			invalidate,
+			reload,
+			current: () => ({ rootId: 'root-0', path: 'photos' }),
+		});
+
+		onComplete('root-0', 'photos');
+
+		expect(invalidate).toHaveBeenCalledWith('root-0', 'photos');
+		expect(reload).toHaveBeenCalledWith('root-0', 'photos');
+	});
+
+	it('invalidates but does NOT reload when user navigated away', () => {
+		const invalidate = vi.fn();
+		const reload = vi.fn();
+		// Current folder differs from the scanned folder (user navigated).
+		const onComplete = makeReloadAfterScan({
+			invalidate,
+			reload,
+			current: () => ({ rootId: 'root-0', path: 'other' }),
+		});
+
+		onComplete('root-0', 'photos');
+
+		expect(invalidate).toHaveBeenCalledWith('root-0', 'photos');
+		expect(reload).not.toHaveBeenCalled();
+	});
+
+	it('does not reload when only the root differs', () => {
+		const invalidate = vi.fn();
+		const reload = vi.fn();
+		const onComplete = makeReloadAfterScan({
+			invalidate,
+			reload,
+			current: () => ({ rootId: 'root-1', path: 'photos' }),
+		});
+
+		onComplete('root-0', 'photos');
+
+		expect(reload).not.toHaveBeenCalled();
+	});
+
+	it('skips invalidate when invalidateCache is false but still guards reload', () => {
+		const invalidate = vi.fn();
+		const reload = vi.fn();
+		const onComplete = makeReloadAfterScan(
+			{
+				invalidate,
+				reload,
+				current: () => ({ rootId: 'root-0', path: 'photos' }),
+			},
+			false,
+		);
+
+		onComplete('root-0', 'photos');
+
+		expect(invalidate).not.toHaveBeenCalled();
+		expect(reload).toHaveBeenCalledWith('root-0', 'photos');
 	});
 });

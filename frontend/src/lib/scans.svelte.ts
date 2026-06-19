@@ -21,6 +21,37 @@ export interface ScanOptions {
 	pollMs?: number;
 }
 
+export interface ReloadAfterScanOptions {
+	/** Invalidate the cache for the scanned path. */
+	invalidate: (rootId: string, path: string) => void;
+	/** Reload directory entries for the given path. */
+	reload: (rootId: string, path: string) => void;
+	/** Resolve the folder currently being viewed. */
+	current: () => { rootId: string; path: string };
+}
+
+/**
+ * makeReloadAfterScan builds a scan `onComplete` handler that avoids clobbering
+ * the current folder when a scan finishes after the user navigated away. The
+ * component instance is reused across path changes, so a late poll completion
+ * must not replace the now-current folder's entries with the scanned folder's.
+ *
+ * The scanned path's cache is always invalidated (when invalidateCache), but the
+ * directory is only reloaded if the scanned path is still the one on screen.
+ */
+export function makeReloadAfterScan(
+	opts: ReloadAfterScanOptions,
+	invalidateCache = true,
+) {
+	return (rootId: string, path: string) => {
+		if (invalidateCache) opts.invalidate(rootId, path);
+		const cur = opts.current();
+		if (cur.rootId === rootId && cur.path === path) {
+			opts.reload(rootId, path);
+		}
+	};
+}
+
 /**
  * createScan dedups the start → toast → poll-until-done → reload flow shared by
  * the detection, classification, OCR, and unified analyze scans. Each call site
