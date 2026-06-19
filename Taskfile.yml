@@ -112,6 +112,7 @@ tasks:
       - pnpm install --frozen-lockfile
       - pnpm exec svelte-kit sync
       - pnpm exec svelte-check --tsconfig ./tsconfig.json
+      - pnpm run test:unit
 
   lint-go:
     desc: Lint Go code

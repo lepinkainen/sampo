@@ -5,41 +5,28 @@ import {
 	moveFiles,
 	copyFiles,
 	renameFile,
-	thumbnailUrl,
 	startScan,
 	getScanStatus,
-	getDetection,
 	startClassifyScan,
 	getClassifyScanStatus,
-	getClassification,
-	runOCR,
 	startOCRScan,
 	getOCRScanStatus,
 	startAnalyzeScan,
 	getAnalyzeScanStatus,
 	searchFiles,
-	getDiskUsage,
-	findDuplicates,
 	getAnalysisSettings,
 	setAnalysisSettings,
 	getCachedDirectory,
 	invalidateDirectoryCache,
 	invalidateParentDirectoryCache,
+	fileUrl,
 } from '$lib/api';
-import type {
-	ScanStatus,
-	DetectionResult,
-	ClassificationResult,
-	OCRResult,
-	DiskUsage,
-	AnalysisSettings,
-} from '$lib/api';
-import type { DuplicateGroup } from '$lib/types';
+import type { AnalysisSettings } from '$lib/api';
 import type { FileEntry } from '$lib/types';
-import { formatSize, sortEntries, formatDate } from '$lib/utils';
+import { sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
 import { createClipboard } from '$lib/clipboard.svelte';
-import FileIcon from './FileIcon.svelte';
+import { createScan } from '$lib/scans.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 import ListView from './ListView.svelte';
@@ -47,6 +34,9 @@ import ConfirmDialog from './ConfirmDialog.svelte';
 import RenameDialog from './RenameDialog.svelte';
 import ContextMenu from './ContextMenu.svelte';
 import Toast from './Toast.svelte';
+import GridToolbar from './GridToolbar.svelte';
+import DetailsPanel from './DetailsPanel.svelte';
+import DuplicatesModal from './DuplicatesModal.svelte';
 import {
 	Trash2,
 	Scissors,
@@ -54,17 +44,6 @@ import {
 	ClipboardPaste,
 	FolderOpen,
 	Pencil,
-	UserX,
-	ScanSearch,
-	Sparkles,
-	RefreshCw,
-	ScanText,
-	Tag,
-	Search,
-	X,
-	LayoutGrid,
-	List,
-	Files,
 	LoaderCircle,
 } from '@lucide/svelte';
 
@@ -107,28 +86,12 @@ let contextMenu = $state<{ x: number; y: number } | null>(null);
 let toastComponent: Toast | undefined = $state();
 let filterPeople = $state(false);
 let filterTag = $state<string>('');
-let scanStatus = $state<ScanStatus | null>(null);
-let scanPollTimer: ReturnType<typeof setInterval> | null = null;
-let detectionResult = $state<DetectionResult | null>(null);
-let classifyScanStatus = $state<ScanStatus | null>(null);
-let classifyPollTimer: ReturnType<typeof setInterval> | null = null;
-let classificationResult = $state<ClassificationResult | null>(null);
-let ocrResult = $state<OCRResult | null>(null);
-let ocrLoading = $state(false);
-let ocrError = $state<string | null>(null);
-let ocrScanStatus = $state<ScanStatus | null>(null);
-let ocrScanPollTimer: ReturnType<typeof setInterval> | null = null;
-let analyzeScanStatus = $state<ScanStatus | null>(null);
-let analyzePollTimer: ReturnType<typeof setInterval> | null = null;
 let analysisSettings = $state<AnalysisSettings | null>(null);
 let analysisSettingsSaving = $state(false);
 let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let loadRequestId = 0;
 let latestVisibleLoadId = 0;
-let detailsThumbLoading = $state(false);
-let detailsThumbError = $state(false);
-let detailsImgEl: HTMLImageElement | undefined = $state();
 
 // Search state
 let searchActive = $state(false);
@@ -138,14 +101,53 @@ let searchLoading = $state(false);
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let searchInput: HTMLInputElement | undefined = $state();
 
-// Disk usage state
-let diskUsage = $state<DiskUsage | null>(null);
-let diskUsageLoading = $state(false);
-
 // Duplicates state
 let showDuplicates = $state(false);
-let duplicateGroups = $state<DuplicateGroup[]>([]);
-let duplicatesLoading = $state(false);
+
+const toast = (msg: string, kind: 'success' | 'error') =>
+	toastComponent?.show(msg, kind);
+const reloadAfterScan = (invalidate: boolean) => (rid: string, p: string) => {
+	if (invalidate) invalidateDirectoryCache(rid, p);
+	loadDirectory(rid, p);
+};
+
+// Background scans share one start → poll → reload flow (see scans.svelte.ts).
+const detectScan = createScan({
+	start: startScan,
+	poll: getScanStatus,
+	startMsg: (s) => `Scanning ${s.total} images...`,
+	doneMsg: (s) => `Scan complete: ${s.completed} images processed`,
+	errMsg: 'Scan failed',
+	onToast: toast,
+	onComplete: reloadAfterScan(true),
+});
+const classifyScan = createScan({
+	start: startClassifyScan,
+	poll: getClassifyScanStatus,
+	startMsg: (s) => `Classifying ${s.total} images...`,
+	doneMsg: (s) => `Classification complete: ${s.completed} images processed`,
+	errMsg: 'Classification scan failed',
+	onToast: toast,
+	onComplete: reloadAfterScan(true),
+});
+const ocrScan = createScan({
+	start: startOCRScan,
+	poll: getOCRScanStatus,
+	startMsg: (s) => `Running OCR on ${s.total} files...`,
+	doneMsg: (s) => `OCR complete: ${s.completed} files processed`,
+	errMsg: 'OCR scan failed',
+	onToast: toast,
+	onComplete: reloadAfterScan(false),
+});
+const analyzeScan = createScan({
+	start: (rid, p) => startAnalyzeScan(rid, p, true),
+	poll: getAnalyzeScanStatus,
+	startMsg: (s) => `Re-analyzing ${s.total} files...`,
+	doneMsg: (s) => `Analysis complete: ${s.completed} files processed`,
+	errMsg: 'Re-analysis failed',
+	onToast: toast,
+	onComplete: reloadAfterScan(false),
+});
 
 let availableTags = $derived.by(() => {
 	const tagSet = new Set<string>();
@@ -190,37 +192,6 @@ let selectedEntries = $derived(
 	displayEntries.filter((e) => selection.has(e.path)),
 );
 
-let selectedDetailsTags = $derived.by(() => {
-	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
-	if (!sel) return [];
-	if (
-		classificationResult?.rootId === rootId &&
-		classificationResult.relPath === sel.path
-	) {
-		return classificationResult.tags;
-	}
-	return sel.tags ?? [];
-});
-
-let lastDetailsThumbKey = $state('');
-let lastSelectionDetailsKey = $state('');
-
-$effect(() => {
-	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
-	const thumbKey = sel ? `${rootId}:${sel.path}:${sel.hasThumb}` : '';
-	if (thumbKey === lastDetailsThumbKey) {
-		return;
-	}
-	lastDetailsThumbKey = thumbKey;
-	detailsThumbError = false;
-	detailsThumbLoading = !!sel?.hasThumb;
-
-	// Check if already complete
-	if (sel?.hasThumb && detailsImgEl?.complete) {
-		detailsThumbLoading = false;
-	}
-});
-
 $effect(() => {
 	closeSearch();
 	loadDirectory(rootId, path);
@@ -238,22 +209,10 @@ $effect(() => {
 
 $effect(() => {
 	return () => {
-		if (scanPollTimer) {
-			clearInterval(scanPollTimer);
-			scanPollTimer = null;
-		}
-		if (classifyPollTimer) {
-			clearInterval(classifyPollTimer);
-			classifyPollTimer = null;
-		}
-		if (ocrScanPollTimer) {
-			clearInterval(ocrScanPollTimer);
-			ocrScanPollTimer = null;
-		}
-		if (analyzePollTimer) {
-			clearInterval(analyzePollTimer);
-			analyzePollTimer = null;
-		}
+		detectScan.dispose();
+		classifyScan.dispose();
+		ocrScan.dispose();
+		analyzeScan.dispose();
 		if (autoRefreshTimer) {
 			clearInterval(autoRefreshTimer);
 			autoRefreshTimer = null;
@@ -287,10 +246,10 @@ $effect(() => {
 		if (
 			loading ||
 			searchLoading ||
-			scanStatus?.running ||
-			classifyScanStatus?.running ||
-			ocrScanStatus?.running ||
-			analyzeScanStatus?.running ||
+			detectScan.running ||
+			classifyScan.running ||
+			ocrScan.running ||
+			analyzeScan.running ||
 			(searchActive && !!searchQuery.trim())
 		) {
 			return;
@@ -310,68 +269,6 @@ $effect(() => {
 			clearInterval(autoRefreshTimer);
 			autoRefreshTimer = null;
 		}
-	};
-});
-
-$effect(() => {
-	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
-	const selectionKey = sel
-		? `${rootId}:${sel.path}:${sel.isDir}:${sel.mediaType}`
-		: '';
-	if (selectionKey === lastSelectionDetailsKey) {
-		return;
-	}
-	lastSelectionDetailsKey = selectionKey;
-
-	detectionResult = null;
-	classificationResult = null;
-	ocrResult = null;
-	ocrError = null;
-	diskUsage = null;
-	if (!sel) {
-		return;
-	}
-
-	// Seed OCR display from cached listing text (no recompute on select).
-	if (sel.ocrText) {
-		ocrResult = {
-			rootId,
-			relPath: sel.path,
-			text: sel.ocrText,
-			blocks: [],
-			modelVer: '',
-			scannedAt: '',
-		};
-	}
-	if (sel.mediaType === 'image') {
-		getDetection(rootId, sel.path)
-			.then((r) => (detectionResult = r))
-			.catch(() => (detectionResult = null));
-		getClassification(rootId, sel.path)
-			.then((r) => (classificationResult = r))
-			.catch(() => (classificationResult = null));
-	}
-	if (sel.isDir) {
-		diskUsageLoading = true;
-		getDiskUsage(rootId, sel.path)
-			.then((r) => (diskUsage = r))
-			.catch(() => (diskUsage = null))
-			.finally(() => (diskUsageLoading = false));
-	}
-});
-
-$effect(() => {
-	const sel = selectedEntries.length === 1 ? selectedEntries[0] : null;
-	if (!sel?.ocrText || ocrResult) {
-		return;
-	}
-	ocrResult = {
-		rootId,
-		relPath: sel.path,
-		text: sel.ocrText,
-		blocks: [],
-		modelVer: '',
-		scannedAt: '',
 	};
 });
 
@@ -522,6 +419,8 @@ function handleOpen(entry: FileEntry) {
 		}
 		selection.clear();
 		onPreviewChange?.(entry.path);
+	} else if (entry.mediaType === 'pdf') {
+		window.open(fileUrl(rootId, entry.path), '_blank');
 	}
 }
 
@@ -807,117 +706,9 @@ async function toggleAutoBrowseAnalysis() {
 	}
 }
 
-async function handleScan() {
-	try {
-		scanStatus = await startScan(rootId, path);
-		toastComponent?.show(`Scanning ${scanStatus.total} images...`, 'success');
-		startPollingScanStatus();
-	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Scan failed',
-			'error',
-		);
-	}
-}
-
-function startPollingScanStatus() {
-	if (scanPollTimer) clearInterval(scanPollTimer);
-	scanPollTimer = setInterval(async () => {
-		try {
-			scanStatus = await getScanStatus();
-			if (!scanStatus.running) {
-				if (scanPollTimer) clearInterval(scanPollTimer);
-				scanPollTimer = null;
-				toastComponent?.show(
-					`Scan complete: ${scanStatus.completed} images processed`,
-					'success',
-				);
-				// Reload to reflect new detection badges (and filter if active)
-				invalidateDirectoryCache(rootId, path);
-				loadDirectory(rootId, path);
-			}
-		} catch {
-			if (scanPollTimer) clearInterval(scanPollTimer);
-			scanPollTimer = null;
-		}
-	}, 1000);
-}
-
-async function handleClassifyScan() {
-	try {
-		classifyScanStatus = await startClassifyScan(rootId, path);
-		toastComponent?.show(
-			`Classifying ${classifyScanStatus.total} images...`,
-			'success',
-		);
-		startPollingClassifyStatus();
-	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Classification scan failed',
-			'error',
-		);
-	}
-}
-
-async function handleRunOCR(entry: FileEntry) {
-	ocrLoading = true;
-	ocrError = null;
-	try {
-		const force = Boolean(ocrResult || entry.ocrText);
-		ocrResult = await runOCR(rootId, entry.path, force);
-		// Reflect the result on the cached entry so it persists across reselects.
-		entry.ocrText = ocrResult.text;
-		if (!ocrResult.text) {
-			toastComponent?.show('No text found in image', 'success');
-		}
-	} catch (e) {
-		ocrError = e instanceof Error ? e.message : 'OCR failed';
-		toastComponent?.show(ocrError, 'error');
-	} finally {
-		ocrLoading = false;
-	}
-}
-
-async function handleOCRScan() {
-	try {
-		ocrScanStatus = await startOCRScan(rootId, path);
-		toastComponent?.show(
-			`Running OCR on ${ocrScanStatus.total} files...`,
-			'success',
-		);
-		startPollingOCRScanStatus();
-	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'OCR scan failed',
-			'error',
-		);
-	}
-}
-
-function startPollingOCRScanStatus() {
-	if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
-	ocrScanPollTimer = setInterval(async () => {
-		try {
-			ocrScanStatus = await getOCRScanStatus();
-			if (!ocrScanStatus.running) {
-				if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
-				ocrScanPollTimer = null;
-				toastComponent?.show(
-					`OCR complete: ${ocrScanStatus.completed} files processed`,
-					'success',
-				);
-				loadDirectory(rootId, path);
-			}
-		} catch {
-			if (ocrScanPollTimer) clearInterval(ocrScanPollTimer);
-			ocrScanPollTimer = null;
-		}
-	}, 1000);
-}
-
 // Re-analyze: one pass over the folder that loads each file once and runs every
 // enabled analyzer (detection + tags + OCR), replacing all existing results.
-async function handleReanalyzeAll() {
+function handleReanalyzeAll() {
 	if (
 		!confirm(
 			'Re-analyze every image in this folder and its subfolders from scratch? This runs detection, tagging, and OCR, replacing all existing results, and may take a while.',
@@ -925,80 +716,13 @@ async function handleReanalyzeAll() {
 	) {
 		return;
 	}
-	try {
-		analyzeScanStatus = await startAnalyzeScan(rootId, path, true);
-		toastComponent?.show(
-			`Re-analyzing ${analyzeScanStatus.total} files...`,
-			'success',
-		);
-		startPollingAnalyzeStatus();
-	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Re-analysis failed',
-			'error',
-		);
-	}
-}
-
-function startPollingAnalyzeStatus() {
-	if (analyzePollTimer) clearInterval(analyzePollTimer);
-	analyzePollTimer = setInterval(async () => {
-		try {
-			analyzeScanStatus = await getAnalyzeScanStatus();
-			if (!analyzeScanStatus.running) {
-				if (analyzePollTimer) clearInterval(analyzePollTimer);
-				analyzePollTimer = null;
-				toastComponent?.show(
-					`Analysis complete: ${analyzeScanStatus.completed} files processed`,
-					'success',
-				);
-				loadDirectory(rootId, path);
-			}
-		} catch {
-			if (analyzePollTimer) clearInterval(analyzePollTimer);
-			analyzePollTimer = null;
-		}
-	}, 1000);
-}
-
-function startPollingClassifyStatus() {
-	if (classifyPollTimer) clearInterval(classifyPollTimer);
-	classifyPollTimer = setInterval(async () => {
-		try {
-			classifyScanStatus = await getClassifyScanStatus();
-			if (!classifyScanStatus.running) {
-				if (classifyPollTimer) clearInterval(classifyPollTimer);
-				classifyPollTimer = null;
-				toastComponent?.show(
-					`Classification complete: ${classifyScanStatus.completed} images processed`,
-					'success',
-				);
-				invalidateDirectoryCache(rootId, path);
-				loadDirectory(rootId, path);
-			}
-		} catch {
-			if (classifyPollTimer) clearInterval(classifyPollTimer);
-			classifyPollTimer = null;
-		}
-	}, 1000);
+	analyzeScan.run(rootId, path);
 }
 
 function handleTagFilter(e: Event) {
 	const target = e.target as HTMLSelectElement;
 	filterTag = target.value;
 	loadDirectory(rootId, path);
-}
-
-async function handleFindDuplicates() {
-	showDuplicates = true;
-	duplicatesLoading = true;
-	try {
-		const result = await findDuplicates(rootId, path || '/');
-		duplicateGroups = result.groups || [];
-	} catch {
-		duplicateGroups = [];
-	}
-	duplicatesLoading = false;
 }
 </script>
 
@@ -1014,275 +738,55 @@ async function handleFindDuplicates() {
 	/>
 {:else}
 	<div class="flex h-full flex-col bg-gray-950">
-		<!-- Toolbar -->
-		<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-4 py-2">
-			<div class="flex items-center gap-4 min-w-0 flex-1">
-				{#if searchActive}
-					<div class="flex items-center gap-2 flex-1 max-w-md">
-						<Search size={16} class="text-gray-500 shrink-0" />
-						<input
-							bind:this={searchInput}
-							type="text"
-							placeholder="Search files and tags..."
-							class="flex-1 bg-transparent border-none text-sm text-gray-200 placeholder-gray-500 focus:outline-none"
-							value={searchQuery}
-							oninput={handleSearchInput}
-						/>
-						{#if searchLoading}
-							<span class="text-xs text-gray-500">...</span>
-						{/if}
-						<button
-							class="rounded p-1 text-gray-500 hover:text-gray-300 transition-colors"
-							onclick={closeSearch}
-						>
-							<X size={14} />
-						</button>
-					</div>
-				{:else}
-					<div class="truncate text-sm font-medium text-gray-300">
-						<button
-							class="text-gray-500 hover:text-gray-200 transition-colors"
-							onclick={() => onNavigate?.('')}
-						>
-							{rootName || rootId}
-						</button>
-						{#each pathSegments as segment, i}
-							<span class="mx-1 text-gray-600">/</span>
-							{#if i < pathSegments.length - 1}
-								<button
-									class="text-gray-400 hover:text-gray-200 transition-colors"
-									onclick={() => onNavigate?.(pathSegments.slice(0, i + 1).join('/'))}
-								>
-									{segment}
-								</button>
-							{:else}
-								<span>{segment}</span>
-							{/if}
-						{/each}
-						{#if backgroundValidating}
-							<LoaderCircle size={14} class="animate-spin text-gray-500 ml-2 inline-block align-middle" />
-						{/if}
-					</div>
-				{/if}
-
-				<!-- File operation buttons -->
-				<div class="flex items-center gap-1">
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
-						title="Search (Ctrl+F)"
-						onclick={openSearch}
-					>
-						<Search size={16} />
-					</button>
-
-					<div class="mx-1 h-4 w-px bg-gray-700"></div>
-
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Cut (Ctrl+X)"
-						disabled={selection.size === 0}
-						onclick={() => {
-							clipboard.cut(rootId, selection.paths);
-							toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
-						}}
-					>
-						<Scissors size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Copy (Ctrl+C)"
-						disabled={selection.size === 0}
-						onclick={() => {
-							clipboard.copy(rootId, selection.paths);
-							toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
-						}}
-					>
-						<Copy size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Paste (Ctrl+V)"
-						disabled={!clipboard.hasItems}
-						onclick={handlePaste}
-					>
-						<ClipboardPaste size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Rename (F2)"
-						disabled={selection.size !== 1}
-						onclick={() => (showRenameDialog = true)}
-					>
-						<Pencil size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Delete"
-						disabled={selection.size === 0}
-						onclick={() => (showDeleteConfirm = true)}
-					>
-						<Trash2 size={16} />
-					</button>
-
-					<div class="mx-1 h-4 w-px bg-gray-700"></div>
-
-					<button
-						class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {analysisSettings?.autoBrowseEnabled ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
-						title="Automatically analyze files while browsing"
-						disabled={!analysisSettings || analysisSettingsSaving}
-						onclick={toggleAutoBrowseAnalysis}
-					>
-						Auto ML
-					</button>
-					{#if analysisSettings?.browseStatus.running}
-						<div
-							class="flex items-center gap-1 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-300"
-							title={`Background analysis running (${analysisSettings.browseStatus.active} active, ${analysisSettings.browseStatus.queued} queued)`}
-						>
-							<LoaderCircle size={12} class="animate-spin" />
-							<span>{analysisSettings.browseStatus.active} active</span>
-							{#if analysisSettings.browseStatus.queued > 0}
-								<span class="text-amber-400/80">/ {analysisSettings.browseStatus.queued} queued</span>
-							{/if}
-						</div>
-					{/if}
-					<button
-						class="rounded p-1.5 transition-colors {filterPeople ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}"
-						title="Hide images with people"
-						onclick={toggleFilter}
-					>
-						<UserX size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Scan for people"
-						disabled={scanStatus?.running === true}
-						onclick={handleScan}
-					>
-						<ScanSearch size={16} />
-					</button>
-
-					<div class="mx-1 h-4 w-px bg-gray-700"></div>
-
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Classify images (CLIP)"
-						disabled={classifyScanStatus?.running === true}
-						onclick={handleClassifyScan}
-					>
-						<Sparkles size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Run OCR on this folder (extract text from images)"
-						disabled={ocrScanStatus?.running === true}
-						onclick={handleOCRScan}
-					>
-						<ScanText size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-						title="Re-analyze this folder and subfolders from scratch — runs detection, tagging, and OCR in one pass (replaces all results)"
-						disabled={analyzeScanStatus?.running === true}
-						onclick={handleReanalyzeAll}
-					>
-						<RefreshCw size={16} />
-					</button>
-					<button
-						class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
-						title="Find duplicates"
-						onclick={handleFindDuplicates}
-					>
-						<Files size={16} />
-					</button>
-					{#if availableTags.length > 0}
-						<div class="relative flex items-center">
-							<Tag size={14} class="absolute left-1.5 text-gray-500 pointer-events-none" />
-							<select
-								class="appearance-none rounded bg-gray-800 py-1 pl-6 pr-6 text-xs text-gray-300 border border-gray-700 focus:border-blue-500 focus:outline-none"
-								value={filterTag}
-								onchange={handleTagFilter}
-							>
-								<option value="">All tags</option>
-								{#each availableTags as tag}
-									<option value={tag}>{tag}</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="flex items-center gap-2">
-				{#if searchActive && searchQuery && !searchLoading}
-					<span class="text-xs text-gray-500">{searchResults.length} result(s)</span>
-				{/if}
-				{#if scanStatus?.running}
-					<span class="text-xs text-blue-400">
-						Scanning {scanStatus.completed}/{scanStatus.total}
-					</span>
-				{/if}
-				{#if classifyScanStatus?.running}
-					<span class="text-xs text-purple-400">
-						Classifying {classifyScanStatus.completed}/{classifyScanStatus.total}
-					</span>
-				{/if}
-				{#if ocrScanStatus?.running}
-					<span class="text-xs text-amber-400">
-						OCR {ocrScanStatus.completed}/{ocrScanStatus.total}
-					</span>
-				{/if}
-				{#if analyzeScanStatus?.running}
-					<span class="text-xs text-emerald-400">
-						Analyzing {analyzeScanStatus.completed}/{analyzeScanStatus.total}
-					</span>
-				{/if}
-				{#if selection.size > 0}
-					<span class="text-xs text-gray-500">{selection.size} selected</span>
-				{/if}
-
-				<!-- View mode toggle -->
-				<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
-					<button
-						class="rounded p-1 transition-colors {viewMode === 'grid' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-						title="Grid view"
-						onclick={() => (viewMode = 'grid')}
-					>
-						<LayoutGrid size={14} />
-					</button>
-					<button
-						class="rounded p-1 transition-colors {viewMode === 'list' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-						title="List view"
-						onclick={() => (viewMode = 'list')}
-					>
-						<List size={14} />
-					</button>
-				</div>
-
-				{#if viewMode === 'grid'}
-					<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
-						<button
-							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-							onclick={() => (thumbSize = 'small')}
-						>
-							S
-						</button>
-						<button
-							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-							onclick={() => (thumbSize = 'medium')}
-						>
-							M
-						</button>
-						<button
-							class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
-							onclick={() => (thumbSize = 'large')}
-						>
-							L
-						</button>
-					</div>
-				{/if}
-			</div>
-		</div>
+		<GridToolbar
+			{rootId}
+			{rootName}
+			{pathSegments}
+			{backgroundValidating}
+			selectionSize={selection.size}
+			hasClipboard={clipboard.hasItems}
+			{searchActive}
+			{searchQuery}
+			{searchLoading}
+			searchResultCount={searchResults.length}
+			{analysisSettings}
+			{analysisSettingsSaving}
+			scanStatus={detectScan.status}
+			classifyScanStatus={classifyScan.status}
+			ocrScanStatus={ocrScan.status}
+			analyzeScanStatus={analyzeScan.status}
+			{filterPeople}
+			{filterTag}
+			{availableTags}
+			{viewMode}
+			{thumbSize}
+			bind:searchInput
+			onNavigate={(p) => onNavigate?.(p)}
+			onOpenSearch={openSearch}
+			onCloseSearch={closeSearch}
+			onSearchInput={handleSearchInput}
+			onCut={() => {
+				clipboard.cut(rootId, selection.paths);
+				toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+			}}
+			onCopy={() => {
+				clipboard.copy(rootId, selection.paths);
+				toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+			}}
+			onPaste={handlePaste}
+			onRename={() => (showRenameDialog = true)}
+			onDelete={() => (showDeleteConfirm = true)}
+			onToggleAutoBrowse={toggleAutoBrowseAnalysis}
+			onToggleFilter={toggleFilter}
+			onScan={() => detectScan.run(rootId, path)}
+			onClassify={() => classifyScan.run(rootId, path)}
+			onOCR={() => ocrScan.run(rootId, path)}
+			onReanalyze={handleReanalyzeAll}
+			onFindDuplicates={() => (showDuplicates = true)}
+			onTagFilter={handleTagFilter}
+			onViewMode={(m) => (viewMode = m)}
+			onThumbSize={(s) => (thumbSize = s)}
+		/>
 
 		<div class="flex flex-1 overflow-hidden">
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1354,175 +858,12 @@ async function handleFindDuplicates() {
 				{/if}
 			</div>
 
-			<!-- Details Panel -->
-			<div class="w-80 overflow-y-auto border-l border-gray-800 bg-gray-900 p-6 shadow-xl">
-				{#if selectedEntries.length === 1}
-					{@const sel = selectedEntries[0]}
-					<div class="flex flex-col gap-6">
-						<div class="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
-							{#if sel.hasThumb && !detailsThumbError}
-								{#if detailsThumbLoading}
-									<div
-										class="thumb-skeleton absolute inset-0 z-10"
-										data-testid="details-thumbnail-skeleton"
-									></div>
-								{/if}
-								<img
-									bind:this={detailsImgEl}
-									src={thumbnailUrl(rootId, sel.path)}
-									alt={sel.name}
-									class="relative z-0 h-full w-full object-contain"
-									onload={() => (detailsThumbLoading = false)}
-									onerror={() => {
-										detailsThumbLoading = false;
-										detailsThumbError = true;
-									}}
-								/>
-							{:else}
-								<div class="flex h-full items-center justify-center text-gray-700">
-									<FileIcon entry={sel} size={64} />
-								</div>
-							{/if}
-						</div>
-
-						<div class="space-y-4">
-							<div>
-								<h3 class="break-all text-lg font-semibold text-gray-100">{sel.name}</h3>
-								<p class="text-sm text-gray-400">{sel.mediaType}</p>
-							</div>
-
-							<div class="grid grid-cols-2 gap-y-4 text-sm">
-								{#if !sel.isDir}
-									<div class="text-gray-500">Size</div>
-									<div class="text-gray-300">{formatSize(sel.size)}</div>
-								{/if}
-
-								<div class="text-gray-500">Modified</div>
-								<div class="text-gray-300">{formatDate(sel.modTime)}</div>
-
-								<div class="text-gray-500">Path</div>
-								<div class="break-all text-gray-300">{sel.path}</div>
-
-								{#if sel.isDir && diskUsageLoading}
-									<div class="text-gray-500">Usage</div>
-									<div class="text-gray-400">Computing...</div>
-								{/if}
-
-								{#if sel.isDir && diskUsage}
-									<div class="text-gray-500">Total size</div>
-									<div class="text-gray-300">{formatSize(diskUsage.totalSize)}</div>
-
-									<div class="text-gray-500">Files</div>
-									<div class="text-gray-300">{diskUsage.fileCount}</div>
-
-									<div class="text-gray-500">Subdirs</div>
-									<div class="text-gray-300">{diskUsage.dirCount}</div>
-								{/if}
-
-								{#if detectionResult}
-									<div class="text-gray-500">Person</div>
-									<div class="text-gray-300">
-										{#if detectionResult.hasPerson}
-											<span class="text-red-400">Yes ({(detectionResult.confidence * 100).toFixed(0)}%)</span>
-										{:else}
-											<span class="text-green-400">No</span>
-										{/if}
-									</div>
-								{/if}
-
-								{#if sel.sha256}
-									<div class="text-gray-500">SHA256</div>
-									<div class="text-gray-300">
-										<button
-											class="font-mono text-xs break-all text-left hover:text-blue-400 transition-colors"
-											title="Click to copy full hash"
-											onclick={() => { navigator.clipboard.writeText(sel.sha256 ?? ''); toastComponent?.show('SHA256 copied', 'success'); }}
-										>
-											{sel.sha256.slice(0, 16)}...
-										</button>
-									</div>
-								{/if}
-
-								{#if sel.crc32}
-									<div class="text-gray-500">CRC32</div>
-									<div class="text-gray-300 font-mono text-xs">{sel.crc32}</div>
-								{/if}
-
-								{#if selectedDetailsTags.length > 0}
-									<div class="col-span-2 border-t border-gray-800 pt-2">
-										<div class="text-gray-500 mb-1">Tags</div>
-										<div class="flex flex-wrap gap-1">
-											{#each selectedDetailsTags as tag}
-												<span class="rounded bg-purple-600/80 px-1.5 py-0.5 text-xs text-white" title={`${(tag.score * 100).toFixed(0)}%`}>
-													{tag.label} <span class="text-purple-300">{(tag.score * 100).toFixed(0)}%</span>
-												</span>
-											{/each}
-										</div>
-									</div>
-								{/if}
-
-								{#if !sel.isDir && (sel.mediaType === 'image' || sel.mediaType === 'video')}
-									<div class="col-span-2 border-t border-gray-800 pt-2">
-										<div class="mb-1 flex items-center justify-between">
-											<span class="text-gray-500">OCR text</span>
-											<button
-												class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-200 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-												onclick={() => handleRunOCR(sel)}
-												disabled={ocrLoading}
-												title="Extract text from this image"
-											>
-												{ocrLoading ? 'Running…' : ocrResult ? 'Re-run OCR' : 'Run OCR'}
-											</button>
-										</div>
-										{#if ocrError}
-											<p class="text-xs text-red-400">{ocrError}</p>
-										{:else if ocrResult && ocrResult.blocks.length > 0}
-											<div class="flex flex-col gap-0.5">
-												{#each ocrResult.blocks as block}
-													<span class="rounded bg-gray-800 px-1.5 py-0.5 text-xs break-all text-gray-200">{block.text}</span>
-												{/each}
-											</div>
-										{:else if ocrResult?.text}
-											<p class="text-xs break-words whitespace-pre-wrap text-gray-200">{ocrResult.text}</p>
-										{:else if ocrResult}
-											<p class="text-xs text-gray-500">No text found</p>
-										{:else}
-											<p class="text-xs text-gray-600">Not analyzed yet</p>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						</div>
-
-						<div class="mt-auto pt-6">
-							<button
-								class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-								onclick={() => handleOpen(sel)}
-							>
-								{sel.isDir ? 'Open Folder' : 'Open'}
-							</button>
-						</div>
-					</div>
-				{:else if selectedEntries.length > 1}
-					<div class="flex flex-col gap-4">
-						<h3 class="text-lg font-semibold text-gray-100">{selectedEntries.length} items selected</h3>
-						<div class="grid grid-cols-2 gap-y-4 text-sm">
-							<div class="text-gray-500">Total size</div>
-							<div class="text-gray-300">{formatSize(selectedEntries.reduce((sum, e) => (e.isDir ? sum : sum + e.size), 0))}</div>
-
-							<div class="text-gray-500">Files</div>
-							<div class="text-gray-300">{selectedEntries.filter((e) => !e.isDir).length}</div>
-
-							<div class="text-gray-500">Folders</div>
-							<div class="text-gray-300">{selectedEntries.filter((e) => e.isDir).length}</div>
-						</div>
-					</div>
-				{:else}
-					<div class="flex h-full items-center justify-center">
-						<p class="text-center text-sm text-gray-600">Select a file to view details</p>
-					</div>
-				{/if}
-			</div>
+			<DetailsPanel
+				{rootId}
+				{selectedEntries}
+				onOpen={handleOpen}
+				onToast={toast}
+			/>
 		</div>
 	</div>
 {/if}
@@ -1554,52 +895,11 @@ async function handleFindDuplicates() {
 {/if}
 
 {#if showDuplicates}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-		onclick={() => (showDuplicates = false)}
-	>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<div
-			class="w-[600px] max-h-[80vh] overflow-y-auto rounded-lg bg-gray-900 border border-gray-700 shadow-2xl"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="flex items-center justify-between border-b border-gray-800 px-6 py-4">
-				<h2 class="text-lg font-semibold text-gray-100">Duplicate Files</h2>
-				<button class="text-gray-500 hover:text-gray-300" onclick={() => (showDuplicates = false)}>
-					<X size={18} />
-				</button>
-			</div>
-			<div class="p-6">
-				{#if duplicatesLoading}
-					<p class="text-gray-500 text-center">Searching for duplicates...</p>
-				{:else if duplicateGroups.length === 0}
-					<p class="text-gray-500 text-center">No duplicates found</p>
-				{:else}
-					<div class="space-y-4">
-						{#each duplicateGroups as group}
-							<div class="rounded border border-gray-700 bg-gray-800/50 p-4">
-								<div class="flex items-center gap-2 mb-2">
-									<span class="text-xs text-gray-500 font-mono">{group.hashType}: {group.hash.slice(0, 16)}...</span>
-									<span class="text-xs text-gray-400">{formatSize(group.size)}</span>
-								</div>
-								<ul class="space-y-1">
-									{#each group.files as file}
-										<li class="text-sm text-gray-300 flex items-center gap-2">
-											<span class="text-gray-500 text-xs">{file.rootId}</span>
-											<span class="break-all">{file.path}</span>
-										</li>
-									{/each}
-								</ul>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
+	<DuplicatesModal
+		{rootId}
+		{path}
+		onClose={() => (showDuplicates = false)}
+	/>
 {/if}
 
 <Toast bind:this={toastComponent} />
