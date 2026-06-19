@@ -40,6 +40,7 @@ jobs:
         run: |
           task download-model
           task download-clip-model
+          task download-ocr-model
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
         with:
