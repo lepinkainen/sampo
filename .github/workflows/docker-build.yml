@@ -25,11 +25,11 @@ jobs:
       # be present on disk before the Docker build copies them into the image.
       - name: Cache ML models
         id: models-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: models
           key: models-${{ hashFiles('scripts/export-clip.py', 'scripts/clip-labels.yaml', 'Taskfile.yml') }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v8
         if: steps.models-cache.outputs.cache-hit != 'true'
       - uses: go-task/setup-task@v2
         if: steps.models-cache.outputs.cache-hit != 'true'
