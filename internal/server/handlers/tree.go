@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/sampo/internal/analysis"
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/ocr"
 )
@@ -130,8 +131,42 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.enqueueDirectoryAnalysis(rootID, entries)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		slog.Error("encoding directory response", "error", err)
+	}
+}
+
+// enqueueDirectoryAnalysis schedules background analysis for every media file in
+// a directory listing when auto-browse analysis is enabled. Unlike the
+// per-thumbnail enqueue, this covers the whole directory (not just files
+// scrolled into view) so results fill in across all cards. EnqueueBatch is
+// non-blocking and dedups, so this is cheap to run on every listing.
+func (h *Handler) enqueueDirectoryAnalysis(rootID string, entries []filesystem.FileEntry) {
+	if !h.AutoBrowseEnabled() || h.browseCoordinator == nil {
+		return
+	}
+
+	items := make([]analysis.EnqueueItem, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir || !h.browseCoordinator.WantsMedia(e.MediaType) {
+			continue
+		}
+		fullPath, err := h.roots.ResolvePath(rootID, e.Path)
+		if err != nil {
+			continue
+		}
+		items = append(items, analysis.EnqueueItem{
+			RelPath:   e.Path,
+			FullPath:  fullPath,
+			MediaType: e.MediaType,
+			Mtime:     e.ModTime.Unix(),
+			Size:      e.Size,
+		})
+	}
+	if len(items) > 0 {
+		h.browseCoordinator.EnqueueBatch(rootID, items)
 	}
 }

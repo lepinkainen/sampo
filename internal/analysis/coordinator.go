@@ -146,30 +146,106 @@ func (c *Coordinator) Analyze(ctx context.Context, rootID, relPath, fullPath, me
 	})
 }
 
-// Enqueue schedules background analysis if at least one enabled model needs fresh data.
-// Returns true if a job was queued.
-func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime, size int64) bool {
+// EnqueueItem describes a single file to analyze as part of a batch.
+type EnqueueItem struct {
+	RelPath   string
+	FullPath  string
+	MediaType string
+	Mtime     int64
+	Size      int64
+}
+
+// WantsMedia reports whether the coordinator analyzes the given media type:
+// always images, videos only when includeVideos is set. Single source of truth
+// for the browse enqueue paths and their callers.
+func (c *Coordinator) WantsMedia(mediaType string) bool {
 	if c == nil {
 		return false
 	}
-	if mediaType != "image" && (!c.includeVideos || mediaType != "video") {
-		return false
+	return mediaType == "image" || (c.includeVideos && mediaType == "video")
+}
+
+// claim reserves a file for analysis. It checks the pending set first so that
+// concurrent callers (the per-thumbnail Enqueue and the directory EnqueueBatch)
+// don't both run needs() — which hits SQLite IsStale per file — or queue a
+// duplicate job. ok is false when the file is already pending or nothing needs
+// running; when ok is true the caller owns the pending slot and must send a job
+// (or release the slot on a failed send).
+func (c *Coordinator) claim(rootID, relPath string, mtime, size int64) (key string, det, cls, ocrN, ok bool) {
+	key = fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
+
+	c.mu.Lock()
+	_, exists := c.pending[key]
+	c.mu.Unlock()
+	if exists {
+		return key, false, false, false, false
 	}
 
-	needDetect, needClassify, needOCR := c.needs(rootID, relPath, mtime, size, false)
-	if !needDetect && !needClassify && !needOCR {
-		return false
+	det, cls, ocrN = c.needs(rootID, relPath, mtime, size, false)
+	if !det && !cls && !ocrN {
+		return key, false, false, false, false
 	}
-
-	key := fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
 
 	c.mu.Lock()
 	if _, exists := c.pending[key]; exists {
 		c.mu.Unlock()
-		return false
+		return key, false, false, false, false
 	}
 	c.pending[key] = struct{}{}
 	c.mu.Unlock()
+	return key, det, cls, ocrN, true
+}
+
+// EnqueueBatch schedules background analysis for a batch of files (for example
+// every media file in a freshly opened directory). Unlike Enqueue it never
+// drops a job when the queue is full: it runs in its own goroutine and blocks
+// on the send until a worker frees a slot, so directory-sized batches larger
+// than the queue are fully queued rather than silently discarded. The caller
+// therefore returns immediately. needs() skips files whose caches are fresh
+// and the pending map dedups against in-flight jobs, so this is cheap to call
+// on every directory listing.
+func (c *Coordinator) EnqueueBatch(rootID string, items []EnqueueItem) {
+	if c == nil {
+		return
+	}
+	go func() {
+		for _, it := range items {
+			if !c.WantsMedia(it.MediaType) {
+				continue
+			}
+
+			key, needDetect, needClassify, needOCR, ok := c.claim(rootID, it.RelPath, it.Mtime, it.Size)
+			if !ok {
+				continue
+			}
+
+			c.jobs <- job{
+				key:          key,
+				rootID:       rootID,
+				relPath:      it.RelPath,
+				fullPath:     it.FullPath,
+				mediaType:    it.MediaType,
+				mtime:        it.Mtime,
+				size:         it.Size,
+				needDetect:   needDetect,
+				needClassify: needClassify,
+				needOCR:      needOCR,
+			}
+		}
+	}()
+}
+
+// Enqueue schedules background analysis if at least one enabled model needs fresh data.
+// Returns true if a job was queued.
+func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime, size int64) bool {
+	if c == nil || !c.WantsMedia(mediaType) {
+		return false
+	}
+
+	key, needDetect, needClassify, needOCR, ok := c.claim(rootID, relPath, mtime, size)
+	if !ok {
+		return false
+	}
 
 	j := job{
 		key:          key,
