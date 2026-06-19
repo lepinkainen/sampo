@@ -57,11 +57,13 @@ WORKDIR /app
 COPY --from=ort-downloader /opt/onnxruntime/ /opt/onnxruntime/
 ENV ORT_LIB_PATH=/opt/onnxruntime/libonnxruntime.so
 
-COPY --chown=sampo:sampo --from=go-builder /out/sampo ./sampo
-COPY --chown=sampo:sampo --from=frontend-builder /app/frontend/build ./frontend/build
-COPY --chown=sampo:sampo config.docker.yaml ./config.yaml
+# Least-volatile layers first so backend/frontend rebuilds don't bust the
+# big model layer. Order: models (rarely change) -> config -> frontend -> binary.
 # Bake ML models into the image so it runs without external mounts.
 COPY --chown=sampo:sampo models/ ./models/
+COPY --chown=sampo:sampo config.docker.yaml ./config.yaml
+COPY --chown=sampo:sampo --from=frontend-builder /app/frontend/build ./frontend/build
+COPY --chown=sampo:sampo --from=go-builder /out/sampo ./sampo
 RUN mkdir -p /cache /data \
     && chown sampo:sampo /app /cache /data
 USER sampo
