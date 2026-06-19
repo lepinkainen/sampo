@@ -7,6 +7,7 @@ import {
 	Image as ImageIcon,
 	Video,
 	File,
+	FileText,
 } from '@lucide/svelte';
 
 interface Props {
@@ -30,6 +31,8 @@ let { entry, size, open = false }: Props = $props();
 	<ImageIcon {size} />
 {:else if entry.mediaType === 'video'}
 	<Video {size} />
+{:else if entry.mediaType === 'pdf'}
+	<FileText {size} />
 {:else}
 	<File {size} />
 {/if}
