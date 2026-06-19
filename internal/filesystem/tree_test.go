@@ -33,6 +33,27 @@ func TestDetectMediaType(t *testing.T) {
 	}
 }
 
+func TestMediaTypeHasThumb(t *testing.T) {
+	tests := []struct {
+		mediaType string
+		expected  bool
+	}{
+		{"image", true},
+		{"video", true},
+		{"pdf", true},
+		{"archive", false},
+		{"other", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mediaType, func(t *testing.T) {
+			if got := MediaTypeHasThumb(tt.mediaType); got != tt.expected {
+				t.Errorf("MediaTypeHasThumb(%q) = %v, want %v", tt.mediaType, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestListDirectory(t *testing.T) {
 	// Create a temp directory with some files
 	dir := t.TempDir()

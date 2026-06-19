@@ -81,7 +81,7 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 				Size:      info.Size(),
 				ModTime:   info.ModTime(),
 				MediaType: mediaType,
-				HasThumb:  mediaType == "image" || mediaType == "video",
+				HasThumb:  filesystem.MediaTypeHasThumb(mediaType),
 			}
 			results = append(results, entry)
 			seen[entryRelPath] = true
@@ -182,7 +182,7 @@ func (h *Handler) appendPathMatches(rootID string, paths []string, results []fil
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
 			MediaType: mediaType,
-			HasThumb:  mediaType == "image" || mediaType == "video",
+			HasThumb:  filesystem.MediaTypeHasThumb(mediaType),
 		})
 		seen[relPath] = true
 	}

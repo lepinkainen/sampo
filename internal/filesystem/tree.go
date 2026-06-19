@@ -82,6 +82,12 @@ func DetectMediaType(name string) string {
 	}
 }
 
+// MediaTypeHasThumb reports whether files of the given media type can have a
+// generated thumbnail (image, video, or pdf).
+func MediaTypeHasThumb(mediaType string) bool {
+	return mediaType == "image" || mediaType == "video" || mediaType == "pdf"
+}
+
 // ImageEntry holds metadata for an image file within a directory.
 type ImageEntry struct {
 	AbsPath string
@@ -166,7 +172,7 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			mediaType = DetectMediaType(e.Name())
 		}
 
-		hasThumb := mediaType == "image" || mediaType == "video" || mediaType == "pdf"
+		hasThumb := MediaTypeHasThumb(mediaType)
 		if e.IsDir() {
 			hasThumb = HasImageFile(filepath.Join(dirPath, e.Name()))
 		}
