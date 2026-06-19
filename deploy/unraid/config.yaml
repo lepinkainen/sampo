@@ -1,0 +1,46 @@
+# Sampo config for unraid — mount this over /app/config.yaml (read-only).
+# Each root below maps to a container path that you bind to an unraid share
+# in the Docker template. Roots get IDs root-0, root-1, ... in listed order.
+
+server:
+  port: 8080
+
+cache:
+  dir: "/cache"
+  max_age_days: 90
+
+# One entry per unraid share. The `path` is the CONTAINER path you mapped the
+# share to in the template (see README), not the /mnt/user/... host path.
+roots:
+  - name: "Photos"
+    path: "/data/photos"
+  - name: "Family"
+    path: "/data/family"
+  - name: "Screenshots"
+    path: "/data/screenshots"
+
+# ML models are baked into the image at /app/models — leave these as-is.
+detection:
+  enabled: true
+  model_path: "/app/models/yolo11n.onnx"
+  model_version: "v11n-1.0"
+  threshold: 0.5
+  workers: 2
+
+classification:
+  enabled: true
+  model_path: "/app/models/clip-vit-b32-image.onnx"
+  labels_path: "/app/models/clip-labels.json"
+  model_version: "clip-vit-b32-1.0"
+  threshold: 0.2
+  workers: 2
+
+# OCR self-disables on Linux (no Vision framework) — leave disabled.
+ocr:
+  enabled: false
+
+analysis:
+  auto_browse_enabled: true
+  browse_workers: 1
+  browse_queue_size: 128
+  include_videos: true
