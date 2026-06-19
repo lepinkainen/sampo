@@ -26,6 +26,9 @@ func main() {
 	handlers.GitHash = gitHash
 	handlers.BuildTime = buildTime
 
+	// Log version early so it appears even if startup fails (e.g. ONNX init).
+	logger.Info("starting sampo", "version", version, "git_hash", gitHash, "build_time", buildTime)
+
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("loading config", "error", err)
