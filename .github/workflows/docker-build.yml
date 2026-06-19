@@ -29,7 +29,7 @@ jobs:
         with:
           path: models
           key: models-${{ hashFiles('scripts/export-clip.py', 'scripts/clip-labels.yaml', 'Taskfile.yml') }}
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v7
         if: steps.models-cache.outputs.cache-hit != 'true'
       - uses: go-task/setup-task@v2
         if: steps.models-cache.outputs.cache-hit != 'true'
