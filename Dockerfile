@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 # Download a pinned ONNX Runtime shared library for the target arch.
 FROM debian:bookworm-slim AS ort-downloader
 ARG TARGETARCH
-ARG ORT_VERSION=1.24.1
+ARG ORT_VERSION=1.26.0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar \
     && rm -rf /var/lib/apt/lists/*
 RUN case "${TARGETARCH}" in \
