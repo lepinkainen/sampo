@@ -30,12 +30,12 @@ type visionEngine struct {
 }
 
 // newEngine resolves the sampo-ocr binary and returns a Vision-backed engine.
-func newEngine(binaryPath, modelVersion string, logger *slog.Logger) (Engine, error) {
-	resolved, err := resolveBinary(binaryPath)
+func newEngine(opts Options, logger *slog.Logger) (Engine, error) {
+	resolved, err := resolveBinary(opts.BinaryPath)
 	if err != nil {
 		return nil, err
 	}
-	version := modelVersion
+	version := opts.ModelVersion
 	if version == "" {
 		version = "vision-1.0"
 	}

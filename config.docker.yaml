@@ -22,3 +22,11 @@ classification:
   model_version: "clip-vit-b32-1.0"
   threshold: 0.2
   workers: 2
+
+ocr:
+  enabled: true
+  det_model_path: "/app/models/ppocr-det.onnx"
+  rec_model_path: "/app/models/ppocr-rec.onnx"
+  dict_path: "/app/models/ppocr-dict.txt"
+  model_version: "ppocrv4-1.0"
+  workers: 2

@@ -201,6 +201,21 @@ tasks:
       - test -f models/clip-vit-b32-image.onnx
       - test -f models/clip-labels.json
 
+  download-ocr-model:
+    desc: Download PP-OCR (RapidOCR) English text detection + recognition ONNX models and char dict for the Linux/Docker OCR backend
+    vars:
+      OCR_REPO: https://huggingface.co/SWHL/RapidOCR/resolve/main
+      DICT_URL: https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/en_dict.txt
+    cmds:
+      - mkdir -p models
+      - curl -fsSL "{{.OCR_REPO}}/PP-OCRv4/en_PP-OCRv3_det_infer.onnx" -o models/ppocr-det.onnx
+      - curl -fsSL "{{.OCR_REPO}}/PP-OCRv3/en_PP-OCRv3_rec_infer.onnx" -o models/ppocr-rec.onnx
+      - curl -fsSL "{{.DICT_URL}}" -o models/ppocr-dict.txt
+    status:
+      - test -f models/ppocr-det.onnx
+      - test -f models/ppocr-rec.onnx
+      - test -f models/ppocr-dict.txt
+
   update-clip-labels:
     desc: Regenerate CLIP text embeddings from clip-labels.yaml and optional local labels (without re-exporting ONNX model)
     cmds:

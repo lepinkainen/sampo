@@ -26,6 +26,19 @@ import (
 // ErrUnsupported is returned by NewEngine on platforms without an OCR backend.
 var ErrUnsupported = errors.New("ocr not supported on this platform")
 
+// Options carries the platform-independent superset of OCR backend settings.
+// Each platform's newEngine reads only the fields its backend needs: darwin uses
+// BinaryPath/ModelVersion (the Vision helper); the Linux ONNX backend uses
+// DetModelPath/RecModelPath/DictPath/ModelVersion. Populated from config.OCRConfig
+// in the server; kept as a local struct so internal/ocr need not import config.
+type Options struct {
+	BinaryPath   string // darwin: path to the sampo-ocr Vision helper
+	ModelVersion string // version tag mixed into Version() for cache invalidation
+	DetModelPath string // onnx: DBNet text-detection model
+	RecModelPath string // onnx: CRNN/SVTR recognition model
+	DictPath     string // onnx: recognition character dictionary
+}
+
 // TextBlock is a single recognized line/region with a normalized bounding box.
 type TextBlock struct {
 	Text       string  `json:"text"`
@@ -91,8 +104,8 @@ type Recognizer struct {
 
 // NewRecognizer builds the platform OCR engine and wraps it. Returns
 // ErrUnsupported (wrapped) on platforms without a backend.
-func NewRecognizer(binaryPath, modelVersion string, logger *slog.Logger) (*Recognizer, error) {
-	engine, err := newEngine(binaryPath, modelVersion, logger)
+func NewRecognizer(opts Options, logger *slog.Logger) (*Recognizer, error) {
+	engine, err := newEngine(opts, logger)
 	if err != nil {
 		return nil, err
 	}

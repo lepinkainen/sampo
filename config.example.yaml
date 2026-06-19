@@ -31,6 +31,11 @@ classification:
 #   Linux  — no backend yet (self-disables); generic ONNX backend planned
 ocr:
   enabled: false
+  # macOS backend (Vision framework): path to the sampo-ocr helper (task build-ocr)
   binary_path: "bin/sampo-ocr"
+  # Linux/Docker backend (in-process ONNX PP-OCR): det + rec models and char dict
+  det_model_path: "models/ppocr-det.onnx"
+  rec_model_path: "models/ppocr-rec.onnx"
+  dict_path: "models/ppocr-dict.txt"
   model_version: "vision-1.0"
   workers: 2

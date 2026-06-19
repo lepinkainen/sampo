@@ -78,8 +78,11 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	var ocrStore *ocr.Store
 	var recognizer *ocr.Recognizer
 
-	// Initialize shared ONNX environment if any ML feature is enabled
-	if cfg.Detection.Enabled || cfg.Classification.Enabled {
+	// Initialize shared ONNX environment if any ML feature is enabled.
+	// OCR's in-process backend (Linux/Docker) is ONNX too; the darwin Vision
+	// backend doesn't need ORT, but onnxenv.Init is idempotent and the OCR engine
+	// also calls it defensively, so gating on OCR.Enabled here is harmless on macOS.
+	if cfg.Detection.Enabled || cfg.Classification.Enabled || cfg.OCR.Enabled {
 		if initErr := onnxenv.Init(); initErr != nil {
 			return nil, fmt.Errorf("initializing ONNX Runtime: %w", initErr)
 		}
@@ -136,7 +139,13 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	// internal/ocr (Vision binary on macOS, unsupported elsewhere for now), so a
 	// recognizer build failure disables the feature instead of killing startup.
 	if cfg.OCR.Enabled {
-		rec, ocrErr := ocr.NewRecognizer(cfg.OCR.BinaryPath, cfg.OCR.ModelVersion, logger)
+		rec, ocrErr := ocr.NewRecognizer(ocr.Options{
+			BinaryPath:   cfg.OCR.BinaryPath,
+			ModelVersion: cfg.OCR.ModelVersion,
+			DetModelPath: cfg.OCR.DetModelPath,
+			RecModelPath: cfg.OCR.RecModelPath,
+			DictPath:     cfg.OCR.DictPath,
+		}, logger)
 		if ocrErr != nil {
 			logger.Warn("OCR enabled but unavailable on this platform, skipping", "error", ocrErr)
 		} else {

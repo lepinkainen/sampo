@@ -35,10 +35,13 @@ type ClassificationConfig struct {
 //
 // The backend is selected at compile time by build tags in internal/ocr:
 // macOS shells out to BinaryPath (the Vision-framework `sampo-ocr` helper);
-// other platforms have no backend yet and self-disable.
+// Linux/other runs in-process ONNX PP-OCR using DetModelPath/RecModelPath/DictPath.
 type OCRConfig struct {
 	Enabled      bool   `mapstructure:"enabled"`
-	BinaryPath   string `mapstructure:"binary_path"`
+	BinaryPath   string `mapstructure:"binary_path"`    // darwin: sampo-ocr Vision helper
+	DetModelPath string `mapstructure:"det_model_path"` // onnx: DBNet detection model
+	RecModelPath string `mapstructure:"rec_model_path"` // onnx: CRNN recognition model
+	DictPath     string `mapstructure:"dict_path"`      // onnx: recognition char dict
 	ModelVersion string `mapstructure:"model_version"`
 	Workers      int    `mapstructure:"workers"`
 }
