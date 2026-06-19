@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/sampo-banner.svg" alt="Sampo" width="500" />
+</p>
+
 # Sampo
 
 Sampo is a local file and media browser with thumbnail previews, search, and optional AI-assisted image/video analysis.

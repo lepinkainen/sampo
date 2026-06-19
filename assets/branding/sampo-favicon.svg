@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Sampo">
+  <title>Sampo</title>
+  <rect width="32" height="32" fill="#131722" rx="6"/>
+  <!-- Simplified high-contrast version of the mill core -->
+  <path d="M6 8 L26 8 L20 16 L12 16 Z" fill="#00E5FF"/>
+  <path d="M12 18 L20 18 L14 26 L6 26 Z" fill="#00B2CC"/>
+  <circle cx="23" cy="22" r="2.5" fill="#FFD700"/>
+</svg>

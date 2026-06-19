@@ -64,8 +64,8 @@ function handleRefresh() {
 <div class="flex h-screen bg-gray-950 text-gray-100">
 	<!-- Tree sidebar -->
 	<div class="w-72 flex-shrink-0 border-r border-gray-800">
-		<div class="flex h-12 items-center border-b border-gray-800 px-4">
-			<h1 class="text-sm font-semibold text-gray-300">Sampo</h1>
+		<div class="flex h-12 items-center border-b border-gray-800 px-3">
+			<img src="/sampo-banner.svg" alt="Sampo" class="h-7 w-auto" />
 		</div>
 		<div class="h-[calc(100vh-3rem)]">
 			<TreeView selectedPath={selectedKey} onSelect={handleSelect} onRefresh={handleRefresh} />

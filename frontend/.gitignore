@@ -24,3 +24,7 @@ test-results/
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Generated from assets/branding by task sync-branding
+static/favicon.svg
+static/sampo-banner.svg

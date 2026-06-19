@@ -129,8 +129,15 @@ tasks:
       - pnpm exec biome check .
 
   # Frontend tasks
+  sync-branding:
+    desc: Copy authoritative branding SVGs from assets/branding into frontend/static
+    cmds:
+      - cp assets/branding/sampo-favicon.svg frontend/static/favicon.svg
+      - cp assets/branding/sampo-banner.svg frontend/static/sampo-banner.svg
+
   build-frontend:
     desc: Build SvelteKit frontend
+    deps: [sync-branding]
     dir: frontend
     cmds:
       - pnpm install --frozen-lockfile
@@ -172,6 +179,7 @@ tasks:
 
   dev-frontend:
     desc: Start frontend dev server
+    deps: [sync-branding]
     dir: frontend
     cmds:
       - pnpm run dev -- --host 127.0.0.1 --port 5173

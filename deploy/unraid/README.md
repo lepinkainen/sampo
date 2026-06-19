@@ -80,6 +80,15 @@ http://[IP]:[PORT:8089]
 
 with the Port mapping host `8089` → container `8080`.
 
+## Container icon
+
+The **Icon URL** field (ADVANCED VIEW) takes a publicly reachable image URL.
+Point it at the logo in the repo:
+
+```
+https://raw.githubusercontent.com/lepinkainen/sampo/main/assets/branding/sampo-logo.svg
+```
+
 ## Multiple roots
 
 Each entry under `roots:` becomes a browse root (root-0, root-1, … in listed
