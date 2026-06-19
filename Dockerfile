@@ -6,6 +6,10 @@ RUN corepack enable
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
+# Branding lives once in assets/branding; mirror task sync-branding here since
+# the generated static copies are gitignored and absent from the build context.
+COPY assets/branding/sampo-favicon.svg ./static/favicon.svg
+COPY assets/branding/sampo-banner.svg ./static/sampo-banner.svg
 RUN pnpm run build
 
 FROM golang:1.26-bookworm AS go-builder
