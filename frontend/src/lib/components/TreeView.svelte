@@ -36,6 +36,38 @@ onMount(async () => {
 	loading = false;
 });
 
+// Auto-expand the root that matches the URL-selected path, once per target.
+let lastAutoTarget: string | null = null;
+$effect(() => {
+	if (loading || !selectedPath) return;
+	if (lastAutoTarget === selectedPath) return;
+	const idx = selectedPath.indexOf(':');
+	if (idx < 0) return;
+	const targetRoot = selectedPath.slice(0, idx);
+	if (!roots.some((r) => r.id === targetRoot)) return;
+	lastAutoTarget = selectedPath;
+	if (!expandedRoots.has(targetRoot)) {
+		autoExpandRoot(targetRoot);
+	}
+});
+
+async function autoExpandRoot(rootId: string) {
+	if (!rootChildren[rootId]) {
+		loadingRoots.add(rootId);
+		loadingRoots = new Set(loadingRoots);
+		try {
+			const entries = sortEntries(await fetchDirectory(rootId, '/'));
+			rootChildren[rootId] = entries.filter((e) => e.isDir);
+		} catch (e) {
+			console.error('Failed to load root', rootId, e);
+		}
+		loadingRoots.delete(rootId);
+		loadingRoots = new Set(loadingRoots);
+	}
+	expandedRoots.add(rootId);
+	expandedRoots = new Set(expandedRoots);
+}
+
 async function toggleRoot(rootId: string) {
 	if (expandedRoots.has(rootId)) {
 		expandedRoots.delete(rootId);

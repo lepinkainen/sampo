@@ -42,6 +42,37 @@ $effect(() => {
 	};
 });
 
+// Auto-expand this node when it is an ancestor of the URL-selected path,
+// cascading the tree open down to the selected directory. Runs once per
+// target so a manual collapse afterwards is not re-fought.
+let lastAutoTarget: string | null = null;
+$effect(() => {
+	if (!entry.isDir || !selectedPath) return;
+	if (lastAutoTarget === selectedPath || expanded) return;
+	const idx = selectedPath.indexOf(':');
+	if (idx < 0) return;
+	if (selectedPath.slice(0, idx) !== rootId) return;
+	const targetPath = selectedPath.slice(idx + 1);
+	if (targetPath === entry.path) return; // selected node itself, nothing to open
+	if (!targetPath.startsWith(`${entry.path}/`)) return; // not an ancestor
+	lastAutoTarget = selectedPath;
+	autoExpand();
+});
+
+async function autoExpand() {
+	if (expanded || loading) return;
+	loading = true;
+	try {
+		children = sortEntries(await fetchDirectory(rootId, entry.path)).filter(
+			(e) => e.isDir,
+		);
+	} catch (e) {
+		console.error('Failed to load directory', e);
+	}
+	loading = false;
+	expanded = true;
+}
+
 async function toggle() {
 	if (!entry.isDir) {
 		onSelect(rootId, entry.path, false);
