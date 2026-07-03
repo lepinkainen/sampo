@@ -219,6 +219,15 @@ func dirPrefix(dirPath string) string {
 	return dirPath + "/"
 }
 
+// escapeLike escapes LIKE wildcards so path characters match literally.
+// Queries using it must append `ESCAPE '\'`.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
 // SearchByText returns rel paths whose recognized text contains the query
 // substring (case-insensitive), scoped to files under dirPath.
 func (s *Store) SearchByText(rootID, dirPath, query string) ([]string, error) {
@@ -301,6 +310,47 @@ func (s *Store) GetText(rootID, relPath string) (string, error) {
 		return "", fmt.Errorf("getting ocr text: %w", err)
 	}
 	return text, nil
+}
+
+// ListPaths returns every stored rel_path under a directory (recursive).
+func (s *Store) ListPaths(rootID, dirPath string) ([]string, error) {
+	prefix := dirPrefix(dirPath)
+	rows, err := s.db.Query(
+		`SELECT rel_path FROM ocr WHERE root_id = ? AND rel_path LIKE ? ESCAPE '\'`,
+		rootID, escapeLike(prefix)+"%",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing paths: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var paths []string
+	for rows.Next() {
+		var relPath string
+		if err := rows.Scan(&relPath); err != nil {
+			return nil, err
+		}
+		paths = append(paths, relPath)
+	}
+	return paths, rows.Err()
+}
+
+// DeletePath removes cached results for a file, or for a whole subtree when
+// the path is a directory (prefix match on rel_path).
+func (s *Store) DeletePath(rootID, relPath string) error {
+	relPath = NormalizeRelPath(relPath)
+	if relPath == "" {
+		return errors.New("refusing to delete root path")
+	}
+	prefix := dirPrefix(relPath)
+	_, err := s.db.Exec(
+		`DELETE FROM ocr WHERE root_id = ? AND (rel_path = ? OR rel_path LIKE ? ESCAPE '\')`,
+		rootID, relPath, escapeLike(prefix)+"%",
+	)
+	if err != nil {
+		return fmt.Errorf("deleting ocr results: %w", err)
+	}
+	return nil
 }
 
 // Close closes the database.

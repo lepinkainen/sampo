@@ -183,3 +183,36 @@ func insertOCRRow(t *testing.T, db *sql.DB, relPath, text string, scannedAt time
 		t.Fatalf("insert %q: %v", relPath, err)
 	}
 }
+
+func TestStoreDeletePath(t *testing.T) {
+	store := newTestStore(t)
+	putTestResult(t, store, "album/a.jpg", "hello world")
+	putTestResult(t, store, "album/sub/b.jpg", "nested words")
+	putTestResult(t, store, "other.jpg", "keep me")
+
+	// Leading slash normalizes like every other store method.
+	if err := store.DeletePath("root-0", "/album/a.jpg"); err != nil {
+		t.Fatalf("DeletePath: %v", err)
+	}
+	if text, _ := store.GetText("root-0", "album/a.jpg"); text != "" {
+		t.Fatalf("text after delete = %q, want empty", text)
+	}
+
+	// Subtree delete.
+	if err := store.DeletePath("root-0", "album"); err != nil {
+		t.Fatalf("DeletePath subtree: %v", err)
+	}
+	if text, _ := store.GetText("root-0", "album/sub/b.jpg"); text != "" {
+		t.Fatalf("nested text after subtree delete = %q, want empty", text)
+	}
+	if text, _ := store.GetText("root-0", "other.jpg"); text != "keep me" {
+		t.Fatalf("sibling text = %q, want keep me", text)
+	}
+
+	// Root paths refused.
+	for _, p := range []string{"", "/"} {
+		if err := store.DeletePath("root-0", p); err == nil {
+			t.Fatalf("DeletePath(%q) should refuse", p)
+		}
+	}
+}
