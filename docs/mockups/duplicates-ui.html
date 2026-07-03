@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampo — Duplicates dialog (mirrors DuplicatesModal.svelte)</title>
+<style>
+  /* Mirrors the Tailwind classes used in DuplicatesModal.svelte.
+     gray-950 #030712, gray-900 #111827, gray-800 #1f2937, gray-700 #374151,
+     gray-600 #4b5563, gray-500 #6b7280, gray-400 #9ca3af, gray-100 #f3f4f6,
+     emerald-400 #34d399, red-400 #f87171, red-700 #b91c1c, blue-400 #60a5fa */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: rgba(0,0,0,.85);
+    color: #f3f4f6;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 12px;
+  }
+  .modal {
+    display: flex; flex-direction: column;
+    max-height: 88vh; width: 860px; max-width: 100%;
+    border-radius: 12px; border: 1px solid #374151;
+    background: #111827;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,.5);
+  }
+
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid #1f2937;
+    padding: 16px 20px;
+  }
+  .header h2 { font-size: 16px; font-weight: 600; color: #f3f4f6; }
+  .scope {
+    border-radius: 6px; border: 1px solid #1f2937; background: rgba(31,41,55,.7);
+    padding: 2px 8px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #9ca3af;
+  }
+  .subtitle { font-size: 12px; color: #4b5563; }
+  .spacer { flex: 1; }
+  .icon-btn { background: none; border: none; color: #6b7280; cursor: pointer; font-size: 16px; padding: 2px; }
+  .icon-btn:hover { color: #d1d5db; }
+
+  .body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  .group { overflow: hidden; border-radius: 8px; border: 1px solid #1f2937; background: rgba(31,41,55,.5); }
+  .group-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border-bottom: 1px solid #1f2937;
+    padding: 10px 14px; font-size: 12px;
+  }
+  .badge-exact {
+    border-radius: 999px; background: rgba(52,211,153,.15);
+    padding: 2px 8px; font-weight: 600; letter-spacing: .02em; color: #34d399;
+    font-size: 12px;
+  }
+  .group-hash { font-family: ui-monospace, Menlo, monospace; color: #4b5563; }
+  .group-meta { color: #9ca3af; }
+  .group-reclaim { margin-left: auto; font-weight: 600; color: #34d399; }
+
+  .file {
+    display: grid; grid-template-columns: 28px 72px 1fr auto;
+    align-items: center; gap: 12px;
+    border-bottom: 1px solid #1f2937;
+    padding: 10px 14px;
+  }
+  .file:last-child { border-bottom: none; }
+  .file.marked { background: rgba(248,113,113,.1); }
+  .file input[type=checkbox] { height: 15px; width: 15px; cursor: pointer; accent-color: #f87171; }
+
+  .thumb {
+    display: flex; height: 54px; width: 72px; flex-shrink: 0;
+    align-items: center; justify-content: center; overflow: hidden;
+    border-radius: 6px; border: 1px solid #1f2937; background: #1f2937;
+    font-size: 20px;
+  }
+  .file-info { min-width: 0; }
+  .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #f3f4f6; }
+  .file-path {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #4b5563;
+  }
+  .file-path .root { color: #60a5fa; }
+  .file-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .keep-tag {
+    border-radius: 4px; border: 1px solid rgba(52,211,153,.4);
+    padding: 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #34d399;
+  }
+  .identical {
+    border-radius: 4px; background: rgba(52,211,153,.1);
+    padding: 1px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #34d399;
+  }
+
+  .footer {
+    display: flex; align-items: center; gap: 12px;
+    border-top: 1px solid #1f2937; background: rgba(0,0,0,.2);
+    border-radius: 0 0 12px 12px;
+    padding: 14px 20px;
+  }
+  .summary { font-size: 13px; color: #9ca3af; }
+  .summary strong { color: #f3f4f6; }
+  .summary .reclaim { font-weight: 600; color: #34d399; }
+  .btn {
+    border-radius: 8px; border: 1px solid #374151; background: #1f2937;
+    padding: 6px 16px; font-size: 13px; color: #9ca3af; cursor: pointer;
+  }
+  .btn:hover { color: #f3f4f6; }
+  .btn.danger { border: none; background: #b91c1c; font-weight: 600; color: #fff; }
+  .btn.danger:hover { background: #dc2626; }
+  .btn.danger:disabled { cursor: default; opacity: .4; }
+</style>
+</head>
+<body>
+
+<div class="modal">
+
+  <div class="header">
+    <h2>Duplicates</h2>
+    <span class="scope">root-2:/2023-03 - JPG</span>
+    <span class="subtitle">files in this folder that also exist elsewhere</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" title="Rescan">&#8635;</button>
+    <button class="icon-btn" title="Close">&#10005;</button>
+  </div>
+
+  <div class="body">
+
+    <div class="group">
+      <div class="group-head">
+        <span class="badge-exact">EXACT</span>
+        <span class="group-hash">sha256 05570fc138949d13…</span>
+        <span class="group-meta">2 files · 318.7 KB each</span>
+        <span class="group-reclaim">reclaim 318.7 KB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">1537x2049_baef6c7cf88cecec345338474630713d.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/1537x2049_baef6c7cf88cecec345338474630713d.jpg</div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">1537x2049_cf6d17f09dcf8d8f68e14007587bc416.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/1537x2049_cf6d17f09dcf8d8f68e14007587bc416.jpg</div>
+        </div>
+        <div class="file-right"><span class="identical">identical</span></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="badge-exact">EXACT</span>
+        <span class="group-hash">sha256 0a871ab2061e38d0…</span>
+        <span class="group-meta">2 files · 1.0 MB each</span>
+        <span class="group-reclaim">reclaim 1.0 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">NR3S3lt.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/NR3S3lt.jpg</div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">NR3S3lt copy.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/NR3S3lt copy.jpg</div>
+        </div>
+        <div class="file-right"><span class="identical">identical</span></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="badge-exact">EXACT</span>
+        <span class="group-hash">sha256 0d75b18709f3ace3…</span>
+        <span class="group-meta">2 files · 901.1 KB each</span>
+        <span class="group-reclaim">reclaim 901.1 KB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">1839x2299_9ef5bcb6fc3af245136678570a39b62d.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/1839x2299_9ef5bcb6fc3af245136678570a39b62d.jpg</div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">1839x2299_9ef5bcb6fc3af245136678570a39b62d-1.jpg</div>
+          <div class="file-path"><span class="root">root-2</span>/2023-03 - JPG/1839x2299_9ef5bcb6fc3af245136678570a39b62d-1.jpg</div>
+        </div>
+        <div class="file-right"><span class="identical">identical</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span class="summary" id="summary"></span>
+    <div class="spacer"></div>
+    <button class="btn" id="clearBtn">Clear selection</button>
+    <button class="btn" id="autoBtn" title="Re-apply keeper suggestions">Auto-select</button>
+    <button class="btn danger" id="deleteBtn">Delete…</button>
+  </div>
+
+</div>
+
+<script>
+  // Same behavior as DuplicatesModal.svelte: first copy in each group is the
+  // suggested keeper; the rest are pre-selected for deletion.
+  function sizeOf(group) {
+    return parseFloat(group.querySelector('.group-meta').textContent);
+  }
+  function unitOf(group) {
+    return group.querySelector('.group-meta').textContent.includes('MB') ? 1024 : 1;
+  }
+
+  function updateSummary() {
+    let count = 0, kb = 0;
+    document.querySelectorAll('.group').forEach(g => {
+      const per = sizeOf(g) * unitOf(g);
+      g.querySelectorAll('.file').forEach(f => {
+        const cb = f.querySelector('input[type=checkbox]');
+        f.classList.toggle('marked', cb.checked);
+        if (cb.checked) { count++; kb += per; }
+      });
+    });
+    const size = kb >= 1024 ? (kb/1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
+    document.getElementById('summary').innerHTML =
+      count === 0
+        ? 'Nothing selected'
+        : `<strong>${count} file${count===1?'':'s'}</strong> marked for deletion · <span class="reclaim">reclaim ${size}</span>`;
+    const del = document.getElementById('deleteBtn');
+    del.disabled = count === 0;
+    del.textContent = count === 0 ? 'Delete…' : `Delete ${count} file${count===1?'':'s'}…`;
+  }
+
+  function autoSelect() {
+    document.querySelectorAll('.group').forEach(g => {
+      [...g.querySelectorAll('.file')].forEach((f, i) => {
+        f.querySelector('input[type=checkbox]').checked = i > 0;
+      });
+    });
+    updateSummary();
+  }
+
+  document.querySelectorAll('.file input[type=checkbox]').forEach(cb =>
+    cb.addEventListener('change', updateSummary));
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    document.querySelectorAll('.file input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateSummary();
+  });
+  document.getElementById('autoBtn').addEventListener('click', autoSelect);
+
+  updateSummary();
+</script>
+</body>
+</html>

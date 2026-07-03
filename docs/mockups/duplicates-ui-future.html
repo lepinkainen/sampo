@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampo — Duplicates UI mockup</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #111827;
+    --panel-2: #1f2937;
+    --border: #374151;
+    --border-soft: #273244;
+    --text: #f3f4f6;
+    --text-dim: #9ca3af;
+    --text-faint: #6b7280;
+    --accent: #3b82f6;
+    --accent-soft: rgba(59,130,246,.15);
+    --green: #34d399;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --red: #f87171;
+    --red-soft: rgba(248,113,113,.12);
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ---------- mockup mode switcher (not part of app UI) ---------- */
+  .mock-bar {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 10px;
+    background: #000; border-bottom: 1px dashed var(--border);
+    font-size: 12px; color: var(--text-faint);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .mock-bar button {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 12px; padding: 4px 12px;
+    border-radius: 6px; cursor: pointer;
+  }
+  .mock-bar button.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+
+  /* ---------- stage: backdrop differs per mode ---------- */
+  .stage { padding: 32px 16px; display: flex; justify-content: center; }
+  body.mode-modal .stage {
+    background:
+      radial-gradient(circle at 20% 30%, rgba(59,130,246,.05), transparent 40%),
+      var(--bg);
+  }
+  /* fake app behind the modal */
+  body.mode-modal .stage::before {
+    content: "";
+  }
+
+  /* ---------- shell: shared container, two skins ---------- */
+  .shell {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  body.mode-modal .shell {
+    width: 860px; max-width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.6);
+    max-height: 88vh;
+  }
+  body.mode-full .shell {
+    width: 1200px; max-width: 100%;
+    border-radius: 10px;
+    min-height: 85vh;
+  }
+
+  /* ---------- header ---------- */
+  .shell-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .shell-header h2 { font-size: 16px; font-weight: 600; }
+  .scope {
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    background: var(--panel-2); border: 1px solid var(--border-soft);
+    border-radius: 6px; padding: 3px 8px;
+  }
+  .subtitle { font-size: 12px; color: var(--text-faint); }
+  .spacer { flex: 1; }
+  .icon-btn {
+    background: none; border: none; color: var(--text-faint);
+    font-size: 18px; cursor: pointer; padding: 4px;
+  }
+  .icon-btn:hover { color: var(--text); }
+  /* mode-specific header bits */
+  .only-modal { display: none; } body.mode-modal .only-modal { display: inline-flex; align-items: center; gap: inherit; }
+  .only-full  { display: none; } body.mode-full  .only-full  { display: inline-flex; align-items: center; gap: inherit; }
+  div.only-full { display: none; } body.mode-full div.only-full { display: flex; }
+
+  .root-select {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); font-size: 12px; border-radius: 6px; padding: 4px 8px;
+  }
+
+  /* ---------- stats strip (full mode) ---------- */
+  .stats {
+    gap: 24px; padding: 12px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    background: rgba(0,0,0,.15);
+  }
+  .stat { display: flex; flex-direction: column; }
+  .stat .num { font-size: 18px; font-weight: 700; }
+  .stat .num.green { color: var(--green); }
+  .stat .lbl { font-size: 11px; color: var(--text-faint); }
+
+  /* ---------- toolbar: tabs + threshold + sort ---------- */
+  .toolbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    flex-wrap: wrap;
+  }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    background: none; border: 1px solid transparent; color: var(--text-dim);
+    font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tab .count {
+    font-size: 11px; background: var(--panel-2); border-radius: 999px;
+    padding: 0 6px; color: var(--text-faint);
+  }
+  .tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  .tab.active .count { color: var(--accent); }
+
+  .threshold { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+  .threshold input[type=range] { width: 110px; accent-color: var(--accent); }
+  .threshold .val { font-family: var(--mono); color: var(--text); width: 3.5em; }
+
+  .sort { align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+  .sort select {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); font-size: 12px; border-radius: 6px; padding: 3px 6px;
+  }
+
+  /* ---------- group list (SHARED between modes) ---------- */
+  .groups { overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+
+  .group { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel-2); overflow: hidden; }
+  .group-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 12px; flex-wrap: wrap;
+  }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em; }
+  .badge.exact { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge.similar { background: rgba(167,139,250,.15); color: var(--purple); }
+  .badge.video { background: rgba(251,191,36,.15); color: var(--amber); }
+  .badge.tie { background: rgba(248,113,113,.15); color: var(--red); }
+  .group-hash { font-family: var(--mono); color: var(--text-faint); }
+  .group-meta { color: var(--text-dim); }
+  .group-savings { margin-left: auto; color: var(--green); font-weight: 600; }
+  .keeper-rule { font-size: 11px; color: var(--text-faint); }
+  .keeper-rule b { color: var(--text-dim); font-weight: 600; }
+
+  /* file rows */
+  .file {
+    display: grid;
+    grid-template-columns: 28px 72px 1fr auto;
+    gap: 12px; align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .file:last-child { border-bottom: none; }
+  .file.marked { background: var(--red-soft); }
+  .file input[type=checkbox] { accent-color: var(--red); width: 15px; height: 15px; cursor: pointer; }
+
+  .thumb {
+    width: 72px; height: 54px; border-radius: 6px;
+    background: linear-gradient(135deg, #2b3a55, #1a2233);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; position: relative; flex-shrink: 0;
+  }
+  .thumb .dur {
+    position: absolute; right: 3px; bottom: 3px;
+    background: rgba(0,0,0,.7); font-family: var(--mono); font-size: 10px;
+    padding: 0 4px; border-radius: 3px; color: #fff;
+  }
+  .thumb.v1 { background: linear-gradient(135deg, #3d2b55, #221a33); }
+  .thumb.v2 { background: linear-gradient(135deg, #2b5540, #1a3328); }
+  .thumb.v3 { background: linear-gradient(135deg, #55402b, #33281a); }
+
+  .file-info { min-width: 0; }
+  .file-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-path {
+    font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-path .root { color: var(--accent); }
+  .file-path .here { color: var(--green); font-family: -apple-system, sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .04em; margin-right: 4px; }
+  .file-attrs { display: flex; gap: 10px; font-size: 11px; color: var(--text-dim); margin-top: 2px; flex-wrap: wrap; }
+  .file-attrs .q { color: var(--green); }
+  .file-attrs .q-low { color: var(--amber); }
+
+  .file-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .sim { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+  .sim.s100 { color: var(--green); background: rgba(52,211,153,.12); }
+  .sim.s9x { color: var(--purple); background: rgba(167,139,250,.12); }
+  .sim.s8x { color: var(--amber); background: rgba(251,191,36,.12); }
+  .keep-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: .05em;
+    color: var(--green); border: 1px solid rgba(52,211,153,.4);
+    border-radius: 4px; padding: 0 5px;
+  }
+  .pick-btn {
+    font-size: 10px; letter-spacing: .05em; font-weight: 700;
+    color: var(--text-faint); border: 1px dashed var(--border);
+    background: none; border-radius: 4px; padding: 0 5px; cursor: pointer;
+  }
+  .pick-btn:hover { color: var(--green); border-color: var(--green); }
+
+  /* ---------- footer ---------- */
+  .shell-footer {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border-soft);
+    background: rgba(0,0,0,.15);
+    border-radius: 0 0 12px 12px;
+  }
+  .summary { font-size: 13px; color: var(--text-dim); }
+  .summary strong { color: var(--text); }
+  .summary .reclaim { color: var(--green); font-weight: 600; }
+  .btn {
+    font-size: 13px; padding: 7px 16px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel-2);
+    color: var(--text-dim); cursor: pointer;
+  }
+  .btn:hover { color: var(--text); }
+  .btn.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; font-weight: 600; }
+  .btn.danger:disabled { opacity: .4; cursor: default; }
+
+  .note { max-width: 900px; margin: 20px auto; color: var(--text-faint); font-size: 12px; text-align: center; padding: 0 16px; }
+</style>
+</head>
+<body class="mode-modal">
+
+<div class="mock-bar">
+  mockup mode:
+  <button id="btnModal" class="active">Modal — "does this photoset exist elsewhere?"</button>
+  <button id="btnFull">Full window — library-wide culling</button>
+</div>
+
+<div class="stage">
+<div class="shell">
+
+  <div class="shell-header">
+    <h2>Duplicates</h2>
+
+    <!-- modal mode: scoped to current dir -->
+    <span class="only-modal scope">root-0:/photos/2024/summer</span>
+    <span class="only-modal subtitle">files in this folder that also exist elsewhere</span>
+
+    <!-- full mode: whole-library scope -->
+    <span class="only-full">
+      <select class="root-select">
+        <option>All roots</option>
+        <option>root-0 (photos)</option>
+        <option>root-1 (backup)</option>
+      </select>
+    </span>
+    <span class="only-full subtitle">scanning entire library for duplicate sets</span>
+
+    <div class="spacer"></div>
+    <button class="icon-btn" title="Rescan">&#8635;</button>
+    <button class="icon-btn only-modal" title="Close">&#10005;</button>
+  </div>
+
+  <!-- stats strip: full mode only -->
+  <div class="only-full stats">
+    <div class="stat"><span class="num">5</span><span class="lbl">duplicate sets</span></div>
+    <div class="stat"><span class="num">12</span><span class="lbl">files involved</span></div>
+    <div class="stat"><span class="num green">328 MB</span><span class="lbl">reclaimable</span></div>
+    <div class="stat"><span class="num">1</span><span class="lbl">needs manual pick</span></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="tabs">
+      <button class="tab active" data-filter="all">All <span class="count">5</span></button>
+      <button class="tab" data-filter="exact">Exact <span class="count">2</span></button>
+      <button class="tab" data-filter="similar-image">Similar images <span class="count">2</span></button>
+      <button class="tab" data-filter="similar-video">Similar videos <span class="count">1</span></button>
+    </div>
+    <div class="spacer"></div>
+    <div class="only-full sort">
+      sort <select><option>reclaimable size</option><option>file count</option><option>needs review first</option></select>
+    </div>
+    <div class="threshold">
+      <span>Similarity ≥</span>
+      <input type="range" min="80" max="100" value="88" id="thresh">
+      <span class="val" id="threshVal">88%</span>
+    </div>
+  </div>
+
+  <div class="groups" id="groups">
+
+    <!-- EXACT group: identical images, quality identical -> keep in-scope copy -->
+    <div class="group" data-type="exact" data-sim="100">
+      <div class="group-head">
+        <span class="badge exact">EXACT</span>
+        <span class="group-hash">sha256 a3f81c92e07d44b1…</span>
+        <span class="group-meta">3 files · 4.2 MB each</span>
+        <span class="keeper-rule">bytes identical → keeper: <b>copy in this folder</b></span>
+        <span class="group-savings">reclaim 8.4 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">IMG_2041.jpg</div>
+          <div class="file-path"><span class="here only-modal">HERE</span><span class="root">root-0</span>/photos/2024/summer/IMG_2041.jpg</div>
+          <div class="file-attrs"><span>4.2 MB</span><span>4032×3024</span><span>2024-06-14</span></div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">IMG_2041 copy.jpg</div>
+          <div class="file-path"><span class="root">root-0</span>/photos/2024/exports/IMG_2041 copy.jpg</div>
+          <div class="file-attrs"><span>4.2 MB</span><span>4032×3024</span><span>2024-06-14</span></div>
+        </div>
+        <div class="file-right"><span class="sim s100">identical</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">IMG_2041.jpg</div>
+          <div class="file-path"><span class="root">root-1</span>/backup/photos/IMG_2041.jpg</div>
+          <div class="file-attrs"><span>4.2 MB</span><span>4032×3024</span><span>2024-06-14</span></div>
+        </div>
+        <div class="file-right"><span class="sim s100">identical</span></div>
+      </div>
+    </div>
+
+    <!-- SIMILAR IMAGE group (phash): keeper by resolution -->
+    <div class="group" data-type="similar-image" data-sim="94">
+      <div class="group-head">
+        <span class="badge similar">SIMILAR</span>
+        <span class="group-hash">phash d8e4a2… ±3 bits</span>
+        <span class="group-meta">3 files</span>
+        <span class="keeper-rule">keeper: <b>highest resolution</b></span>
+        <span class="group-savings">reclaim 1.7 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb v1">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">sunset_original.png</div>
+          <div class="file-path"><span class="here only-modal">HERE</span><span class="root">root-0</span>/photos/2024/summer/sunset_original.png</div>
+          <div class="file-attrs"><span>6.1 MB</span><span class="q">4032×3024 ← best</span><span>2024-07-02</span></div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb v1">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">sunset_web.jpg</div>
+          <div class="file-path"><span class="root">root-0</span>/photos/2024/exports/sunset_web.jpg</div>
+          <div class="file-attrs"><span>1.4 MB</span><span class="q-low">1920×1440</span><span>2024-07-02</span></div>
+        </div>
+        <div class="file-right"><span class="sim s9x">96% match</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb v1">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">sunset_thumb.jpg</div>
+          <div class="file-path"><span class="root">root-0</span>/photos/2024/exports/sunset_thumb.jpg</div>
+          <div class="file-attrs"><span>0.3 MB</span><span class="q-low">640×480</span><span>2024-07-02</span></div>
+        </div>
+        <div class="file-right"><span class="sim s9x">94% match</span></div>
+      </div>
+    </div>
+
+    <!-- SIMILAR IMAGE group: quality TIE (same resolution, webp vs png) -> manual pick -->
+    <div class="group" data-type="similar-image" data-sim="98">
+      <div class="group-head">
+        <span class="badge similar">SIMILAR</span>
+        <span class="badge tie">QUALITY TIE</span>
+        <span class="group-hash">phash 9f22c1… ±1 bit</span>
+        <span class="group-meta">2 files · same resolution, different codec</span>
+        <span class="keeper-rule">resolution equal, size unreliable (webp vs png) → <b>manual pick</b></span>
+        <span class="group-savings">up to 13.6 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb v3">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">poster_scan.png</div>
+          <div class="file-path"><span class="root">root-0</span>/photos/scans/poster_scan.png</div>
+          <div class="file-attrs"><span>14.8 MB</span><span>3600×2400</span><span>png · lossless</span><span>2024-02-08</span></div>
+        </div>
+        <div class="file-right"><button class="pick-btn">KEEP THIS</button></div>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb v3">🖼️</div>
+        <div class="file-info">
+          <div class="file-name">poster_scan.webp</div>
+          <div class="file-path"><span class="root">root-1</span>/backup/misc/poster_scan.webp</div>
+          <div class="file-attrs"><span>1.2 MB</span><span>3600×2400</span><span>webp · q92</span><span>2024-02-08</span></div>
+        </div>
+        <div class="file-right"><button class="pick-btn">KEEP THIS</button></div>
+      </div>
+    </div>
+
+    <!-- EXACT group: video -->
+    <div class="group" data-type="exact" data-sim="100">
+      <div class="group-head">
+        <span class="badge exact">EXACT</span>
+        <span class="group-hash">sha256 77b0fe38c1aa92d4…</span>
+        <span class="group-meta">2 files · 218 MB each</span>
+        <span class="keeper-rule">bytes identical → keeper: <b>copy in this folder</b></span>
+        <span class="group-savings">reclaim 218 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb v2">🎬<span class="dur">02:41</span></div>
+        <div class="file-info">
+          <div class="file-name">birthday_party.mp4</div>
+          <div class="file-path"><span class="here only-modal">HERE</span><span class="root">root-0</span>/photos/2024/summer/birthday_party.mp4</div>
+          <div class="file-attrs"><span>218 MB</span><span>1080p · 12 Mbps</span><span>2024-03-11</span></div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb v2">🎬<span class="dur">02:41</span></div>
+        <div class="file-info">
+          <div class="file-name">VID_20240311.mp4</div>
+          <div class="file-path"><span class="root">root-1</span>/backup/camera/VID_20240311.mp4</div>
+          <div class="file-attrs"><span>218 MB</span><span>1080p · 12 Mbps</span><span>2024-03-11</span></div>
+        </div>
+        <div class="file-right"><span class="sim s100">identical</span></div>
+      </div>
+    </div>
+
+    <!-- SIMILAR VIDEO group (future phase): keeper by resolution then bitrate -->
+    <div class="group" data-type="similar-video" data-sim="91">
+      <div class="group-head">
+        <span class="badge similar">SIMILAR</span>
+        <span class="badge video">VIDEO</span>
+        <span class="group-hash">vphash 12 keyframes · ±4 bits avg</span>
+        <span class="group-meta">2 files · same content, different encode</span>
+        <span class="keeper-rule">keeper: <b>highest resolution, then bitrate</b></span>
+        <span class="group-savings">reclaim 96 MB</span>
+      </div>
+      <div class="file">
+        <input type="checkbox">
+        <div class="thumb v2">🎬<span class="dur">01:12</span></div>
+        <div class="file-info">
+          <div class="file-name">concert_4k.mov</div>
+          <div class="file-path"><span class="root">root-0</span>/videos/concert_4k.mov</div>
+          <div class="file-attrs"><span>310 MB</span><span class="q">2160p · 34 Mbps ← best</span><span>2024-08-20</span></div>
+        </div>
+        <div class="file-right"><span class="keep-tag">KEEP</span></div>
+      </div>
+      <div class="file marked">
+        <input type="checkbox" checked>
+        <div class="thumb v2">🎬<span class="dur">01:12</span></div>
+        <div class="file-info">
+          <div class="file-name">concert_shared.mp4</div>
+          <div class="file-path"><span class="root">root-0</span>/videos/exports/concert_shared.mp4</div>
+          <div class="file-attrs"><span>96 MB</span><span class="q-low">1080p · 9 Mbps</span><span>2024-08-20</span></div>
+        </div>
+        <div class="file-right"><span class="sim s9x">91% match</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="shell-footer">
+    <span class="summary" id="summary"></span>
+    <div class="spacer"></div>
+    <button class="btn" id="clearBtn">Clear selection</button>
+    <button class="btn" id="autoBtn" title="Re-apply quality-based keeper suggestions">Auto-select</button>
+    <button class="btn danger" id="deleteBtn">Delete…</button>
+  </div>
+
+</div>
+</div>
+
+<p class="note">
+  Mockup — static data, both modes render the same group-card component.<br>
+  Keeper rules: exact → any copy (prefer in-scope); similar images → highest resolution; similar videos → resolution then bitrate.
+  Filesize never decides quality (webp-vs-png tie case shown). Quality ties get no auto-selection — explicit KEEP THIS pick.
+</p>
+
+<script>
+  // mode switch
+  const btnModal = document.getElementById('btnModal');
+  const btnFull = document.getElementById('btnFull');
+  function setMode(full) {
+    document.body.className = full ? 'mode-full' : 'mode-modal';
+    btnModal.classList.toggle('active', !full);
+    btnFull.classList.toggle('active', full);
+  }
+  btnModal.addEventListener('click', () => setMode(false));
+  btnFull.addEventListener('click', () => setMode(true));
+
+  function fileSizeMB(fileEl) {
+    const t = fileEl.querySelector('.file-attrs span').textContent;
+    const v = parseFloat(t);
+    return t.includes('GB') ? v * 1024 : v;
+  }
+
+  function updateSummary() {
+    let count = 0, mb = 0;
+    document.querySelectorAll('.file').forEach(f => {
+      const cb = f.querySelector('input[type=checkbox]');
+      f.classList.toggle('marked', cb.checked);
+      if (cb.checked) { count++; mb += fileSizeMB(f); }
+    });
+    const size = mb >= 1024 ? (mb/1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB';
+    document.getElementById('summary').innerHTML =
+      count === 0
+        ? 'Nothing selected'
+        : `<strong>${count} file${count===1?'':'s'}</strong> marked for deletion · <span class="reclaim">reclaim ${size}</span>`;
+    const del = document.getElementById('deleteBtn');
+    del.disabled = count === 0;
+    del.textContent = count === 0 ? 'Delete…' : `Delete ${count} file${count===1?'':'s'}…`;
+  }
+
+  document.querySelectorAll('.file input[type=checkbox]').forEach(cb =>
+    cb.addEventListener('change', updateSummary));
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    document.querySelectorAll('.file input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateSummary();
+  });
+
+  // auto-select: mark everything except rows carrying KEEP tag; skip tie groups
+  document.getElementById('autoBtn').addEventListener('click', () => {
+    document.querySelectorAll('.group').forEach(g => {
+      const files = [...g.querySelectorAll('.file')];
+      const hasKeeper = files.some(f => f.querySelector('.keep-tag'));
+      if (!hasKeeper) return; // quality tie: user must pick
+      files.forEach(f => {
+        f.querySelector('input[type=checkbox]').checked = !f.querySelector('.keep-tag');
+      });
+    });
+    updateSummary();
+  });
+
+  // tie groups: KEEP THIS resolves the tie -> mark the other file
+  document.querySelectorAll('.pick-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const group = btn.closest('.group');
+      const chosen = btn.closest('.file');
+      group.querySelectorAll('.file').forEach(f => {
+        f.querySelector('input[type=checkbox]').checked = (f !== chosen);
+      });
+      // swap the button for a KEEP tag on the chosen row
+      group.querySelectorAll('.pick-btn').forEach(b => { b.textContent = 'KEEP THIS'; });
+      btn.textContent = '✓ KEEPING';
+      updateSummary();
+    }));
+
+  // tabs
+  document.querySelectorAll('.tab').forEach(tab =>
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      applyFilters();
+    }));
+
+  // threshold slider — hides similar groups below cutoff
+  const thresh = document.getElementById('thresh');
+  thresh.addEventListener('input', () => {
+    document.getElementById('threshVal').textContent = thresh.value + '%';
+    applyFilters();
+  });
+
+  function applyFilters() {
+    const filter = document.querySelector('.tab.active').dataset.filter;
+    const minSim = parseInt(thresh.value, 10);
+    document.querySelectorAll('.group').forEach(g => {
+      const typeOk = filter === 'all' || g.dataset.type === filter;
+      const simOk = g.dataset.type === 'exact' || parseInt(g.dataset.sim, 10) >= minSim;
+      g.style.display = (typeOk && simOk) ? '' : 'none';
+    });
+  }
+
+  updateSummary();
+</script>
+</body>
+</html>
