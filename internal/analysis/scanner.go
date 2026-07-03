@@ -82,12 +82,6 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 	status := scanstatus.New(rootID, relPath, int64(len(files)))
 	s.status.Store(status)
 
-	if len(files) == 0 {
-		status.Complete()
-		cancel()
-		return nil
-	}
-
 	ch := make(chan scanItem, len(files))
 	for _, f := range files {
 		ch <- f
@@ -95,6 +89,10 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 	close(ch)
 
 	go func() {
+		// Drop cached rows for files that no longer exist before re-analyzing
+		// what does.
+		s.coord.PruneMissing(rootID, root.Path, relPath)
+
 		var wg sync.WaitGroup
 		for range s.workers {
 			wg.Add(1)
@@ -112,6 +110,7 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 		wg.Wait()
 
 		status.Complete()
+		cancel()
 	}()
 
 	return nil

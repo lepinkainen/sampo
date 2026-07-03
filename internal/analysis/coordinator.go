@@ -10,6 +10,7 @@ import (
 	"image"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -144,6 +145,56 @@ func (c *Coordinator) Analyze(ctx context.Context, rootID, relPath, fullPath, me
 		needClassify: cls,
 		needOCR:      ocrN,
 	})
+}
+
+// PruneMissing removes cached analysis rows under relPath whose files no
+// longer exist on disk, so deleted/moved files don't linger in duplicate
+// finding or search. Called by the bulk Scanner at the start of a scan.
+func (c *Coordinator) PruneMissing(rootID, rootPath, relPath string) {
+	if c == nil {
+		return
+	}
+	type analysisStore interface {
+		ListPaths(rootID, dirPath string) ([]string, error)
+		DeletePath(rootID, relPath string) error
+	}
+	stores := map[string]analysisStore{}
+	if c.detectionStore != nil {
+		stores["detection"] = c.detectionStore
+	}
+	if c.classStore != nil {
+		stores["classification"] = c.classStore
+	}
+	if c.ocrStore != nil {
+		stores["ocr"] = c.ocrStore
+	}
+
+	// The stores usually cache the same files, so remember stat results to
+	// avoid re-statting a path for every store.
+	missing := map[string]bool{}
+	for name, store := range stores {
+		paths, err := store.ListPaths(rootID, relPath)
+		if err != nil {
+			c.logger.Error("listing cached paths for prune", "store", name, "error", err)
+			continue
+		}
+		for _, p := range paths {
+			gone, seen := missing[p]
+			if !seen {
+				_, statErr := os.Stat(filepath.Join(rootPath, p))
+				gone = os.IsNotExist(statErr)
+				missing[p] = gone
+			}
+			if !gone {
+				continue
+			}
+			if err := store.DeletePath(rootID, p); err != nil {
+				c.logger.Error("pruning cached result", "store", name, "path", p, "error", err)
+			} else {
+				c.logger.Info("pruned cached result for missing file", "store", name, "rootID", rootID, "path", p)
+			}
+		}
+	}
 }
 
 // EnqueueItem describes a single file to analyze as part of a batch.
