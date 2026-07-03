@@ -42,8 +42,31 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.purgeAnalysisResults(rootID, relPath)
+
 	h.logger.Info("deleted", "rootID", rootID, "path", relPath, "recursive", recursive)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// purgeAnalysisResults drops cached analysis rows (classification/checksums,
+// detection, OCR) for a deleted file or subtree so stale entries don't
+// resurface in duplicate finding or search.
+func (h *Handler) purgeAnalysisResults(rootID, relPath string) {
+	if h.classStore != nil {
+		if err := h.classStore.DeletePath(rootID, relPath); err != nil {
+			h.logger.Error("purging classification results", "error", err, "rootID", rootID, "path", relPath)
+		}
+	}
+	if h.detectionStore != nil {
+		if err := h.detectionStore.DeletePath(rootID, relPath); err != nil {
+			h.logger.Error("purging detection results", "error", err, "rootID", rootID, "path", relPath)
+		}
+	}
+	if h.ocrStore != nil {
+		if err := h.ocrStore.DeletePath(rootID, relPath); err != nil {
+			h.logger.Error("purging ocr results", "error", err, "rootID", rootID, "path", relPath)
+		}
+	}
 }
 
 type fileItem struct {
@@ -135,6 +158,11 @@ func (h *Handler) bulkOp(w http.ResponseWriter, r *http.Request, op string) {
 			hasError = true
 			h.logger.Error(op+" failed", "error", err, "src", srcFull, "dst", dstFull)
 		} else {
+			if op == "move" {
+				// The source path is gone; drop its cached analysis rows so they
+				// don't resurface in duplicate finding or search.
+				h.purgeAnalysisResults(item.SrcRoot, item.SrcPath)
+			}
 			// Return relative destination path
 			res.DstPath = filepath.Base(actualDst)
 			h.logger.Info(op+" completed", "src", item.SrcPath, "dst", actualDst)
