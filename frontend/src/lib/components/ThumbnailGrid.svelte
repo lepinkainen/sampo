@@ -904,6 +904,7 @@ function handleTagFilter(e: Event) {
 		{rootId}
 		{path}
 		onClose={() => (showDuplicates = false)}
+		onDeleted={() => loadDirectory(rootId, path)}
 	/>
 {/if}
 
