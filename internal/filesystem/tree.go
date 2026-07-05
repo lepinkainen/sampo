@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -173,9 +174,6 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 		}
 
 		hasThumb := MediaTypeHasThumb(mediaType)
-		if e.IsDir() {
-			hasThumb = HasImageFile(filepath.Join(dirPath, e.Name()))
-		}
 
 		entry := FileEntry{
 			Name:      e.Name(),
@@ -195,6 +193,23 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 		}
 		result = append(result, entry)
 	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 16)
+	for i := range result {
+		if !result[i].IsDir {
+			continue
+		}
+		wg.Add(1)
+		path := filepath.Join(dirPath, result[i].Name)
+		go func(i int, path string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			result[i].HasThumb = HasImageFile(path)
+		}(i, path)
+	}
+	wg.Wait()
 
 	return result, nil
 }
