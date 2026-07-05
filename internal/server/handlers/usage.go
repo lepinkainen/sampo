@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/sampo/internal/filesystem"
 )
 
 // DiskUsage holds directory size statistics.
@@ -38,11 +42,8 @@ func (h *Handler) GetDiskUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var usage DiskUsage
-	err = filepath.WalkDir(fullPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip entries we can't read
-		}
+	var totalSize, fileCount, dirCount atomic.Int64
+	err = filesystem.WalkDirParallel(r.Context(), fullPath, func(path string, d fs.DirEntry) error {
 		// Skip hidden files/directories
 		if strings.HasPrefix(d.Name(), ".") && path != fullPath {
 			if d.IsDir() {
@@ -52,22 +53,36 @@ func (h *Handler) GetDiskUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		if d.IsDir() {
 			if path != fullPath {
-				usage.DirCount++
+				dirCount.Add(1)
 			}
 			return nil
 		}
-		info, err := d.Info()
-		if err != nil {
+		info, infoErr := d.Info()
+		if infoErr != nil {
 			return nil
 		}
-		usage.FileCount++
-		usage.TotalSize += info.Size()
+		fileCount.Add(1)
+		totalSize.Add(info.Size())
 		return nil
 	})
 	if err != nil {
+		// Client disconnected mid-walk; nobody is listening for a response.
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
 		h.logger.Error("computing disk usage", "error", err, "path", fullPath)
 		http.Error(w, "Failed to compute disk usage", http.StatusInternalServerError)
 		return
+	}
+
+	usage := DiskUsage{
+		TotalSize: totalSize.Load(),
+		FileCount: int(fileCount.Load()),
+		DirCount:  int(dirCount.Load()),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
