@@ -103,7 +103,7 @@ func (h *Handler) StartClassifyScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.classScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil {
+	if err := h.classScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil { //nolint:contextcheck // background scan detaches from the request lifecycle by design
 		h.logger.Error("starting classification scan", "error", err)
 		http.Error(w, "Failed to start scan", http.StatusInternalServerError)
 		return

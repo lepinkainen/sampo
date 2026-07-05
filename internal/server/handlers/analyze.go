@@ -27,7 +27,7 @@ func (h *Handler) StartAnalyzeScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.analysisScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil {
+	if err := h.analysisScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil { //nolint:contextcheck // background scan detaches from the request lifecycle by design
 		h.logger.Error("starting analysis scan", "error", err)
 		http.Error(w, "Failed to start scan", http.StatusInternalServerError)
 		return

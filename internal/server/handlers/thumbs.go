@@ -59,11 +59,11 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	switch mediaType {
 	case "image":
-		err = thumbnail.GenerateImageThumbnail(fullPath, dstPath)
+		err = thumbnail.GenerateImageThumbnail(r.Context(), fullPath, dstPath)
 	case "video":
-		err = thumbnail.GenerateVideoThumbnail(fullPath, dstPath)
+		err = thumbnail.GenerateVideoThumbnail(r.Context(), fullPath, dstPath)
 	case "pdf":
-		err = thumbnail.GeneratePdfThumbnail(fullPath, dstPath)
+		err = thumbnail.GeneratePdfThumbnail(r.Context(), fullPath, dstPath)
 	default:
 		http.Error(w, "No thumbnail available", http.StatusNotFound)
 		return
@@ -87,7 +87,7 @@ func (h *Handler) serveDirThumbnail(w http.ResponseWriter, r *http.Request, root
 		return
 	}
 
-	thumbPath, err := thumbnail.FindFirstCachedOrGenerate(images, rootID, h.thumbCache)
+	thumbPath, err := thumbnail.FindFirstCachedOrGenerate(r.Context(), images, rootID, h.thumbCache)
 	if err != nil {
 		if errors.Is(err, thumbnail.ErrNoImages) {
 			http.Error(w, "No thumbnail available", http.StatusNotFound)

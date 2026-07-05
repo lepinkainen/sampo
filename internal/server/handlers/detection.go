@@ -102,7 +102,7 @@ func (h *Handler) StartScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.scanner.ScanDirectory(req.RootID, req.Path); err != nil {
+	if err := h.scanner.ScanDirectory(req.RootID, req.Path); err != nil { //nolint:contextcheck // background scan detaches from the request lifecycle by design
 		h.logger.Error("starting scan", "error", err)
 		http.Error(w, "Failed to start scan", http.StatusInternalServerError)
 		return

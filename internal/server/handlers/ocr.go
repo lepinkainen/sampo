@@ -115,7 +115,7 @@ func (h *Handler) StartOCRScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ocrScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil {
+	if err := h.ocrScanner.ScanDirectory(req.RootID, req.Path, req.Force); err != nil { //nolint:contextcheck // background scan detaches from the request lifecycle by design
 		h.logger.Error("starting ocr scan", "error", err)
 		http.Error(w, "Failed to start scan", http.StatusInternalServerError)
 		return
