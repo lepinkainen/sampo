@@ -19,10 +19,13 @@ type Store struct {
 // NewStore opens or creates the classification database.
 func NewStore(cacheDir string) (*Store, error) {
 	dbPath := filepath.Join(cacheDir, "classification.db")
-	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=ON")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("opening classification db: %w", err)
 	}
+	// SQLite allows only one writer; a single connection serializes writes
+	// in-process instead of failing with SQLITE_BUSY under concurrent Puts.
+	db.SetMaxOpenConns(1)
 
 	if err := migrate(db); err != nil {
 		_ = db.Close()
