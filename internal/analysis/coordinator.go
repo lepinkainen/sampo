@@ -147,6 +147,27 @@ func (c *Coordinator) Analyze(ctx context.Context, rootID, relPath, fullPath, me
 	})
 }
 
+func (c *Coordinator) deleteCachedPath(rootID, relPath string) {
+	type deletionStore interface {
+		DeletePath(rootID, relPath string) error
+	}
+	stores := map[string]deletionStore{}
+	if c.detectionStore != nil {
+		stores["detection"] = c.detectionStore
+	}
+	if c.classStore != nil {
+		stores["classification"] = c.classStore
+	}
+	if c.ocrStore != nil {
+		stores["ocr"] = c.ocrStore
+	}
+	for name, store := range stores {
+		if err := store.DeletePath(rootID, relPath); err != nil {
+			c.logger.Error("purging cached analysis result", "store", name, "rootID", rootID, "path", relPath, "error", err)
+		}
+	}
+}
+
 // PruneMissing removes cached analysis rows under relPath whose files no
 // longer exist on disk, so deleted/moved files don't linger in duplicate
 // finding or search. Called by the bulk Scanner at the start of a scan.
@@ -392,7 +413,12 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 	// Load once, share across every analyzer (the "same byte-level file").
 	img, sha256Hex, crc32Hex, err := loadImage(analyzePath)
 	if err != nil {
-		c.logger.Warn("browse analysis image load failed", "path", j.relPath, "error", err)
+		if os.IsNotExist(err) {
+			c.deleteCachedPath(j.rootID, j.relPath)
+			c.logger.Info("browse analysis skipped missing file; pruned cached results", "path", j.relPath)
+		} else {
+			c.logger.Warn("browse analysis image load failed", "path", j.relPath, "error", err)
+		}
 		return
 	}
 

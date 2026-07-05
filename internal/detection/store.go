@@ -134,6 +134,39 @@ func escapeLike(s string) string {
 	return s
 }
 
+// pathVariants returns both cache-key spellings used by older and newer callers.
+// Some rows were written with a leading slash from FileEntry.Path, while tests
+// and some direct scanners use root-relative paths without one.
+func pathVariants(relPath string) []string {
+	trimmed := strings.Trim(relPath, "/")
+	if trimmed == "" {
+		return nil
+	}
+	return []string{trimmed, "/" + trimmed}
+}
+
+type scopedPathMatch struct {
+	first        string
+	firstPrefix  string
+	second       string
+	secondPrefix string
+	ok           bool
+}
+
+func newScopedPathMatch(relPath string) scopedPathMatch {
+	variants := pathVariants(relPath)
+	if len(variants) == 0 {
+		return scopedPathMatch{}
+	}
+	return scopedPathMatch{
+		first:        variants[0],
+		firstPrefix:  escapeLike(dirPrefix(variants[0])) + "%",
+		second:       variants[1],
+		secondPrefix: escapeLike(dirPrefix(variants[1])) + "%",
+		ok:           true,
+	}
+}
+
 // DirStatus returns the count of scanned and total-with-person files in a directory.
 type DirStatus struct {
 	Scanned   int `json:"scanned"`
@@ -200,11 +233,25 @@ func (s *Store) GetDetection(rootID, relPath string) (bool, error) {
 
 // ListPaths returns every stored rel_path under a directory (recursive).
 func (s *Store) ListPaths(rootID, dirPath string) ([]string, error) {
-	prefix := dirPrefix(dirPath)
-	rows, err := s.db.Query(
-		`SELECT rel_path FROM detections WHERE root_id = ? AND rel_path LIKE ? ESCAPE '\'`,
-		rootID, escapeLike(prefix)+"%",
-	)
+	match := newScopedPathMatch(dirPath)
+	var rows *sql.Rows
+	var err error
+	if match.ok {
+		rows, err = s.db.Query(
+			`SELECT rel_path FROM detections
+			 WHERE root_id = ? AND (
+			   (rel_path = ? OR rel_path LIKE ? ESCAPE '\') OR
+			   (rel_path = ? OR rel_path LIKE ? ESCAPE '\')
+			 )
+			 ORDER BY rel_path`,
+			rootID, match.first, match.firstPrefix, match.second, match.secondPrefix,
+		)
+	} else {
+		rows, err = s.db.Query(
+			`SELECT rel_path FROM detections WHERE root_id = ? ORDER BY rel_path`,
+			rootID,
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("listing paths: %w", err)
 	}
@@ -224,14 +271,17 @@ func (s *Store) ListPaths(rootID, dirPath string) ([]string, error) {
 // DeletePath removes cached results for a file, or for a whole subtree when
 // the path is a directory (prefix match on rel_path).
 func (s *Store) DeletePath(rootID, relPath string) error {
-	relPath = strings.Trim(relPath, "/")
-	if relPath == "" {
+	match := newScopedPathMatch(relPath)
+	if !match.ok {
 		return errors.New("refusing to delete root path")
 	}
-	prefix := dirPrefix(relPath)
 	_, err := s.db.Exec(
-		`DELETE FROM detections WHERE root_id = ? AND (rel_path = ? OR rel_path LIKE ? ESCAPE '\')`,
-		rootID, relPath, escapeLike(prefix)+"%",
+		`DELETE FROM detections
+		 WHERE root_id = ? AND (
+		   (rel_path = ? OR rel_path LIKE ? ESCAPE '\') OR
+		   (rel_path = ? OR rel_path LIKE ? ESCAPE '\')
+		 )`,
+		rootID, match.first, match.firstPrefix, match.second, match.secondPrefix,
 	)
 	if err != nil {
 		return fmt.Errorf("deleting detections: %w", err)

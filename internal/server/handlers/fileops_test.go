@@ -139,6 +139,25 @@ func TestDeleteFile_PurgesAnalysisResults(t *testing.T) {
 	}
 }
 
+func TestDeleteFile_MissingTargetPurgesAnalysisResults(t *testing.T) {
+	h, classStore, ocrStore, dir := setupDeleteTest(t)
+
+	if err := os.Remove(filepath.Join(dir, "photos/copy.jpg")); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := doDelete(h, "/api/files/root-0/photos/copy.jpg")
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want 204: %s", rr.Code, rr.Body.String())
+	}
+	if got, err := classStore.Get("root-0", "photos/copy.jpg"); err != nil || got != nil {
+		t.Fatalf("classification after missing delete = %v, %v; want pruned", got, err)
+	}
+	if text, _ := ocrStore.GetText("root-0", "photos/copy.jpg"); text != "" {
+		t.Fatalf("ocr text after missing delete = %q, want empty", text)
+	}
+}
+
 func TestDeleteFile_RecursivePurgesSubtree(t *testing.T) {
 	h, classStore, _, dir := setupDeleteTest(t)
 

@@ -53,6 +53,7 @@ func putDetection(t *testing.T, store *Store, relPath string) {
 func TestStoreDeletePath(t *testing.T) {
 	store := newTestStore(t)
 	putDetection(t, store, "album/a.jpg")
+	putDetection(t, store, "/album/leading.jpg")
 	putDetection(t, store, "album/sub/b.jpg")
 	putDetection(t, store, "other.jpg")
 
@@ -61,6 +62,12 @@ func TestStoreDeletePath(t *testing.T) {
 	}
 	if _, err := store.GetDetection("root-0", "album/a.jpg"); err == nil {
 		t.Fatal("detection should be gone after delete")
+	}
+	if err := store.DeletePath("root-0", "album/leading.jpg"); err != nil {
+		t.Fatalf("DeletePath leading stored row: %v", err)
+	}
+	if _, err := store.GetDetection("root-0", "/album/leading.jpg"); err == nil {
+		t.Fatal("leading-slash detection should be gone after delete")
 	}
 
 	// Subtree delete.

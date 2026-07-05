@@ -161,12 +161,19 @@ func TestStoreDeletePathNormalizesLeadingSlash(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	putFile(t, store, "images/a.jpg", "h1")
+	putFile(t, store, "/images/b.jpg", "h2")
 
 	if err := store.DeletePath("root-0", "/images/a.jpg"); err != nil {
 		t.Fatalf("DeletePath: %v", err)
 	}
 	if got, err := store.Get("root-0", "images/a.jpg"); err != nil || got != nil {
 		t.Fatalf("row should be gone after leading-slash delete: %v, %v", got, err)
+	}
+	if err := store.DeletePath("root-0", "images/b.jpg"); err != nil {
+		t.Fatalf("DeletePath leading stored row: %v", err)
+	}
+	if got, err := store.Get("root-0", "/images/b.jpg"); err != nil || got != nil {
+		t.Fatalf("leading-slash row should be gone after delete: %v, %v", got, err)
 	}
 }
 

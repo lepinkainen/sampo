@@ -37,6 +37,12 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	recursive := r.URL.Query().Get("recursive") == "true"
 
 	if err := filesystem.Delete(fullPath, recursive); err != nil {
+		if os.IsNotExist(err) {
+			h.purgeAnalysisResults(rootID, relPath)
+			h.logger.Info("delete target missing; purged cached analysis", "rootID", rootID, "path", relPath)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		h.logger.Error("deleting file", "error", err, "path", fullPath)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
