@@ -438,14 +438,31 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 		}
 	}()
 
-	// Decode each frame once and run every analyzer on it, then aggregate.
+	// Decode all frames in parallel (read + JPEG decode is the parallelizable
+	// part; the analyzers below serialize on ONNX session mutexes anyway).
+	frameImgs := make([]image.Image, len(framePaths))
+	var wg sync.WaitGroup
+	for i, fp := range framePaths {
+		wg.Add(1)
+		go func(i int, fp string) {
+			defer wg.Done()
+			img, _, _, loadErr := loadImage(fp)
+			if loadErr != nil {
+				c.logger.Debug("browse analysis frame load failed", "path", j.relPath, "frame", fp, "error", loadErr)
+				return
+			}
+			frameImgs[i] = img
+		}(i, fp)
+	}
+	wg.Wait()
+
+	// Run every analyzer on each decoded frame in order, then aggregate.
 	var detResults []*detection.Result
 	var clsResults []*classification.Result
 	var ocrResults []*ocr.Result
-	for _, fp := range framePaths {
-		img, _, _, loadErr := loadImage(fp)
-		if loadErr != nil {
-			c.logger.Debug("browse analysis frame load failed", "path", j.relPath, "frame", fp, "error", loadErr)
+	for i, fp := range framePaths {
+		img := frameImgs[i]
+		if img == nil {
 			continue
 		}
 

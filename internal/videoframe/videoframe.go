@@ -8,7 +8,48 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
+
+// extractConcurrency bounds parallel ffmpeg frame extractions per video.
+const extractConcurrency = 4
+
+// ffmpegSem bounds ffmpeg frame extractions process-wide. Extractions come
+// from thumbnail tiles, analysis scans, and single-file handlers at once;
+// without a global bound N concurrent requests spawn N×4 ffmpeg processes.
+var ffmpegSem = make(chan struct{}, extractConcurrency)
+
+// ExtractFrameAt runs ffmpeg to extract a single frame at the given position
+// (in seconds) from videoPath into dstPath. Concurrency is bounded
+// process-wide; on failure the destination file is removed.
+func ExtractFrameAt(ctx context.Context, videoPath, dstPath string, seconds float64) error {
+	select {
+	case ffmpegSem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-ffmpegSem }()
+
+	args := []string{
+		"-ss", fmt.Sprintf("%.2f", seconds),
+		"-i", videoPath,
+		"-vframes", "1",
+		"-f", "mjpeg",
+		"-y",
+		dstPath,
+	}
+
+	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, "ffmpeg", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		_ = os.Remove(dstPath)
+		return fmt.Errorf("ffmpeg failed: %w\noutput: %s", err, output)
+	}
+	return nil
+}
 
 // ExtractFrame extracts a single full-resolution frame from a video file at
 // approximately 10% of its duration. The dir parameter controls where the
@@ -30,24 +71,8 @@ func ExtractFrame(ctx context.Context, dir, videoPath string) (framePath string,
 	}
 	_ = tmp.Close()
 
-	seekPos := SeekPosition(ctx, videoPath)
-
-	args := []string{
-		"-ss", seekPos,
-		"-i", videoPath,
-		"-vframes", "1",
-		"-f", "mjpeg",
-		"-y",
-		tmp.Name(),
-	}
-
-	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "ffmpeg", args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		_ = os.Remove(tmp.Name())
-		return "", nil, fmt.Errorf("ffmpeg failed: %w\noutput: %s", err, output)
+	if err := ExtractFrameAt(ctx, videoPath, tmp.Name(), seekPositionSeconds(ctx, videoPath)); err != nil {
+		return "", nil, err
 	}
 
 	cleanup = func() error { return os.Remove(tmp.Name()) }
@@ -82,12 +107,27 @@ func SeekPosition(ctx context.Context, videoPath string) string {
 	if err != nil || duration <= 0 {
 		return "1"
 	}
+	return strconv.FormatFloat(seekFraction(duration), 'f', 2, 64)
+}
 
+// seekPositionSeconds probes video duration and returns a position at ~10%,
+// falling back to 1s if probing fails.
+func seekPositionSeconds(ctx context.Context, videoPath string) float64 {
+	duration, err := ProbeDuration(ctx, videoPath)
+	if err != nil || duration <= 0 {
+		return 1
+	}
+	return seekFraction(duration)
+}
+
+// seekFraction returns a seek position at ~10% of duration, snapping to the
+// start for very short videos.
+func seekFraction(duration float64) float64 {
 	seek := duration * 0.1
 	if seek < 1 {
-		seek = 0
+		return 0
 	}
-	return strconv.FormatFloat(seek, 'f', 2, 64)
+	return seek
 }
 
 // EvenlySpacedPositions returns count timestamps evenly distributed across the
@@ -126,31 +166,35 @@ func ExtractFrames(ctx context.Context, dir, videoPath string, count int) (frame
 	duration, _ := ProbeDuration(ctx, videoPath)
 	positions := EvenlySpacedPositions(duration, count)
 
-	var paths []string
+	// Extract frames concurrently — each position is an independent ffmpeg
+	// run. Index-addressed slots keep frame order deterministic for callers
+	// that aggregate per-frame results. The limit bounds both ffmpeg
+	// processes and concurrent readers of the same file on network mounts.
+	slots := make([]string, len(positions))
+	var g errgroup.Group
+	g.SetLimit(extractConcurrency)
 	for i, pos := range positions {
-		tmp, tmpErr := os.CreateTemp(dir, fmt.Sprintf("videoframe-%d-*.jpg", i))
-		if tmpErr != nil {
-			continue
-		}
-		_ = tmp.Close()
+		g.Go(func() error {
+			tmp, tmpErr := os.CreateTemp(dir, fmt.Sprintf("videoframe-%d-*.jpg", i))
+			if tmpErr != nil {
+				return nil
+			}
+			_ = tmp.Close()
 
-		args := []string{
-			"-ss", fmt.Sprintf("%.2f", pos),
-			"-i", videoPath,
-			"-vframes", "1",
-			"-f", "mjpeg",
-			"-y",
-			tmp.Name(),
+			if runErr := ExtractFrameAt(ctx, videoPath, tmp.Name(), pos); runErr != nil {
+				return nil
+			}
+			slots[i] = tmp.Name()
+			return nil
+		})
+	}
+	_ = g.Wait() // goroutines never return errors; failed frames leave empty slots
+
+	paths := make([]string, 0, len(slots))
+	for _, p := range slots {
+		if p != "" {
+			paths = append(paths, p)
 		}
-		cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		cmd := exec.CommandContext(cmdCtx, "ffmpeg", args...)
-		_, runErr := cmd.CombinedOutput()
-		cancel()
-		if runErr != nil {
-			_ = os.Remove(tmp.Name())
-			continue
-		}
-		paths = append(paths, tmp.Name())
 	}
 
 	if len(paths) == 0 {

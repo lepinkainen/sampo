@@ -39,7 +39,7 @@ func TestGenerateVideoThumbnail(t *testing.T) {
 	dstDir := t.TempDir()
 	dstPath := filepath.Join(dstDir, "thumb.jpg")
 
-	if err := GenerateVideoThumbnail(srcPath, dstPath); err != nil {
+	if err := GenerateVideoThumbnail(t.Context(), srcPath, dstPath); err != nil {
 		t.Fatalf("GenerateVideoThumbnail failed: %v", err)
 	}
 
