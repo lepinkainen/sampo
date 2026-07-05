@@ -50,7 +50,7 @@ startxref
 	dstDir := t.TempDir()
 	dstPath := filepath.Join(dstDir, "thumb.jpg")
 
-	if err := GeneratePdfThumbnail(srcPath, dstPath); err != nil {
+	if err := GeneratePdfThumbnail(t.Context(), srcPath, dstPath); err != nil {
 		t.Fatalf("GeneratePdfThumbnail failed: %v", err)
 	}
 

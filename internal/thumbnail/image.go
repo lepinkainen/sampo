@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"context"
 	"fmt"
 	"image/jpeg"
 	"os"
@@ -12,8 +13,14 @@ import (
 
 const thumbSize = 300
 
-// GenerateImageThumbnail creates a thumbnail for an image file.
-func GenerateImageThumbnail(srcPath, dstPath string) error {
+// GenerateImageThumbnail creates a thumbnail for an image file. The imaging
+// operations themselves are not cancellable, so ctx is only checked before
+// the decode/resize work starts.
+func GenerateImageThumbnail(ctx context.Context, srcPath, dstPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// imaging.Open handles JPEG, PNG, GIF, BMP, TIFF natively; WebP via golang.org/x/image/webp import
 	src, err := imaging.Open(srcPath)
 	if err != nil {

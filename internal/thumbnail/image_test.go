@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"context"
 	"image"
 	"image/color"
 	"image/png"
@@ -37,7 +38,7 @@ func TestGenerateImageThumbnail_PNG(t *testing.T) {
 	dstDir := t.TempDir()
 	dstPath := filepath.Join(dstDir, "thumb.jpg")
 
-	if err := GenerateImageThumbnail(srcPath, dstPath); err != nil {
+	if err := GenerateImageThumbnail(context.Background(), srcPath, dstPath); err != nil {
 		t.Fatalf("GenerateImageThumbnail failed: %v", err)
 	}
 
@@ -69,7 +70,7 @@ func TestGenerateImageThumbnail_WebP(t *testing.T) {
 	dstDir := t.TempDir()
 	dstPath := filepath.Join(dstDir, "thumb.jpg")
 
-	if err := GenerateImageThumbnail(webpPath, dstPath); err != nil {
+	if err := GenerateImageThumbnail(context.Background(), webpPath, dstPath); err != nil {
 		t.Fatalf("GenerateImageThumbnail failed for WebP: %v", err)
 	}
 

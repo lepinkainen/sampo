@@ -1,6 +1,7 @@
 package thumbnail
 
 import (
+	"context"
 	"errors"
 
 	"github.com/lepinkainen/sampo/internal/filesystem"
@@ -12,7 +13,7 @@ var ErrNoImages = errors.New("no image files in directory")
 // FindFirstCachedOrGenerate returns the JPEG path for a directory thumbnail.
 // It first looks for an already-cached thumbnail (iterating entries in order),
 // then generates one for the first entry if nothing is cached.
-func FindFirstCachedOrGenerate(entries []filesystem.ImageEntry, rootID string, cache *Cache) (string, error) {
+func FindFirstCachedOrGenerate(ctx context.Context, entries []filesystem.ImageEntry, rootID string, cache *Cache) (string, error) {
 	if len(entries) == 0 {
 		return "", ErrNoImages
 	}
@@ -32,7 +33,7 @@ func FindFirstCachedOrGenerate(entries []filesystem.ImageEntry, rootID string, c
 		return "", err
 	}
 	dstPath := cache.Path(rootID, key)
-	if err := GenerateImageThumbnail(first.AbsPath, dstPath); err != nil {
+	if err := GenerateImageThumbnail(ctx, first.AbsPath, dstPath); err != nil {
 		return "", err
 	}
 	return dstPath, nil

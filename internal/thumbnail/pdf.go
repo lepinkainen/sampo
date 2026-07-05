@@ -14,7 +14,8 @@ import (
 )
 
 // GeneratePdfThumbnail creates a thumbnail for the first page of a PDF file.
-func GeneratePdfThumbnail(srcPath, dstPath string) error {
+// Cancelling ctx aborts the external converter process.
+func GeneratePdfThumbnail(ctx context.Context, srcPath, dstPath string) error {
 	// Create a temp directory for the extracted page image
 	tempDir, err := os.MkdirTemp("", "sampo-pdf-thumb-*")
 	if err != nil {
@@ -23,7 +24,7 @@ func GeneratePdfThumbnail(srcPath, dstPath string) error {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// Try pdftoppm first (standard in Linux/Docker poppler-utils)
