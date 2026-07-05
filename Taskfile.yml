@@ -173,9 +173,8 @@ tasks:
       - ./scripts/devctl logs
 
   dev-go:
-    desc: Start Go development server
-    cmds:
-      - go run ./cmd/sampo
+    desc: Start Go development server (auto-rebuilds/restarts on .go changes via air)
+    cmd: air
 
   dev-frontend:
     desc: Start frontend dev server
