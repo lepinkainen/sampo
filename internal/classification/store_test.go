@@ -1,7 +1,9 @@
 package classification
 
 import (
+	"fmt"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -181,6 +183,74 @@ func putFile(t *testing.T, store *Store, relPath, sha string) {
 		Tags:      []TagScore{{Label: "tag", Score: 0.9}},
 	}); err != nil {
 		t.Fatalf("Put %s: %v", relPath, err)
+	}
+}
+
+func TestStorePragmasApplied(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	var journalMode string
+	if err := store.db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("querying journal_mode: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Errorf("journal_mode = %q, want wal (DSN pragma not applied)", journalMode)
+	}
+
+	var busyTimeout int
+	if err := store.db.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("querying busy_timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Errorf("busy_timeout = %d, want 5000 (DSN pragma not applied)", busyTimeout)
+	}
+
+	var foreignKeys int
+	if err := store.db.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatalf("querying foreign_keys: %v", err)
+	}
+	if foreignKeys != 1 {
+		t.Errorf("foreign_keys = %d, want 1 (DSN pragma not applied)", foreignKeys)
+	}
+}
+
+func TestStoreConcurrentPutsDoNotReturnBusy(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	const writers = 20
+	const putsPerWriter = 5
+	errs := make(chan error, writers*putsPerWriter)
+	var wg sync.WaitGroup
+	for w := range writers {
+		wg.Go(func() {
+			for p := range putsPerWriter {
+				errs <- store.Put(&Result{
+					RootID:    "root-0",
+					RelPath:   fmt.Sprintf("images/w%d-p%d.jpg", w, p),
+					Mtime:     1,
+					Size:      1,
+					ModelVer:  "test-model",
+					ScannedAt: time.Now().UTC(),
+					Tags:      []TagScore{{Label: "a", Score: 0.9}, {Label: "b", Score: 0.8}},
+				})
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent Put: %v", err)
+		}
 	}
 }
 
