@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -129,21 +128,35 @@ func ImageFilesInDir(dirPath, relBase string) ([]ImageEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	var result []ImageEntry
+	visible := make([]os.DirEntry, 0, len(entries))
 	for _, e := range entries {
-		if !isVisibleImage(e) {
-			continue
+		if isVisibleImage(e) {
+			visible = append(visible, e)
 		}
+	}
+
+	// Stat entries in parallel; index-addressed slots keep ReadDir's lexical
+	// order, entries whose Info fails leave a hole that is compacted below.
+	slots := make([]*ImageEntry, len(visible))
+	forEachLimit(len(visible), func(i int) {
+		e := visible[i]
 		info, err := e.Info()
 		if err != nil {
-			continue
+			return
 		}
-		result = append(result, ImageEntry{
+		slots[i] = &ImageEntry{
 			AbsPath: filepath.Join(dirPath, e.Name()),
 			RelPath: filepath.Join(relBase, e.Name()),
 			ModTime: info.ModTime().Unix(),
 			Size:    info.Size(),
-		})
+		}
+	})
+
+	var result []ImageEntry
+	for _, s := range slots {
+		if s != nil {
+			result = append(result, *s)
+		}
 	}
 	return result, nil
 }
@@ -155,16 +168,26 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 		return nil, err
 	}
 
-	result := make([]FileEntry, 0, len(entries))
+	visible := make([]os.DirEntry, 0, len(entries))
 	for _, e := range entries {
 		// Skip hidden files
 		if strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
+		visible = append(visible, e)
+	}
 
+	// Per-entry I/O (stat, and for directories a thumbnail probe) runs in
+	// parallel with bounded concurrency — on network mounts each call is a
+	// round-trip, so this is the hot path when browsing large directories.
+	// Index-addressed slots keep ReadDir's lexical order; entries whose
+	// Info fails leave a hole that is compacted below.
+	slots := make([]*FileEntry, len(visible))
+	forEachLimit(len(visible), func(i int) {
+		e := visible[i]
 		info, err := e.Info()
 		if err != nil {
-			continue
+			return
 		}
 
 		relPath := filepath.Join(relBase, e.Name())
@@ -174,6 +197,9 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 		}
 
 		hasThumb := MediaTypeHasThumb(mediaType)
+		if e.IsDir() {
+			hasThumb = HasImageFile(filepath.Join(dirPath, e.Name()))
+		}
 
 		entry := FileEntry{
 			Name:      e.Name(),
@@ -191,25 +217,14 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 				entry.CRC32 = &crc
 			}
 		}
-		result = append(result, entry)
-	}
+		slots[i] = &entry
+	})
 
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 16)
-	for i := range result {
-		if !result[i].IsDir {
-			continue
+	result := make([]FileEntry, 0, len(visible))
+	for _, s := range slots {
+		if s != nil {
+			result = append(result, *s)
 		}
-		wg.Add(1)
-		path := filepath.Join(dirPath, result[i].Name)
-		go func(i int, path string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			result[i].HasThumb = HasImageFile(path)
-		}(i, path)
 	}
-	wg.Wait()
-
 	return result, nil
 }

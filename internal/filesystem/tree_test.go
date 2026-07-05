@@ -89,3 +89,51 @@ func TestListDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestListDirectoryOrderAndAttributes(t *testing.T) {
+	dir := t.TempDir()
+	// Create out-of-order to verify listing is lexical regardless.
+	names := []string{"zebra.txt", "apple.jpg", "mango", "banana.mp4"}
+	os.MkdirAll(filepath.Join(dir, "mango"), 0o755)
+	os.WriteFile(filepath.Join(dir, "mango", "pic.jpg"), []byte("img"), 0o644)
+	for _, n := range names {
+		if n == "mango" {
+			continue
+		}
+		os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644)
+	}
+
+	entries, err := ListDirectory(dir, "/")
+	if err != nil {
+		t.Fatalf("ListDirectory failed: %v", err)
+	}
+
+	want := []string{"apple.jpg", "banana.mp4", "mango", "zebra.txt"}
+	if len(entries) != len(want) {
+		t.Fatalf("expected %d entries, got %d", len(want), len(entries))
+	}
+	for i, n := range want {
+		if entries[i].Name != n {
+			t.Errorf("entry %d: got %q, want %q (lexical order)", i, entries[i].Name, n)
+		}
+	}
+
+	for _, e := range entries {
+		switch e.Name {
+		case "zebra.txt":
+			if e.Size != int64(len("zebra.txt")) {
+				t.Errorf("zebra.txt size = %d", e.Size)
+			}
+			if e.ModTime.IsZero() {
+				t.Error("zebra.txt modTime not populated")
+			}
+		case "mango":
+			if !e.IsDir {
+				t.Error("mango should be a directory")
+			}
+			if !e.HasThumb {
+				t.Error("mango contains an image, HasThumb should be true")
+			}
+		}
+	}
+}
