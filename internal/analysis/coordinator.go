@@ -48,16 +48,26 @@ type Coordinator struct {
 }
 
 type job struct {
-	key          string
-	rootID       string
-	relPath      string
-	fullPath     string
-	mediaType    string
-	mtime        int64
-	size         int64
-	needDetect   bool
-	needClassify bool
-	needOCR      bool
+	key       string
+	rootID    string
+	relPath   string
+	fullPath  string
+	mediaType string
+	mtime     int64
+	size      int64
+	needs     needSet
+}
+
+// needSet marks which analyzers must run for a file.
+type needSet struct {
+	detect   bool
+	classify bool
+	ocr      bool
+	phash    bool
+}
+
+func (n needSet) any() bool {
+	return n.detect || n.classify || n.ocr || n.phash
 }
 
 // Status reports current browse-analysis activity.
@@ -112,17 +122,25 @@ func NewCoordinator(
 
 // needs reports which enabled analyzers must run for a file. When force is true,
 // every enabled analyzer runs; otherwise only those with stale cached results.
-func (c *Coordinator) needs(rootID, relPath string, mtime, size int64, force bool) (det, cls, ocrN bool) {
+func (c *Coordinator) needs(rootID, relPath, mediaType string, mtime, size int64, force bool) needSet {
+	var n needSet
 	if c.detectionStore != nil && c.detector != nil {
-		det = force || c.detectionStore.IsStale(rootID, relPath, mtime, size)
+		n.detect = force || c.detectionStore.IsStale(rootID, relPath, mtime, size)
 	}
 	if c.classStore != nil && c.classifier != nil {
-		cls = force || c.classStore.IsStale(rootID, relPath, mtime, size, c.classifier.ModelVersion())
+		n.classify = force || c.classStore.IsStale(rootID, relPath, mtime, size, c.classifier.ModelVersion())
 	}
 	if c.ocrStore != nil && c.recognizer != nil {
-		ocrN = force || c.ocrStore.IsStale(rootID, relPath, mtime, size, c.recognizer.ModelVersion())
+		n.ocr = force || c.ocrStore.IsStale(rootID, relPath, mtime, size, c.recognizer.ModelVersion())
 	}
-	return det, cls, ocrN
+	// Perceptual hash rides along with classification (the classify Put
+	// persists it); the standalone check backfills legacy NULL-phash rows
+	// with a decode-only job. Videos never set phash — theirs stays NULL
+	// (frames are temporary), so checking them would re-queue forever.
+	if c.classStore != nil && mediaType == "image" {
+		n.phash = n.classify || force || c.classStore.NeedsPHash(rootID, relPath)
+	}
+	return n
 }
 
 // Analyze runs all needed analyzers for a single file synchronously, loading the
@@ -131,20 +149,18 @@ func (c *Coordinator) Analyze(ctx context.Context, rootID, relPath, fullPath, me
 	if c == nil {
 		return
 	}
-	det, cls, ocrN := c.needs(rootID, relPath, mtime, size, force)
-	if !det && !cls && !ocrN {
+	n := c.needs(rootID, relPath, mediaType, mtime, size, force)
+	if !n.any() {
 		return
 	}
 	c.process(ctx, job{
-		rootID:       rootID,
-		relPath:      relPath,
-		fullPath:     fullPath,
-		mediaType:    mediaType,
-		mtime:        mtime,
-		size:         size,
-		needDetect:   det,
-		needClassify: cls,
-		needOCR:      ocrN,
+		rootID:    rootID,
+		relPath:   relPath,
+		fullPath:  fullPath,
+		mediaType: mediaType,
+		mtime:     mtime,
+		size:      size,
+		needs:     n,
 	})
 }
 
@@ -244,29 +260,29 @@ func (c *Coordinator) WantsMedia(mediaType string) bool {
 // duplicate job. ok is false when the file is already pending or nothing needs
 // running; when ok is true the caller owns the pending slot and must send a job
 // (or release the slot on a failed send).
-func (c *Coordinator) claim(rootID, relPath string, mtime, size int64) (key string, det, cls, ocrN, ok bool) {
+func (c *Coordinator) claim(rootID, relPath, mediaType string, mtime, size int64) (key string, n needSet, ok bool) {
 	key = fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
 
 	c.mu.Lock()
 	_, exists := c.pending[key]
 	c.mu.Unlock()
 	if exists {
-		return key, false, false, false, false
+		return key, needSet{}, false
 	}
 
-	det, cls, ocrN = c.needs(rootID, relPath, mtime, size, false)
-	if !det && !cls && !ocrN {
-		return key, false, false, false, false
+	n = c.needs(rootID, relPath, mediaType, mtime, size, false)
+	if !n.any() {
+		return key, needSet{}, false
 	}
 
 	c.mu.Lock()
 	if _, exists := c.pending[key]; exists {
 		c.mu.Unlock()
-		return key, false, false, false, false
+		return key, needSet{}, false
 	}
 	c.pending[key] = struct{}{}
 	c.mu.Unlock()
-	return key, det, cls, ocrN, true
+	return key, n, true
 }
 
 // EnqueueBatch schedules background analysis for a batch of files (for example
@@ -288,22 +304,20 @@ func (c *Coordinator) EnqueueBatch(rootID string, items []EnqueueItem) {
 				continue
 			}
 
-			key, needDetect, needClassify, needOCR, ok := c.claim(rootID, it.RelPath, it.Mtime, it.Size)
+			key, n, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
 			if !ok {
 				continue
 			}
 
 			c.jobs <- job{
-				key:          key,
-				rootID:       rootID,
-				relPath:      it.RelPath,
-				fullPath:     it.FullPath,
-				mediaType:    it.MediaType,
-				mtime:        it.Mtime,
-				size:         it.Size,
-				needDetect:   needDetect,
-				needClassify: needClassify,
-				needOCR:      needOCR,
+				key:       key,
+				rootID:    rootID,
+				relPath:   it.RelPath,
+				fullPath:  it.FullPath,
+				mediaType: it.MediaType,
+				mtime:     it.Mtime,
+				size:      it.Size,
+				needs:     n,
 			}
 		}
 	}()
@@ -316,22 +330,20 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 		return false
 	}
 
-	key, needDetect, needClassify, needOCR, ok := c.claim(rootID, relPath, mtime, size)
+	key, n, ok := c.claim(rootID, relPath, mediaType, mtime, size)
 	if !ok {
 		return false
 	}
 
 	j := job{
-		key:          key,
-		rootID:       rootID,
-		relPath:      relPath,
-		fullPath:     fullPath,
-		mediaType:    mediaType,
-		mtime:        mtime,
-		size:         size,
-		needDetect:   needDetect,
-		needClassify: needClassify,
-		needOCR:      needOCR,
+		key:       key,
+		rootID:    rootID,
+		relPath:   relPath,
+		fullPath:  fullPath,
+		mediaType: mediaType,
+		mtime:     mtime,
+		size:      size,
+		needs:     n,
 	}
 
 	select {
@@ -442,7 +454,7 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 
 	var detMs, clsMs, ocrMs int64
 
-	if j.needDetect {
+	if j.needs.detect {
 		t := time.Now()
 		result, detErr := c.detector.DetectImage(img, j.rootID, j.relPath, j.mtime, j.size)
 		detMs = time.Since(t).Milliseconds()
@@ -453,18 +465,41 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 		}
 	}
 
-	if j.needClassify {
+	var phash string
+	var width, height int
+	if j.needs.phash {
+		var phErr error
+		phash, phErr = classification.ComputePHash(img)
+		if phErr != nil {
+			c.logger.Warn("browse analysis phash failed", "path", j.relPath, "error", phErr)
+		}
+		bounds := img.Bounds()
+		width, height = bounds.Dx(), bounds.Dy()
+	}
+
+	if j.needs.classify {
 		t := time.Now()
 		result, clsErr := c.classifier.ClassifyImage(img, sha256Hex, crc32Hex, j.rootID, j.relPath, j.mtime, j.size)
 		clsMs = time.Since(t).Milliseconds()
 		if clsErr != nil {
 			c.logger.Warn("browse analysis classification failed", "path", j.relPath, "error", clsErr)
-		} else if putErr := c.classStore.Put(result); putErr != nil {
-			c.logger.Warn("storing browse analysis classification result", "path", j.relPath, "error", putErr)
+		} else {
+			result.PHash = phash
+			result.Width = width
+			result.Height = height
+			if putErr := c.classStore.Put(result); putErr != nil {
+				c.logger.Warn("storing browse analysis classification result", "path", j.relPath, "error", putErr)
+			}
+		}
+	} else if j.needs.phash && phash != "" {
+		// Decode-only backfill for legacy rows: update phash and dimensions
+		// without re-running any ML analyzer.
+		if putErr := c.classStore.UpdatePHash(j.rootID, j.relPath, phash, width, height); putErr != nil {
+			c.logger.Warn("storing browse analysis phash", "path", j.relPath, "error", putErr)
 		}
 	}
 
-	if j.needOCR {
+	if j.needs.ocr {
 		// Pass the shared decode; the macOS subprocess backend ignores it and
 		// re-reads analyzePath, the in-process backend reuses it.
 		t := time.Now()
@@ -527,14 +562,14 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 			continue
 		}
 
-		if j.needDetect {
+		if j.needs.detect {
 			if result, detErr := c.detector.DetectImage(img, j.rootID, j.relPath, j.mtime, j.size); detErr != nil {
 				c.logger.Debug("browse analysis detection failed for frame", "path", j.relPath, "frame", fp, "error", detErr)
 			} else {
 				detResults = append(detResults, result)
 			}
 		}
-		if j.needClassify {
+		if j.needs.classify {
 			// Hashes left empty — frames are temporary, not the original video.
 			if result, clsErr := c.classifier.ClassifyImage(img, "", "", j.rootID, j.relPath, j.mtime, j.size); clsErr != nil {
 				c.logger.Debug("browse analysis classification failed for frame", "path", j.relPath, "frame", fp, "error", clsErr)
@@ -542,7 +577,7 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 				clsResults = append(clsResults, result)
 			}
 		}
-		if j.needOCR {
+		if j.needs.ocr {
 			if result, ocrErr := c.recognizer.Recognize(ctx, img, fp, j.rootID, j.relPath, j.mtime, j.size); ocrErr != nil {
 				c.logger.Debug("browse analysis OCR failed for frame", "path", j.relPath, "frame", fp, "error", ocrErr)
 			} else {
@@ -551,14 +586,14 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 		}
 	}
 
-	if j.needDetect {
+	if j.needs.detect {
 		if agg := aggregateDetections(detResults); agg != nil {
 			if putErr := c.detectionStore.Put(agg); putErr != nil {
 				c.logger.Warn("storing browse analysis detection result", "path", j.relPath, "error", putErr)
 			}
 		}
 	}
-	if j.needClassify {
+	if j.needs.classify {
 		if agg := aggregateClassifications(clsResults); agg != nil {
 			agg.SHA256 = ""
 			agg.CRC32 = ""
@@ -567,7 +602,7 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 			}
 		}
 	}
-	if j.needOCR {
+	if j.needs.ocr {
 		if agg := aggregateOCR(ocrResults); agg != nil {
 			if putErr := c.ocrStore.Put(agg); putErr != nil {
 				c.logger.Warn("storing browse analysis OCR result", "path", j.relPath, "error", putErr)
