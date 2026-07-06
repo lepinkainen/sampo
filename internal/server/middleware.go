@@ -30,8 +30,8 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 // noisyPaths are endpoints the frontend polls on a timer. Logging them floods
 // the debug log with no diagnostic value, so they're skipped by requestLogger.
 var noisyPaths = map[string]bool{
-	"/health":                  true,
-	"/api/analysis/settings":   true,
+	"/health":                true,
+	"/api/analysis/settings": true,
 }
 
 // requestLogger returns middleware that logs each HTTP request at Debug level,
