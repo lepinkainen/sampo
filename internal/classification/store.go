@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -63,9 +64,9 @@ func migrate(db *sql.DB) error {
 		return fmt.Errorf("migrating classification db: %w", err)
 	}
 
-	// Migration: add sha256 and crc32 columns if they don't exist
-	for _, col := range []string{"sha256", "crc32"} {
-		_, _ = db.Exec("ALTER TABLE classifications ADD COLUMN " + col + " TEXT")
+	// Migration: add columns if they don't exist
+	for _, col := range []string{"sha256 TEXT", "crc32 TEXT", "phash TEXT", "width INTEGER", "height INTEGER"} {
+		_, _ = db.Exec("ALTER TABLE classifications ADD COLUMN " + col)
 	}
 
 	return nil
@@ -89,10 +90,11 @@ func (s *Store) Put(result *Result) error {
 	}
 
 	_, err = tx.Exec(
-		`INSERT OR REPLACE INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32, phash, width, height)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		result.RootID, result.RelPath, result.Mtime, result.Size, result.ModelVer, result.ScannedAt,
 		nullString(result.SHA256), nullString(result.CRC32),
+		nullString(result.PHash), nullInt(result.Width), nullInt(result.Height),
 	)
 	if err != nil {
 		return fmt.Errorf("upserting classification: %w", err)
@@ -119,17 +121,26 @@ func nullString(s string) any {
 	return s
 }
 
+// nullInt converts a zero value to nil for nullable INTEGER columns.
+func nullInt(v int) any {
+	if v == 0 {
+		return nil
+	}
+	return v
+}
+
 // Get retrieves a classification result with tags for a single file.
 func (s *Store) Get(rootID, relPath string) (*Result, error) {
 	row := s.db.QueryRow(
-		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32
+		`SELECT root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32, phash, width, height
 		 FROM classifications WHERE root_id = ? AND rel_path = ?`,
 		rootID, relPath,
 	)
 
 	var r Result
-	var sha256Val, crc32Val sql.NullString
-	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.ModelVer, &r.ScannedAt, &sha256Val, &crc32Val)
+	var sha256Val, crc32Val, phashVal sql.NullString
+	var widthVal, heightVal sql.NullInt64
+	err := row.Scan(&r.RootID, &r.RelPath, &r.Mtime, &r.Size, &r.ModelVer, &r.ScannedAt, &sha256Val, &crc32Val, &phashVal, &widthVal, &heightVal)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -138,6 +149,9 @@ func (s *Store) Get(rootID, relPath string) (*Result, error) {
 	}
 	r.SHA256 = sha256Val.String
 	r.CRC32 = crc32Val.String
+	r.PHash = phashVal.String
+	r.Width = int(widthVal.Int64)
+	r.Height = int(heightVal.Int64)
 
 	tags, err := s.getTags(rootID, relPath)
 	if err != nil {
@@ -375,18 +389,25 @@ func (s *Store) GetDirChecksums(rootID, dirPath string) (map[string]ChecksumInfo
 	return result, rows.Err()
 }
 
-// DuplicateGroup holds a group of files with matching hashes.
+// DuplicateGroup holds a group of files with matching or similar hashes.
 type DuplicateGroup struct {
-	Hash     string    `json:"hash"`
-	HashType string    `json:"hashType"`
-	Size     int64     `json:"size"`
-	Files    []DupFile `json:"files"`
+	Hash        string    `json:"hash"`                  // phash groups: keeper's phash hex
+	HashType    string    `json:"hashType"`              // "sha256" | "phash"
+	Size        int64     `json:"size"`                  // exact groups (all files identical)
+	MaxDistance int       `json:"maxDistance,omitempty"` // phash groups: max Hamming distance to keeper
+	Keeper      *int      `json:"keeper,omitempty"`      // index into Files; nil = quality tie, manual pick
+	Files       []DupFile `json:"files"`
 }
 
 // DupFile identifies a file in a duplicate group.
 type DupFile struct {
-	RootID string `json:"rootId"`
-	Path   string `json:"path"`
+	RootID     string `json:"rootId"`
+	Path       string `json:"path"`
+	Size       int64  `json:"size,omitempty"`
+	Width      int    `json:"width,omitempty"`
+	Height     int    `json:"height,omitempty"`
+	Mtime      int64  `json:"mtime,omitempty"`
+	Similarity int    `json:"similarity,omitempty"` // % vs keeper (phash groups only)
 }
 
 // FindDuplicates finds files with matching SHA256 under a directory.
@@ -394,7 +415,7 @@ func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error)
 	prefix := dirPrefix(dirPath)
 
 	rows, err := s.db.Query(
-		`SELECT c1.sha256, c1.size, c1.rel_path
+		`SELECT c1.sha256, c1.size, c1.rel_path, c1.width, c1.height, c1.mtime
 		 FROM classifications c1
 		 WHERE c1.root_id = ? AND c1.rel_path LIKE ? AND c1.sha256 IS NOT NULL
 		   AND c1.sha256 IN (
@@ -414,17 +435,26 @@ func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error)
 	var order []string
 	for rows.Next() {
 		var hash, relPath string
-		var size int64
-		if err := rows.Scan(&hash, &size, &relPath); err != nil {
+		var size, mtime int64
+		var widthVal, heightVal sql.NullInt64
+		if err := rows.Scan(&hash, &size, &relPath, &widthVal, &heightVal, &mtime); err != nil {
 			return nil, err
 		}
 		g, ok := groups[hash]
 		if !ok {
-			g = &DuplicateGroup{Hash: hash, HashType: "sha256", Size: size}
+			keeper := 0
+			g = &DuplicateGroup{Hash: hash, HashType: "sha256", Size: size, Keeper: &keeper}
 			groups[hash] = g
 			order = append(order, hash)
 		}
-		g.Files = append(g.Files, DupFile{RootID: rootID, Path: relPath})
+		g.Files = append(g.Files, DupFile{
+			RootID: rootID,
+			Path:   relPath,
+			Size:   size,
+			Width:  int(widthVal.Int64),
+			Height: int(heightVal.Int64),
+			Mtime:  mtime,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -435,6 +465,125 @@ func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error)
 		result = append(result, *groups[hash])
 	}
 	return result, nil
+}
+
+// NeedsPHash reports whether a cached classification row exists but has no
+// perceptual hash yet (legacy rows from before phash support). Freshness of
+// the row itself is already gated by IsStale in the analysis coordinator.
+func (s *Store) NeedsPHash(rootID, relPath string) bool {
+	var missing bool
+	err := s.db.QueryRow(
+		`SELECT phash IS NULL FROM classifications WHERE root_id = ? AND rel_path = ?`,
+		rootID, relPath,
+	).Scan(&missing)
+	return err == nil && missing
+}
+
+// UpdatePHash backfills the perceptual hash and dimensions of an existing
+// classification row without touching tags, mtime, or model version.
+func (s *Store) UpdatePHash(rootID, relPath, phash string, width, height int) error {
+	_, err := s.db.Exec(
+		`UPDATE classifications SET phash = ?, width = ?, height = ? WHERE root_id = ? AND rel_path = ?`,
+		nullString(phash), nullInt(width), nullInt(height), rootID, relPath,
+	)
+	if err != nil {
+		return fmt.Errorf("updating phash: %w", err)
+	}
+	return nil
+}
+
+// FindSimilar finds groups of visually similar images under a directory by
+// clustering perceptual hashes within maxDist Hamming bits. Byte-identical
+// files are collapsed to one representative (those belong to FindDuplicates).
+func (s *Store) FindSimilar(rootID, dirPath string, maxDist int) ([]DuplicateGroup, error) {
+	prefix := dirPrefix(dirPath)
+
+	rows, err := s.db.Query(
+		`SELECT rel_path, phash, size, width, height, mtime, sha256
+		 FROM classifications
+		 WHERE root_id = ? AND rel_path LIKE ? AND phash IS NOT NULL
+		 ORDER BY rel_path`,
+		rootID, prefix+"%",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding similar: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var entries []PHashEntry
+	for rows.Next() {
+		var relPath, phashHex string
+		var sha256Val sql.NullString
+		var widthVal, heightVal sql.NullInt64
+		var size, mtime int64
+		if err := rows.Scan(&relPath, &phashHex, &size, &widthVal, &heightVal, &mtime, &sha256Val); err != nil {
+			return nil, err
+		}
+		h, ok := parsePHash(phashHex)
+		if !ok {
+			continue
+		}
+		entries = append(entries, PHashEntry{
+			RelPath: relPath,
+			PHash:   h,
+			Size:    size,
+			Width:   int(widthVal.Int64),
+			Height:  int(heightVal.Int64),
+			Mtime:   mtime,
+			SHA256:  sha256Val.String,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	clusters := groupSimilar(entries, maxDist)
+	groups := make([]DuplicateGroup, 0, len(clusters))
+	for _, members := range clusters {
+		groups = append(groups, buildSimilarGroup(rootID, members))
+	}
+	return groups, nil
+}
+
+// buildSimilarGroup turns one cluster into a DuplicateGroup: files sorted by
+// resolution (best first, path as tiebreak), keeper = the highest-resolution
+// file unless several share the top resolution (quality tie → nil keeper),
+// per-file similarity computed against the best file's hash.
+func buildSimilarGroup(rootID string, members []PHashEntry) DuplicateGroup {
+	sort.Slice(members, func(i, j int) bool {
+		ai, aj := members[i].Width*members[i].Height, members[j].Width*members[j].Height
+		if ai != aj {
+			return ai > aj
+		}
+		return members[i].RelPath < members[j].RelPath
+	})
+
+	best := members[0]
+	g := DuplicateGroup{
+		Hash:     fmt.Sprintf("%016x", best.PHash),
+		HashType: "phash",
+	}
+	if best.Width*best.Height != members[1].Width*members[1].Height {
+		keeper := 0
+		g.Keeper = &keeper
+	}
+
+	for _, m := range members {
+		d := hammingDistance(best.PHash, m.PHash)
+		if d > g.MaxDistance {
+			g.MaxDistance = d
+		}
+		g.Files = append(g.Files, DupFile{
+			RootID:     rootID,
+			Path:       m.RelPath,
+			Size:       m.Size,
+			Width:      m.Width,
+			Height:     m.Height,
+			Mtime:      m.Mtime,
+			Similarity: DistanceToSimilarity(d),
+		})
+	}
+	return g
 }
 
 // ListPaths returns every stored rel_path under a directory (recursive).

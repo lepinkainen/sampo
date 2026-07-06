@@ -65,6 +65,9 @@ type Result struct {
 	Tags      []TagScore `json:"tags"`
 	SHA256    string     `json:"sha256,omitempty"`
 	CRC32     string     `json:"crc32,omitempty"`
+	PHash     string     `json:"phash,omitempty"`
+	Width     int        `json:"width,omitempty"`
+	Height    int        `json:"height,omitempty"`
 }
 
 // Classifier runs CLIP image classification using ONNX Runtime.

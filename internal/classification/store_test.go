@@ -283,3 +283,164 @@ func tagLabels(tags []TagScore) []string {
 	}
 	return labels
 }
+
+func TestStorePHashRoundtrip(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	if err := store.Put(&Result{
+		RootID: "root-0", RelPath: "images/a.jpg", Mtime: 1, Size: 100,
+		ModelVer: "test-model", ScannedAt: time.Now().UTC(),
+		SHA256: "h1", PHash: "d0d14f6a0e2d3d71", Width: 4032, Height: 3024,
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	got, err := store.Get("root-0", "images/a.jpg")
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v, %v", got, err)
+	}
+	if got.PHash != "d0d14f6a0e2d3d71" || got.Width != 4032 || got.Height != 3024 {
+		t.Fatalf("roundtrip = phash %q %dx%d", got.PHash, got.Width, got.Height)
+	}
+}
+
+func TestStoreMigrationIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	putFile(t, store, "images/a.jpg", "h1")
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Reopening the same database must re-run migrations without error and
+	// keep existing rows.
+	store, err = NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore reopen: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	got, err := store.Get("root-0", "images/a.jpg")
+	if err != nil || got == nil {
+		t.Fatalf("Get after reopen: %v, %v", got, err)
+	}
+}
+
+func TestStoreNeedsPHashAndUpdate(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	if store.NeedsPHash("root-0", "images/a.jpg") {
+		t.Fatal("NeedsPHash should be false for a missing row")
+	}
+
+	putFile(t, store, "images/a.jpg", "h1") // legacy row, no phash
+	if !store.NeedsPHash("root-0", "images/a.jpg") {
+		t.Fatal("NeedsPHash should be true for a NULL-phash row")
+	}
+
+	if err := store.UpdatePHash("root-0", "images/a.jpg", "00000000000000ff", 800, 600); err != nil {
+		t.Fatalf("UpdatePHash: %v", err)
+	}
+	if store.NeedsPHash("root-0", "images/a.jpg") {
+		t.Fatal("NeedsPHash should be false after UpdatePHash")
+	}
+
+	// UpdatePHash must not touch tags, mtime, or model version.
+	got, err := store.Get("root-0", "images/a.jpg")
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v, %v", got, err)
+	}
+	if got.Mtime != 1 || got.ModelVer != "test-model" || len(got.Tags) != 1 {
+		t.Fatalf("UpdatePHash side effects: mtime=%d modelVer=%q tags=%v", got.Mtime, got.ModelVer, got.Tags)
+	}
+	if got.PHash != "00000000000000ff" || got.Width != 800 || got.Height != 600 {
+		t.Fatalf("UpdatePHash values: phash=%q %dx%d", got.PHash, got.Width, got.Height)
+	}
+}
+
+func putPHashFile(t *testing.T, store *Store, relPath, sha, phash string, width, height int) {
+	t.Helper()
+	if err := store.Put(&Result{
+		RootID: "root-0", RelPath: relPath, Mtime: 1, Size: 100,
+		ModelVer: "test-model", ScannedAt: time.Now().UTC(),
+		SHA256: sha, PHash: phash, Width: width, Height: height,
+	}); err != nil {
+		t.Fatalf("Put %s: %v", relPath, err)
+	}
+}
+
+func TestStoreFindSimilar(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Near pair (1 bit apart), original bigger than the resized copy.
+	putPHashFile(t, store, "images/orig.png", "sha-orig", "00000000000000f0", 4032, 3024)
+	putPHashFile(t, store, "images/resized.jpg", "sha-resized", "00000000000000f1", 1920, 1440)
+	// Byte-identical pair: belongs to FindDuplicates, not FindSimilar.
+	putPHashFile(t, store, "images/copy1.jpg", "sha-same", "000000000000ff00", 800, 600)
+	putPHashFile(t, store, "images/copy2.jpg", "sha-same", "000000000000ff00", 800, 600)
+	// Unrelated image far from everything.
+	putPHashFile(t, store, "images/other.jpg", "sha-other", "ffffffffffffffff", 800, 600)
+
+	groups, err := store.FindSimilar("root-0", "images", 7)
+	if err != nil {
+		t.Fatalf("FindSimilar: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("similar groups = %+v, want exactly the near pair", groups)
+	}
+	g := groups[0]
+	if g.HashType != "phash" || len(g.Files) != 2 {
+		t.Fatalf("group = %+v", g)
+	}
+	if g.Keeper == nil || *g.Keeper != 0 || g.Files[0].Path != "images/orig.png" {
+		t.Fatalf("keeper should be the high-res original: %+v", g)
+	}
+	if g.Files[1].Similarity != DistanceToSimilarity(1) {
+		t.Fatalf("similarity = %d", g.Files[1].Similarity)
+	}
+
+	// The byte-identical pair still shows up as an exact duplicate group.
+	exact, err := store.FindDuplicates("root-0", "images")
+	if err != nil {
+		t.Fatalf("FindDuplicates: %v", err)
+	}
+	if len(exact) != 1 || len(exact[0].Files) != 2 {
+		t.Fatalf("exact groups = %+v, want the sha-same pair", exact)
+	}
+}
+
+func TestStoreFindSimilarQualityTie(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	putPHashFile(t, store, "scans/poster.png", "sha-png", "00000000000000f0", 3600, 2400)
+	putPHashFile(t, store, "scans/poster.webp", "sha-webp", "00000000000000f1", 3600, 2400)
+
+	groups, err := store.FindSimilar("root-0", "scans", 7)
+	if err != nil {
+		t.Fatalf("FindSimilar: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v", groups)
+	}
+	if groups[0].Keeper != nil {
+		t.Fatalf("keeper = %v, want nil on same-resolution tie", *groups[0].Keeper)
+	}
+}
