@@ -27,12 +27,23 @@ export interface FileEntry {
 export interface DuplicateFile {
 	rootId: string;
 	path: string;
+	size?: number;
+	width?: number;
+	height?: number;
+	mtime?: number;
+	/** % match vs the group's best file (phash groups only). */
+	similarity?: number;
 }
 
 export interface DuplicateGroup {
 	hash: string;
+	/** "sha256" (exact) or "phash" (similar images). */
 	hashType: string;
 	size: number;
+	/** phash groups: max Hamming distance to the best file, in bits. */
+	maxDistance?: number;
+	/** Index into files of the suggested keeper; null/absent = quality tie. */
+	keeper?: number | null;
 	files: DuplicateFile[];
 }
 

@@ -14,10 +14,14 @@ interface Props {
 
 let { rootId, path, onClose, onDeleted }: Props = $props();
 
+type Tab = 'all' | 'sha256' | 'phash';
+
 let loading = $state(true);
 let groups = $state<DuplicateGroup[]>([]);
 let thumbErrors = $state<Record<string, boolean>>({});
 let selected = $state<Record<string, boolean>>({});
+let tab = $state<Tab>('all');
+let threshold = $state(88);
 let showConfirm = $state(false);
 let deleting = $state(false);
 let error = $state('');
@@ -30,21 +34,43 @@ function fileName(p: string): string {
 	return p.split('/').pop() || p;
 }
 
-// Default selection: keep the first copy in each group, mark the rest.
+function fileSize(group: DuplicateGroup, file: DuplicateFile): number {
+	return file.size ?? group.size;
+}
+
+function isKeeper(group: DuplicateGroup, index: number): boolean {
+	return group.keeper != null && group.keeper === index;
+}
+
+function isTie(group: DuplicateGroup): boolean {
+	return group.hashType === 'phash' && group.keeper == null;
+}
+
+// Default selection: mark everything except the suggested keeper. Quality
+// ties (no keeper) are skipped — the user must pick which file to keep.
 function autoSelect() {
 	const next: Record<string, boolean> = {};
 	for (const group of groups) {
+		if (isTie(group)) continue;
+		const keeper = group.keeper ?? 0;
 		for (const [i, file] of group.files.entries()) {
-			next[fileKey(file)] = i > 0;
+			next[fileKey(file)] = i !== keeper;
 		}
 	}
 	selected = next;
 }
 
+// Resolves a quality tie: keep the chosen file, mark the rest.
+function keepThis(group: DuplicateGroup, index: number) {
+	for (const [i, file] of group.files.entries()) {
+		selected[fileKey(file)] = i !== index;
+	}
+}
+
 function load() {
 	loading = true;
 	error = '';
-	findDuplicates(rootId, path || '/')
+	findDuplicates(rootId, path || '/', { similar: true, threshold })
 		.then((r) => {
 			groups = r.groups || [];
 			autoSelect();
@@ -64,18 +90,41 @@ $effect(() => {
 	load();
 });
 
+let visibleGroups = $derived(
+	tab === 'all' ? groups : groups.filter((g) => g.hashType === tab),
+);
+let exactCount = $derived(groups.filter((g) => g.hashType === 'sha256').length);
+let similarCount = $derived(
+	groups.filter((g) => g.hashType === 'phash').length,
+);
+
 let selectedFiles = $derived(
 	groups.flatMap((g) =>
 		g.files
 			.filter((f) => selected[fileKey(f)])
-			.map((f) => ({ file: f, size: g.size })),
+			.map((f) => ({ file: f, size: fileSize(g, f) })),
 	),
 );
 let selectedCount = $derived(selectedFiles.length);
 let reclaimSize = $derived(selectedFiles.reduce((sum, s) => sum + s.size, 0));
 
 function groupReclaim(group: DuplicateGroup): number {
-	return group.size * (group.files.length - 1);
+	if (group.hashType === 'sha256') return group.size * (group.files.length - 1);
+	const keeper = group.keeper ?? null;
+	if (keeper == null) {
+		// Quality tie: best case keeps the largest file.
+		const sizes = group.files.map((f) => fileSize(group, f));
+		return sizes.reduce((a, b) => a + b, 0) - Math.max(...sizes);
+	}
+	return group.files.reduce(
+		(sum, f, i) => (i === keeper ? sum : sum + fileSize(group, f)),
+		0,
+	);
+}
+
+function formatMtime(mtime?: number): string {
+	if (!mtime) return '';
+	return new Date(mtime * 1000).toISOString().slice(0, 10);
 }
 
 function clearSelection() {
@@ -141,26 +190,79 @@ async function handleDelete() {
 			</button>
 		</div>
 
+		<div class="flex flex-wrap items-center gap-4 border-b border-gray-800 px-5 py-3">
+			<div class="flex gap-1">
+				{#each [{ id: 'all', label: 'All', count: groups.length }, { id: 'sha256', label: 'Exact', count: exactCount }, { id: 'phash', label: 'Similar', count: similarCount }] as t (t.id)}
+					<button
+						class="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px]
+						{tab === t.id
+							? ' border-blue-500 bg-blue-500/15 text-gray-100'
+							: ' border-transparent text-gray-400 hover:text-gray-200'}"
+						onclick={() => {
+							tab = t.id as Tab;
+						}}
+					>
+						{t.label}
+						<span class="rounded-full bg-gray-800 px-1.5 text-[11px] text-gray-500">{t.count}</span>
+					</button>
+				{/each}
+			</div>
+			<div class="flex-1"></div>
+			<label class="flex items-center gap-2 text-xs text-gray-400">
+				Similarity ≥
+				<input
+					type="range"
+					min="80"
+					max="100"
+					class="w-[110px] accent-blue-500"
+					bind:value={threshold}
+					onchange={load}
+				/>
+				<span class="w-[3.5em] font-mono text-gray-100">{threshold}%</span>
+			</label>
+		</div>
+
 		<div class="flex-1 space-y-4 overflow-y-auto p-5">
 			{#if loading}
 				<p class="text-center text-gray-500">Searching for duplicates...</p>
-			{:else if groups.length === 0}
+			{:else if visibleGroups.length === 0}
 				<p class="text-center text-gray-500">No duplicates found</p>
 			{:else}
-				{#each groups as group (group.hash)}
+				{#each visibleGroups as group (group.hash)}
 					<div class="overflow-hidden rounded-lg border border-gray-800 bg-gray-800/50">
 						<div
 							class="flex flex-wrap items-center gap-2.5 border-b border-gray-800 px-3.5 py-2.5 text-xs"
 						>
-							<span
-								class="rounded-full bg-emerald-400/15 px-2 py-0.5 font-semibold tracking-wide text-emerald-400"
-							>
-								EXACT
-							</span>
-							<span class="font-mono text-gray-600">{group.hashType} {group.hash.slice(0, 16)}…</span>
-							<span class="text-gray-400">{group.files.length} files · {formatSize(group.size)} each</span>
+							{#if group.hashType === 'phash'}
+								<span
+									class="rounded-full bg-purple-400/15 px-2 py-0.5 font-semibold tracking-wide text-purple-400"
+								>
+									SIMILAR
+								</span>
+								{#if isTie(group)}
+									<span
+										class="rounded-full bg-red-400/15 px-2 py-0.5 font-semibold tracking-wide text-red-400"
+									>
+										QUALITY TIE
+									</span>
+								{/if}
+								<span class="font-mono text-gray-600">
+									phash {group.hash.slice(0, 8)}… ±{group.maxDistance ?? 0} bits
+								</span>
+								<span class="text-gray-500">
+									{isTie(group) ? 'same resolution → manual pick' : 'keeper: highest resolution'}
+								</span>
+							{:else}
+								<span
+									class="rounded-full bg-emerald-400/15 px-2 py-0.5 font-semibold tracking-wide text-emerald-400"
+								>
+									EXACT
+								</span>
+								<span class="font-mono text-gray-600">{group.hashType} {group.hash.slice(0, 16)}…</span>
+								<span class="text-gray-400">{group.files.length} files · {formatSize(group.size)} each</span>
+							{/if}
 							<span class="ml-auto font-semibold text-emerald-400">
-								reclaim {formatSize(groupReclaim(group))}
+								reclaim {isTie(group) ? 'up to ' : ''}{formatSize(groupReclaim(group))}
 							</span>
 						</div>
 						{#each group.files as file, i (fileKey(file))}
@@ -200,13 +302,47 @@ async function handleDelete() {
 											? ''
 											: '/'}{file.path}
 									</div>
+									{#if file.size || file.width}
+										<div class="flex flex-wrap gap-2.5 text-[11px] text-gray-400">
+											{#if file.size}<span>{formatSize(file.size)}</span>{/if}
+											{#if file.width && file.height}
+												<span class={isKeeper(group, i) ? 'text-emerald-400' : ''}>
+													{file.width}×{file.height}{isKeeper(group, i) && group.hashType === 'phash'
+														? ' ← best'
+														: ''}
+												</span>
+											{/if}
+											{#if file.mtime}<span>{formatMtime(file.mtime)}</span>{/if}
+										</div>
+									{/if}
 								</div>
 								<div class="flex flex-col items-end gap-1">
-									{#if i === 0 && !selected[fileKey(file)]}
+									{#if isTie(group)}
+										{#if selected[fileKey(file)] === false && group.files.some((f) => selected[fileKey(f)])}
+											<span
+												class="rounded border border-emerald-400/40 px-1.5 text-[10px] font-bold tracking-wider text-emerald-400"
+											>
+												✓ KEEPING
+											</span>
+										{:else}
+											<button
+												class="rounded border border-dashed border-gray-700 px-1.5 text-[10px] font-bold tracking-wider text-gray-500 hover:border-emerald-400 hover:text-emerald-400"
+												onclick={() => keepThis(group, i)}
+											>
+												KEEP THIS
+											</button>
+										{/if}
+									{:else if isKeeper(group, i) && !selected[fileKey(file)]}
 										<span
 											class="rounded border border-emerald-400/40 px-1.5 text-[10px] font-bold tracking-wider text-emerald-400"
 										>
 											KEEP
+										</span>
+									{:else if group.hashType === 'phash'}
+										<span
+											class="rounded bg-purple-400/10 px-1.5 py-px font-mono text-[11px] text-purple-400"
+										>
+											{file.similarity ?? 0}% match
 										</span>
 									{:else}
 										<span

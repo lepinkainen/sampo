@@ -393,9 +393,17 @@ export async function getDiskUsage(
 export async function findDuplicates(
 	rootId: string,
 	path: string,
+	opts?: { similar?: boolean; threshold?: number },
 ): Promise<DuplicatesResponse> {
+	const params = new URLSearchParams();
+	if (opts?.similar) {
+		params.set('similar', 'true');
+		if (opts.threshold !== undefined)
+			params.set('threshold', String(opts.threshold));
+	}
+	const query = params.size > 0 ? `?${params}` : '';
 	const res = await fetch(
-		`${BASE}/api/duplicates/${rootId}/${encodePath(path)}`,
+		`${BASE}/api/duplicates/${rootId}/${encodePath(path)}${query}`,
 	);
 	if (!res.ok) throw new Error(`Duplicates failed: ${res.statusText}`);
 	return res.json();
