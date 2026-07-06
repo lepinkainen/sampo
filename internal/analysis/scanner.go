@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/scanstatus"
@@ -89,6 +90,14 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 	close(ch)
 
 	go func() {
+		s.logger.Debug("analysis scan start",
+			"rootID", rootID,
+			"path", relPath,
+			"files", len(files),
+			"workers", s.workers,
+			"force", force,
+		)
+		start := time.Now()
 		// Drop cached rows for files that no longer exist before re-analyzing
 		// what does.
 		s.coord.PruneMissing(rootID, root.Path, relPath)
@@ -108,6 +117,15 @@ func (s *Scanner) ScanDirectory(rootID, relPath string, force bool) error {
 			}()
 		}
 		wg.Wait()
+
+		s.logger.Debug("analysis scan complete",
+			"rootID", rootID,
+			"path", relPath,
+			"files", len(files),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"completed", status.Snapshot().Completed,
+			"errors", status.Snapshot().Errors,
+		)
 
 		status.Complete()
 		cancel()

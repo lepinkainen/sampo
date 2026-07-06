@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/lepinkainen/sampo/internal/classification"
@@ -281,6 +282,7 @@ func (c *Coordinator) EnqueueBatch(rootID string, items []EnqueueItem) {
 		return
 	}
 	go func() {
+		c.logger.Debug("browse analysis batch start", "rootID", rootID, "items", len(items))
 		for _, it := range items {
 			if !c.WantsMedia(it.MediaType) {
 				continue
@@ -334,6 +336,12 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 
 	select {
 	case c.jobs <- j:
+		c.logger.Debug("browse analysis enqueued",
+			"path", relPath,
+			"qlen", len(c.jobs),
+			"qcap", cap(c.jobs),
+			"active", c.active.Load(),
+		)
 		return true
 	default:
 		c.mu.Lock()
@@ -347,7 +355,15 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 func (c *Coordinator) worker() {
 	for j := range c.jobs {
 		c.active.Add(1)
+		c.logger.Debug("worker picked job",
+			"path", j.relPath,
+			"qlen", len(c.jobs),
+			"qcap", cap(c.jobs),
+			"active", c.active.Load(),
+		)
+		start := time.Now()
 		c.process(context.Background(), j)
+		c.logger.Debug("worker finished job", "path", j.relPath, "duration_ms", time.Since(start).Milliseconds())
 		c.active.Add(-1)
 		c.mu.Lock()
 		delete(c.pending, j.key)
@@ -411,6 +427,7 @@ func loadImage(path string) (img image.Image, sha256Hex, crc32Hex string, err er
 
 func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath string) {
 	// Load once, share across every analyzer (the "same byte-level file").
+	loadStart := time.Now()
 	img, sha256Hex, crc32Hex, err := loadImage(analyzePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -421,9 +438,14 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 		}
 		return
 	}
+	loadMs := time.Since(loadStart).Milliseconds()
+
+	var detMs, clsMs, ocrMs int64
 
 	if j.needDetect {
+		t := time.Now()
 		result, detErr := c.detector.DetectImage(img, j.rootID, j.relPath, j.mtime, j.size)
+		detMs = time.Since(t).Milliseconds()
 		if detErr != nil {
 			c.logger.Warn("browse analysis detection failed", "path", j.relPath, "error", detErr)
 		} else if putErr := c.detectionStore.Put(result); putErr != nil {
@@ -432,7 +454,9 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 	}
 
 	if j.needClassify {
+		t := time.Now()
 		result, clsErr := c.classifier.ClassifyImage(img, sha256Hex, crc32Hex, j.rootID, j.relPath, j.mtime, j.size)
+		clsMs = time.Since(t).Milliseconds()
 		if clsErr != nil {
 			c.logger.Warn("browse analysis classification failed", "path", j.relPath, "error", clsErr)
 		} else if putErr := c.classStore.Put(result); putErr != nil {
@@ -443,16 +467,27 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 	if j.needOCR {
 		// Pass the shared decode; the macOS subprocess backend ignores it and
 		// re-reads analyzePath, the in-process backend reuses it.
+		t := time.Now()
 		result, ocrErr := c.recognizer.Recognize(ctx, img, analyzePath, j.rootID, j.relPath, j.mtime, j.size)
+		ocrMs = time.Since(t).Milliseconds()
 		if ocrErr != nil {
 			c.logger.Warn("browse analysis OCR failed", "path", j.relPath, "error", ocrErr)
 		} else if putErr := c.ocrStore.Put(result); putErr != nil {
 			c.logger.Warn("storing browse analysis OCR result", "path", j.relPath, "error", putErr)
 		}
 	}
+
+	c.logger.Debug("analyzed image",
+		"path", j.relPath,
+		"load_ms", loadMs,
+		"detect_ms", detMs,
+		"classify_ms", clsMs,
+		"ocr_ms", ocrMs,
+	)
 }
 
 func (c *Coordinator) processVideo(ctx context.Context, j job) {
+	start := time.Now()
 	framePaths, cleanup, err := videoframe.ExtractFrames(ctx, c.frameDir, j.fullPath, videoAnalysisFrames)
 	if err != nil {
 		c.logger.Warn("browse analysis video frame extraction failed", "path", j.relPath, "error", err)
@@ -539,6 +574,12 @@ func (c *Coordinator) processVideo(ctx context.Context, j job) {
 			}
 		}
 	}
+
+	c.logger.Debug("analyzed video",
+		"path", j.relPath,
+		"frames", len(framePaths),
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
 }
 
 // aggregateDetections merges detection results from multiple frames.

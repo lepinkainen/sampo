@@ -64,7 +64,7 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		logger: logger,
 	}
 
-	s.router.Use(middleware.Logger)
+	s.router.Use(requestLogger(logger))
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Compress(5))
 

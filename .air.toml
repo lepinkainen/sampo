@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = ".run/air-tmp"
 
 [build]
-  entrypoint = [".run/air-tmp/sampo"]
+  entrypoint = [".run/air-tmp/sampo", "--debug"]
   cmd = "go build -o ./.run/air-tmp/sampo ./cmd/sampo"
   delay = 1000
   exclude_dir = ["assets", "vendor", "testdata", "frontend", "build", "models", ".run", ".cache", "data", "llm-shared", "scripts", "docs"]

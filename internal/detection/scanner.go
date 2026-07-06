@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/scanstatus"
@@ -126,6 +127,13 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 	close(ch)
 
 	go func() {
+		s.logger.Debug("detection scan start",
+			"rootID", rootID,
+			"path", relPath,
+			"files", len(files),
+			"workers", s.workers,
+		)
+		start := time.Now()
 		var wg sync.WaitGroup
 		for i := 0; i < s.workers; i++ {
 			wg.Add(1)
@@ -140,6 +148,16 @@ func (s *Scanner) ScanDirectory(rootID, relPath string) error {
 			}()
 		}
 		wg.Wait()
+
+		snap := status.Snapshot()
+		s.logger.Debug("detection scan complete",
+			"rootID", rootID,
+			"path", relPath,
+			"files", len(files),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"completed", snap.Completed,
+			"errors", snap.Errors,
+		)
 
 		// Mark scan as complete
 		status.Complete()

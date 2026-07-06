@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log/slog"
 	"os"
 
@@ -18,7 +19,14 @@ var (
 )
 
 func main() {
-	logger := slog.New(humanlog.NewHandler(os.Stderr, nil))
+	debug := flag.Bool("debug", false, "enable debug-level logging")
+	flag.Parse()
+
+	level := slog.LevelInfo
+	if *debug {
+		level = slog.LevelDebug
+	}
+	logger := slog.New(humanlog.NewHandler(os.Stderr, &humanlog.Options{Level: level}))
 	slog.SetDefault(logger)
 
 	// Set build metadata for whoami endpoint.
@@ -27,7 +35,7 @@ func main() {
 	handlers.BuildTime = buildTime
 
 	// Log version early so it appears even if startup fails (e.g. ONNX init).
-	logger.Info("starting sampo", "version", version, "git_hash", gitHash, "build_time", buildTime)
+	logger.Info("starting sampo", "version", version, "git_hash", gitHash, "build_time", buildTime, "debug", *debug)
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -63,6 +63,7 @@ task dev-logs       # Show log file paths for debugging
 ```
 
 - `dev-up` builds the Go binary, starts both services, and waits for health checks to pass
+- `task dev-go` and `task dev-up` pass `--debug` to the backend, enabling debug-level logging (HTTP requests, analysis queue depth, per-analyzer timings, scan start/complete). Run `./build/sampo` without the flag for Info-level only.
 - Logs are written to `.run/backend.log` and `.run/frontend.log`
 - If startup fails, the last 20 lines of the service log are printed automatically
 - Always run `task dev-down` before exiting to avoid orphan processes

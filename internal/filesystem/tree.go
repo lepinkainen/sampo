@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -163,6 +164,7 @@ func ImageFilesInDir(dirPath, relBase string) ([]ImageEntry, error) {
 
 // ListDirectory returns the contents of a directory.
 func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
+	listStart := time.Now()
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -226,5 +228,10 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			result = append(result, *s)
 		}
 	}
+	slog.Debug("listed directory",
+		"path", relBase,
+		"entries", len(result),
+		"duration_ms", time.Since(listStart).Milliseconds(),
+	)
 	return result, nil
 }
