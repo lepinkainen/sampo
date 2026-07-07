@@ -30,6 +30,9 @@ type FileEntry struct {
 	OCRText   string     `json:"ocrText,omitempty"`
 	SHA256    *string    `json:"sha256,omitempty"`
 	CRC32     *string    `json:"crc32,omitempty"`
+	Width     *int       `json:"width,omitempty"`
+	Height    *int       `json:"height,omitempty"`
+	Duration  *float64   `json:"duration,omitempty"`
 }
 
 // videotaggerCRC32Re matches the CRC32 bracket group in videotagger-style filenames.

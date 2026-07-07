@@ -10,6 +10,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/lepinkainen/sampo/internal/filesystem"
 )
 
 // Store manages classification results in SQLite.
@@ -90,8 +92,18 @@ func (s *Store) Put(result *Result) error {
 	}
 
 	_, err = tx.Exec(
-		`INSERT OR REPLACE INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32, phash, width, height)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, sha256, crc32, phash, width, height)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(root_id, rel_path) DO UPDATE SET
+		     mtime = excluded.mtime,
+		     size = excluded.size,
+		     model_ver = excluded.model_ver,
+		     scanned_at = excluded.scanned_at,
+		     sha256 = excluded.sha256,
+		     crc32 = COALESCE(excluded.crc32, classifications.crc32),
+		     phash = excluded.phash,
+		     width = excluded.width,
+		     height = excluded.height`,
 		result.RootID, result.RelPath, result.Mtime, result.Size, result.ModelVer, result.ScannedAt,
 		nullString(result.SHA256), nullString(result.CRC32),
 		nullString(result.PHash), nullInt(result.Width), nullInt(result.Height),
@@ -127,6 +139,55 @@ func nullInt(v int) any {
 		return nil
 	}
 	return v
+}
+
+// modelVerFilename is the sentinel model_ver for rows that carry only a
+// filename-derived CRC32 (videotagger-style filenames). It marks the row as
+// not-yet-classified so IsStale returns true when the real classifier runs.
+const modelVerFilename = "filename"
+
+// FilenameCRC32Entry pairs a file's identity with a CRC32 parsed from its name.
+type FilenameCRC32Entry struct {
+	RelPath string
+	Mtime   int64
+	Size    int64
+	CRC32   string
+}
+
+// PutFilenameCRC32Batch upserts filename-derived CRC32 values for multiple
+// files in a single transaction. Each row is seeded with model_ver="filename"
+// so it participates in duplicate detection before classification runs. When a
+// row already exists (from a prior classification), only crc32 is updated —
+// tags, sha256, phash, and dimensions are left untouched. A nil/empty CRC32
+// on the excluded value preserves the existing crc32.
+func (s *Store) PutFilenameCRC32Batch(rootID string, entries []FilenameCRC32Entry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare(
+		`INSERT INTO classifications (root_id, rel_path, mtime, size, model_ver, scanned_at, crc32)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(root_id, rel_path) DO UPDATE SET
+		     crc32 = COALESCE(excluded.crc32, classifications.crc32)`,
+	)
+	if err != nil {
+		return fmt.Errorf("preparing filename crc32 upsert: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	now := time.Now().UTC()
+	for _, e := range entries {
+		if _, err := stmt.Exec(rootID, e.RelPath, e.Mtime, e.Size, modelVerFilename, now, nullString(e.CRC32)); err != nil {
+			return fmt.Errorf("upserting filename crc32 for %s: %w", e.RelPath, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // Get retrieves a classification result with tags for a single file.
@@ -198,20 +259,6 @@ func (s *Store) IsStale(rootID, relPath string, mtime int64, size int64, modelVe
 	return storedMtime != mtime || storedSize != size || storedModelVer != modelVer
 }
 
-// dirPrefix normalizes a directory path for prefix matching.
-func dirPrefix(dirPath string) string {
-	if dirPath != "" && !strings.HasSuffix(dirPath, "/") {
-		return dirPath + "/"
-	}
-	return dirPath
-}
-
-// isDirectChild returns true if relPath is a direct child under prefix (not nested).
-func isDirectChild(relPath, prefix string) bool {
-	rel := strings.TrimPrefix(relPath, prefix)
-	return !strings.Contains(rel, "/")
-}
-
 // escapeLike escapes LIKE wildcards so path characters match literally.
 // Queries using it must append `ESCAPE '\'`.
 func escapeLike(s string) string {
@@ -247,16 +294,16 @@ func newScopedPathMatch(relPath string) scopedPathMatch {
 	}
 	return scopedPathMatch{
 		first:        variants[0],
-		firstPrefix:  escapeLike(dirPrefix(variants[0])) + "%",
+		firstPrefix:  escapeLike(filesystem.DirPrefix(variants[0])) + "%",
 		second:       variants[1],
-		secondPrefix: escapeLike(dirPrefix(variants[1])) + "%",
+		secondPrefix: escapeLike(filesystem.DirPrefix(variants[1])) + "%",
 		ok:           true,
 	}
 }
 
 // GetDirTags returns a map of relPath -> []TagScore for all scanned direct children of a directory.
 func (s *Store) GetDirTags(rootID, dirPath string) (map[string][]TagScore, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	rows, err := s.db.Query(
 		`SELECT t.rel_path, t.label, t.score
@@ -278,7 +325,7 @@ func (s *Store) GetDirTags(rootID, dirPath string) (map[string][]TagScore, error
 		if err := rows.Scan(&relPath, &label, &score); err != nil {
 			return nil, err
 		}
-		if isDirectChild(relPath, prefix) {
+		if filesystem.IsDirectChild(relPath, prefix) {
 			result[relPath] = append(result[relPath], TagScore{Label: label, Score: score})
 		}
 	}
@@ -288,7 +335,7 @@ func (s *Store) GetDirTags(rootID, dirPath string) (map[string][]TagScore, error
 // FilterByTag returns a set of relPaths that have the given tag with score >= minScore,
 // limited to direct children of dirPath.
 func (s *Store) FilterByTag(rootID, dirPath, label string, minScore float32) (map[string]bool, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	rows, err := s.db.Query(
 		`SELECT t.rel_path FROM tags t
@@ -306,7 +353,7 @@ func (s *Store) FilterByTag(rootID, dirPath, label string, minScore float32) (ma
 		if err := rows.Scan(&relPath); err != nil {
 			return nil, err
 		}
-		if isDirectChild(relPath, prefix) {
+		if filesystem.IsDirectChild(relPath, prefix) {
 			result[relPath] = true
 		}
 	}
@@ -316,7 +363,7 @@ func (s *Store) FilterByTag(rootID, dirPath, label string, minScore float32) (ma
 // SearchByTag returns rel paths where any tag label contains the query substring,
 // scoped to files under dirPath.
 func (s *Store) SearchByTag(rootID, dirPath, query string) ([]string, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 	pattern := "%" + query + "%"
 
 	rows, err := s.db.Query(
@@ -363,7 +410,7 @@ type ChecksumInfo struct {
 
 // GetDirChecksums returns a map of relPath -> ChecksumInfo for scanned files under dirPath.
 func (s *Store) GetDirChecksums(rootID, dirPath string) (map[string]ChecksumInfo, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	rows, err := s.db.Query(
 		`SELECT rel_path, sha256, crc32 FROM classifications
@@ -382,7 +429,7 @@ func (s *Store) GetDirChecksums(rootID, dirPath string) (map[string]ChecksumInfo
 		if err := rows.Scan(&relPath, &sha256Val, &crc32Val); err != nil {
 			return nil, err
 		}
-		if isDirectChild(relPath, prefix) {
+		if filesystem.IsDirectChild(relPath, prefix) {
 			result[relPath] = ChecksumInfo{SHA256: sha256Val.String, CRC32: crc32Val.String}
 		}
 	}
@@ -410,11 +457,14 @@ type DupFile struct {
 	Similarity int    `json:"similarity,omitempty"` // % vs keeper (phash groups only)
 }
 
-// FindDuplicates finds files with matching SHA256 under a directory.
+// FindDuplicates finds files with matching checksums under a directory.
+// SHA256 groups cover byte-identical images; CRC32 groups cover videos whose
+// CRC32 was parsed from a videotagger-style filename (and which have no
+// SHA256). A file never appears in both group types.
 func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
-	rows, err := s.db.Query(
+	shaGroups, err := s.findDuplicateGroups(rootID, prefix, "sha256",
 		`SELECT c1.sha256, c1.size, c1.rel_path, c1.width, c1.height, c1.mtime
 		 FROM classifications c1
 		 WHERE c1.root_id = ? AND c1.rel_path LIKE ? AND c1.sha256 IS NOT NULL
@@ -423,11 +473,41 @@ func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error)
 		     WHERE root_id = ? AND rel_path LIKE ? AND sha256 IS NOT NULL
 		     GROUP BY sha256 HAVING COUNT(*) > 1
 		   )
-		 ORDER BY c1.sha256`,
-		rootID, prefix+"%", rootID, prefix+"%",
-	)
+		 ORDER BY c1.sha256`)
 	if err != nil {
-		return nil, fmt.Errorf("finding duplicates: %w", err)
+		return nil, err
+	}
+
+	crcGroups, err := s.findDuplicateGroups(rootID, prefix, "crc32",
+		`SELECT c1.crc32, c1.size, c1.rel_path, c1.width, c1.height, c1.mtime
+		 FROM classifications c1
+		 WHERE c1.root_id = ? AND c1.rel_path LIKE ?
+		   AND c1.crc32 IS NOT NULL AND c1.sha256 IS NULL
+		   AND c1.crc32 IN (
+		     SELECT crc32 FROM classifications
+		     WHERE root_id = ? AND rel_path LIKE ?
+		       AND crc32 IS NOT NULL AND sha256 IS NULL
+		     GROUP BY crc32 HAVING COUNT(*) > 1
+		   )
+		 ORDER BY c1.crc32`)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]DuplicateGroup, 0, len(shaGroups)+len(crcGroups))
+	result = append(result, shaGroups...)
+	result = append(result, crcGroups...)
+	return result, nil
+}
+
+// findDuplicateGroups runs a generic exact-match grouping query. The queryText
+// must select (hash, size, rel_path, width, height, mtime) in that order and
+// accept (rootID, prefix%, rootID, prefix%) parameters. hashType is the label
+// stored on each resulting DuplicateGroup.
+func (s *Store) findDuplicateGroups(rootID, prefix, hashType, queryText string) ([]DuplicateGroup, error) {
+	rows, err := s.db.Query(queryText, rootID, prefix+"%", rootID, prefix+"%")
+	if err != nil {
+		return nil, fmt.Errorf("finding %s duplicates: %w", hashType, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -443,7 +523,7 @@ func (s *Store) FindDuplicates(rootID, dirPath string) ([]DuplicateGroup, error)
 		g, ok := groups[hash]
 		if !ok {
 			keeper := 0
-			g = &DuplicateGroup{Hash: hash, HashType: "sha256", Size: size, Keeper: &keeper}
+			g = &DuplicateGroup{Hash: hash, HashType: hashType, Size: size, Keeper: &keeper}
 			groups[hash] = g
 			order = append(order, hash)
 		}
@@ -496,7 +576,7 @@ func (s *Store) UpdatePHash(rootID, relPath, phash string, width, height int) er
 // clustering perceptual hashes within maxDist Hamming bits. Byte-identical
 // files are collapsed to one representative (those belong to FindDuplicates).
 func (s *Store) FindSimilar(rootID, dirPath string, maxDist int) ([]DuplicateGroup, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	rows, err := s.db.Query(
 		`SELECT rel_path, phash, size, width, height, mtime, sha256

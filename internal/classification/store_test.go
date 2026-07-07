@@ -444,3 +444,119 @@ func TestStoreFindSimilarQualityTie(t *testing.T) {
 		t.Fatalf("keeper = %v, want nil on same-resolution tie", *groups[0].Keeper)
 	}
 }
+
+func TestStoreFindDuplicatesByCRC32(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	if err := store.PutFilenameCRC32Batch("root-0", []FilenameCRC32Entry{
+		{RelPath: "videos/a[DEADBEEF].mp4", Mtime: 1, Size: 1000, CRC32: "DEADBEEF"},
+		{RelPath: "videos/b[DEADBEEF].mkv", Mtime: 2, Size: 1000, CRC32: "DEADBEEF"},
+		{RelPath: "videos/c[12345678].mp4", Mtime: 3, Size: 500, CRC32: "12345678"},
+	}); err != nil {
+		t.Fatalf("PutFilenameCRC32Batch: %v", err)
+	}
+
+	groups, err := store.FindDuplicates("root-0", "videos")
+	if err != nil {
+		t.Fatalf("FindDuplicates: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v, want 1 CRC32 group", groups)
+	}
+	g := groups[0]
+	if g.HashType != "crc32" || g.Hash != "DEADBEEF" || len(g.Files) != 2 {
+		t.Fatalf("group = %+v, want crc32/DEADBEEF with 2 files", g)
+	}
+}
+
+func TestStoreFindDuplicatesCRC32ExcludesSHA256Files(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Two videos with filename CRC32, no SHA256 → CRC32 group.
+	if err := store.PutFilenameCRC32Batch("root-0", []FilenameCRC32Entry{
+		{RelPath: "v/a[DEADBEEF].mp4", Mtime: 1, Size: 1000, CRC32: "DEADBEEF"},
+		{RelPath: "v/b[DEADBEEF].mkv", Mtime: 2, Size: 1000, CRC32: "DEADBEEF"},
+	}); err != nil {
+		t.Fatalf("PutFilenameCRC32Batch: %v", err)
+	}
+	// A third file with the same CRC32 but also a SHA256 (classified image)
+	// must NOT appear in the CRC32 group — it belongs to SHA256 dedup.
+	putFile(t, store, "v/c[DEADBEEF].jpg", "sha-real")
+
+	groups, err := store.FindDuplicates("root-0", "v")
+	if err != nil {
+		t.Fatalf("FindDuplicates: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v, want only the CRC32 video pair", groups)
+	}
+	if groups[0].HashType != "crc32" || len(groups[0].Files) != 2 {
+		t.Fatalf("group = %+v, want crc32 with 2 files (image excluded)", groups[0])
+	}
+}
+
+func TestStorePutPreservesFilenameCRC32(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Seed a filename-derived CRC32.
+	if err := store.PutFilenameCRC32Batch("root-0", []FilenameCRC32Entry{
+		{RelPath: "v/clip[ABCD1234].mp4", Mtime: 1, Size: 500, CRC32: "ABCD1234"},
+	}); err != nil {
+		t.Fatalf("PutFilenameCRC32Batch: %v", err)
+	}
+
+	// Simulate classification writing tags but blank CRC32 (videos blank both
+	// hashes because frames are temporary, not the original file).
+	if err := store.Put(&Result{
+		RootID:    "root-0",
+		RelPath:   "v/clip[ABCD1234].mp4",
+		Mtime:     1,
+		Size:      500,
+		ModelVer:  "clip-v1",
+		ScannedAt: time.Now().UTC(),
+		Tags:      []TagScore{{Label: "video", Score: 0.9}},
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	got, err := store.Get("root-0", "v/clip[ABCD1234].mp4")
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v, %v", got, err)
+	}
+	if got.CRC32 != "ABCD1234" {
+		t.Fatalf("CRC32 = %q, want ABCD1234 preserved through classification Put", got.CRC32)
+	}
+	if len(got.Tags) != 1 || got.Tags[0].Label != "video" {
+		t.Fatalf("tags = %+v, want classification tags preserved", got.Tags)
+	}
+	if got.ModelVer != "clip-v1" {
+		t.Fatalf("model_ver = %q, want clip-v1 (classification overwrites filename sentinel)", got.ModelVer)
+	}
+}
+
+func TestStorePutFilenameCRC32BatchEmpty(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	if err := store.PutFilenameCRC32Batch("root-0", nil); err != nil {
+		t.Fatalf("PutFilenameCRC32Batch(nil): %v", err)
+	}
+	if err := store.PutFilenameCRC32Batch("root-0", []FilenameCRC32Entry{}); err != nil {
+		t.Fatalf("PutFilenameCRC32Batch(empty): %v", err)
+	}
+}
