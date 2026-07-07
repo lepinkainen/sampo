@@ -13,6 +13,7 @@ import type {
 	OCRResult,
 } from '$lib/api';
 import { ThumbnailLoader, thumbnailKey } from '$lib/thumbnailLoader.svelte';
+import { thumbnailQueue } from '$lib/thumbnailQueue';
 import type { FileEntry } from '$lib/types';
 import {
 	formatDate,
@@ -45,6 +46,9 @@ let diskUsageLoading = $state(false);
 const detailsThumb = new ThumbnailLoader();
 let lastDetailsThumbKey = $state('');
 let lastSelectionDetailsKey = $state('');
+// Priority 0: an explicitly-selected file should preempt every grid
+// thumbnail, including cheap images. Only one entry is alive at a time.
+let detailsThumbCancel: (() => void) | null = null;
 
 let selectedDetailsTags = $derived.by(() => {
 	if (!sel) return [];
@@ -57,7 +61,10 @@ let selectedDetailsTags = $derived.by(() => {
 	return sel.tags ?? [];
 });
 
-onDestroy(() => detailsThumb.cleanup());
+onDestroy(() => {
+	detailsThumbCancel?.();
+	detailsThumb.cleanup();
+});
 
 $effect(() => {
 	const thumbKey = sel ? thumbnailKey(rootId, sel) : '';
@@ -65,9 +72,15 @@ $effect(() => {
 		return;
 	}
 	lastDetailsThumbKey = thumbKey;
+	detailsThumbCancel?.();
+	detailsThumbCancel = null;
 	detailsThumb.reset(sel?.hasThumb ? 'loading' : 'idle');
 	if (sel?.hasThumb) {
-		void detailsThumb.fetch(rootId, sel.path);
+		// Route through the shared queue so the panel's single thumbnail
+		// preempts any in-flight grid fetches (priority 0 = lowest cost).
+		detailsThumbCancel = thumbnailQueue.enqueue(0, () =>
+			detailsThumb.fetch(rootId, sel.path),
+		);
 	}
 });
 

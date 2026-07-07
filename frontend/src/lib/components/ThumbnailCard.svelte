@@ -1,6 +1,8 @@
 <script lang="ts">
 import { onMount } from 'svelte';
 import { ThumbnailLoader, thumbnailKey } from '$lib/thumbnailLoader.svelte';
+import { thumbnailPriority } from '$lib/thumbnailPriority';
+import { thumbnailQueue } from '$lib/thumbnailQueue';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
@@ -34,6 +36,10 @@ const loader = new ThumbnailLoader();
 let thumbBox: HTMLDivElement | undefined = $state();
 let lastThumbKey = $state('');
 let thumbVisible = $state(false);
+// Cancels the pending (not-yet-started) queue entry. Nulled when the entry
+// has begun running — once `loader.fetch` is in flight the loader's own
+// AbortController is the source of truth.
+let cancelEnqueue: (() => void) | null = null;
 
 let thumbKey = $derived(thumbnailKey(rootId, entry));
 let showThumbPending = $derived(
@@ -47,7 +53,10 @@ let showThumbError = $derived(entry.hasThumb && loader.state === 'error');
 onMount(() => {
 	if (!thumbBox || typeof IntersectionObserver === 'undefined') {
 		thumbVisible = true;
-		return () => loader.cleanup();
+		return () => {
+			cancelEnqueue?.();
+			loader.cleanup();
+		};
 	}
 
 	const observer = new IntersectionObserver(
@@ -63,6 +72,8 @@ onMount(() => {
 
 	return () => {
 		observer.disconnect();
+		cancelEnqueue?.();
+		cancelEnqueue = null;
 		loader.cleanup();
 	};
 });
@@ -72,6 +83,8 @@ $effect(() => {
 		return;
 	}
 	lastThumbKey = thumbKey;
+	cancelEnqueue?.();
+	cancelEnqueue = null;
 	loader.reset(entry.hasThumb ? 'idle' : 'error');
 });
 
@@ -79,7 +92,13 @@ $effect(() => {
 	if (!thumbVisible || !entry.hasThumb || loader.state !== 'idle') {
 		return;
 	}
-	void loader.fetch(rootId, entry.path);
+	// Hand scheduling to the shared priority queue so a few slow video
+	// thumbnails can't claim the browser's HTTP slots while cheaper images
+	// are still waiting. The loader still owns fetch state and abort.
+	cancelEnqueue?.();
+	cancelEnqueue = thumbnailQueue.enqueue(thumbnailPriority(entry), () =>
+		loader.fetch(rootId, entry.path),
+	);
 });
 </script>
 
