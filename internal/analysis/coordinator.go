@@ -124,8 +124,8 @@ func NewCoordinator(
 		pending:        make(map[string]chan struct{}),
 	}
 
-	for range workers {
-		go c.worker()
+	for i := range workers {
+		go c.worker(i)
 	}
 
 	return c
@@ -437,18 +437,19 @@ func (c *Coordinator) EnqueueDone(rootID string, it EnqueueItem) <-chan struct{}
 	return done
 }
 
-func (c *Coordinator) worker() {
+func (c *Coordinator) worker(id int) {
 	for j := range c.jobs {
 		c.active.Add(1)
 		c.logger.Debug("worker picked job",
 			"path", j.relPath,
+			"worker", id,
 			"qlen", len(c.jobs),
 			"qcap", cap(c.jobs),
 			"active", c.active.Load(),
 		)
 		start := time.Now()
 		c.process(context.Background(), j)
-		c.logger.Debug("worker finished job", "path", j.relPath, "duration_ms", time.Since(start).Milliseconds())
+		c.logger.Debug("worker finished job", "path", j.relPath, "worker", id, "duration_ms", time.Since(start).Milliseconds())
 		c.active.Add(-1)
 		c.releasePending(j.key)
 	}
