@@ -8,6 +8,16 @@ export default async function globalSetup(config: FullConfig) {
 
 	const api = await request.newContext({ baseURL });
 	try {
+		// Capture the user's current preference so global-teardown can restore it;
+		// otherwise the e2e run leaves the shared dev backend with auto-analysis off.
+		const before = await api.get('/api/analysis/settings');
+		if (before.ok()) {
+			const settings = (await before.json()) as { autoBrowseEnabled?: boolean };
+			process.env.SAMPO_PREV_AUTO_BROWSE = settings.autoBrowseEnabled
+				? '1'
+				: '0';
+		}
+
 		const response = await api.post('/api/analysis/settings', {
 			data: { autoBrowseEnabled: false },
 		});
