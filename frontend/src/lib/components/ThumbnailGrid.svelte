@@ -38,6 +38,7 @@ import Toast from './Toast.svelte';
 import GridToolbar from './GridToolbar.svelte';
 import DetailsPanel from './DetailsPanel.svelte';
 import DuplicatesModal from './DuplicatesModal.svelte';
+import Loader from './Loader.svelte';
 import {
 	Trash2,
 	Scissors,
@@ -45,7 +46,6 @@ import {
 	ClipboardPaste,
 	FolderOpen,
 	Pencil,
-	LoaderCircle,
 } from '@lucide/svelte';
 
 interface Props {
@@ -881,7 +881,7 @@ function handleTagFilter(e: Event) {
 						</div>
 						<div class="text-center">
 							<p class="text-gray-500">
-								<LoaderCircle size={16} class="mr-2 inline animate-spin" />
+								<Loader class="mr-2 inline" />
 								Loading...
 							</p>
 							{#if loadingSlow}

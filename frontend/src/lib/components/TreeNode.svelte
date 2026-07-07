@@ -2,8 +2,9 @@
 import { fetchDirectory, moveFiles, copyFiles } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
-import { ChevronDown, ChevronRight, Loader } from '@lucide/svelte';
+import { ChevronDown, ChevronRight } from '@lucide/svelte';
 import FileIcon from './FileIcon.svelte';
+import Loader from './Loader.svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -164,7 +165,7 @@ async function handleDrop(e: DragEvent) {
 		{#if entry.isDir}
 			<span class="w-4 shrink-0 text-gray-500">
 				{#if loading}
-					<Loader size={14} class="animate-spin" />
+					<Loader size={14} />
 				{:else if expanded}
 					<ChevronDown size={14} />
 				{:else}

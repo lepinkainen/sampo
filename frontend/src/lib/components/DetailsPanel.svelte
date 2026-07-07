@@ -20,8 +20,8 @@ import {
 	formatResolution,
 	formatSize,
 } from '$lib/utils';
-import { LoaderCircle } from '@lucide/svelte';
 import FileIcon from './FileIcon.svelte';
+import Loader from './Loader.svelte';
 
 interface Props {
 	rootId: string;
@@ -174,7 +174,7 @@ async function handleRunOCR(entry: FileEntry) {
 							class="absolute inset-0 z-20 flex items-center justify-center text-gray-500"
 							aria-label="Loading thumbnail"
 						>
-							<LoaderCircle size={16} class="animate-spin" />
+							<Loader />
 						</div>
 					{/if}
 				{:else}

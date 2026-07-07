@@ -4,7 +4,8 @@ import { ThumbnailLoader, thumbnailKey } from '$lib/thumbnailLoader.svelte';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
-import { Folder, LoaderCircle, ScanText, User } from '@lucide/svelte';
+import Loader from './Loader.svelte';
+import { Folder, ScanText, User } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -128,7 +129,7 @@ $effect(() => {
 					class="absolute inset-0 z-20 flex items-center justify-center text-gray-500"
 					aria-label="Loading thumbnail"
 				>
-					<LoaderCircle size={16} class="animate-spin" />
+					<Loader />
 				</div>
 			{/if}
 		{:else}

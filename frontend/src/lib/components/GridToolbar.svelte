@@ -6,7 +6,6 @@ import {
 	Files,
 	LayoutGrid,
 	List,
-	LoaderCircle,
 	Pencil,
 	RefreshCw,
 	ScanSearch,
@@ -19,6 +18,7 @@ import {
 	UserX,
 	X,
 } from '@lucide/svelte';
+import Loader from './Loader.svelte';
 
 interface Props {
 	rootId: string;
@@ -154,7 +154,7 @@ let {
 					{/if}
 				{/each}
 				{#if backgroundValidating}
-					<LoaderCircle size={14} class="animate-spin text-gray-500 ml-2 inline-block align-middle" />
+					<Loader size={14} class="text-gray-500 ml-2 inline-block align-middle" />
 				{/if}
 			</div>
 		{/if}
@@ -227,10 +227,7 @@ let {
 					class="flex items-center gap-1 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-300"
 					title={`Background analysis running (${analysisSettings.browseStatus.active} active, ${analysisSettings.browseStatus.queued} queued)`}
 				>
-					<span class="bl bl-dither" role="status" aria-label="Loading" style="--size: 12px; --speed: 1.2s">
-						<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-						<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-					</span>
+				<Loader size={12} speed="1.2s" />
 					<span>{analysisSettings.browseStatus.active} active</span>
 					{#if analysisSettings.browseStatus.queued > 0}
 						<span class="text-amber-400/80">/ {analysisSettings.browseStatus.queued} queued</span>
@@ -375,52 +372,3 @@ let {
 	</div>
 </div>
 
-<style>
-.bl {
-  --size: 32px;
-  --speed: 1s;
-  --bl-ease: cubic-bezier(0.77, 0, 0.175, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
-}
-@keyframes bl-rotate { to { transform: rotate(1turn); } }
-@keyframes bl-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-@media (prefers-reduced-motion: reduce) {
-  .bl * { animation: none !important; }
-  .bl { animation: bl-fade 1.4s var(--bl-ease) infinite; }
-}
-
-.bl-dither {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: max(1px, calc(var(--size) * 0.05));
-  width: var(--size);
-}
-.bl-dither i {
-  aspect-ratio: 1;
-  background: currentColor;
-  animation: bl-dith var(--speed) var(--bl-ease) infinite;
-}
-.bl-dither i:nth-child(1)  { animation-delay: 0s; }
-.bl-dither i:nth-child(2)  { animation-delay: calc(var(--speed) * 0.5); }
-.bl-dither i:nth-child(3)  { animation-delay: calc(var(--speed) * 0.125); }
-.bl-dither i:nth-child(4)  { animation-delay: calc(var(--speed) * 0.625); }
-.bl-dither i:nth-child(5)  { animation-delay: calc(var(--speed) * 0.75); }
-.bl-dither i:nth-child(6)  { animation-delay: calc(var(--speed) * 0.25); }
-.bl-dither i:nth-child(7)  { animation-delay: calc(var(--speed) * 0.875); }
-.bl-dither i:nth-child(8)  { animation-delay: calc(var(--speed) * 0.375); }
-.bl-dither i:nth-child(9)  { animation-delay: calc(var(--speed) * 0.1875); }
-.bl-dither i:nth-child(10) { animation-delay: calc(var(--speed) * 0.6875); }
-.bl-dither i:nth-child(11) { animation-delay: calc(var(--speed) * 0.0625); }
-.bl-dither i:nth-child(12) { animation-delay: calc(var(--speed) * 0.5625); }
-.bl-dither i:nth-child(13) { animation-delay: calc(var(--speed) * 0.9375); }
-.bl-dither i:nth-child(14) { animation-delay: calc(var(--speed) * 0.4375); }
-.bl-dither i:nth-child(15) { animation-delay: calc(var(--speed) * 0.8125); }
-.bl-dither i:nth-child(16) { animation-delay: calc(var(--speed) * 0.3125); }
-@keyframes bl-dith {
-  0%, 100% { opacity: 0.1; }
-  50% { opacity: 1; }
-}
-</style>

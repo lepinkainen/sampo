@@ -3,13 +3,8 @@ import { onMount } from 'svelte';
 import { fetchDirectory, fetchRoots, moveFiles, copyFiles } from '$lib/api';
 import type { FileEntry, Root } from '$lib/types';
 import { sortEntries } from '$lib/utils';
-import {
-	Folder,
-	FolderOpen,
-	ChevronDown,
-	ChevronRight,
-	Loader,
-} from '@lucide/svelte';
+import { Folder, FolderOpen, ChevronDown, ChevronRight } from '@lucide/svelte';
+import Loader from './Loader.svelte';
 import TreeNode from './TreeNode.svelte';
 
 interface Props {
@@ -152,7 +147,7 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 				>
 					<span class="w-4 shrink-0 text-gray-500">
 						{#if loadingRoots.has(root.id)}
-							<Loader size={14} class="animate-spin" />
+							<Loader size={14} />
 						{:else if expandedRoots.has(root.id)}
 							<ChevronDown size={14} />
 						{:else}
