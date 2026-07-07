@@ -1,6 +1,19 @@
+import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
+const TESTDATA = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	'../../testdata',
+);
+const TMPDIR = resolve(TESTDATA, '_tmp_special_chars');
+
 test.describe('Special characters in paths', () => {
+	test.afterEach(() => {
+		rmSync(TMPDIR, { recursive: true, force: true });
+	});
+
 	test('ampersand in directory name shows thumbnails', async ({ page }) => {
 		await page.goto('/');
 		// Expand "Sample" root in tree view
@@ -19,15 +32,24 @@ test.describe('Special characters in paths', () => {
 	});
 
 	test('apostrophe in filename shows thumbnail', async ({ page }) => {
+		rmSync(TMPDIR, { recursive: true, force: true });
+		mkdirSync(TMPDIR, { recursive: true });
+		cpSync(
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_rrrr.png'),
+			resolve(TMPDIR, "grid2x2_rgb_apostrophe'.png"),
+		);
+
 		await page.goto('/');
 		// Expand "Sample" root in tree view
 		await page.getByText('Sample').click();
-		// Click the tree node for images directory
-		await page.locator('.select-none button', { hasText: 'images' }).click();
+		// Click the tree node for temp special-char directory
+		await page
+			.locator('.select-none button', { hasText: '_tmp_special_chars' })
+			.click();
 		// Wait for thumbnail grid
 		await page.waitForSelector('[class*="grid"]');
 		// Find the card for the apostrophe file
-		const card = page.locator('p', { hasText: "test'apostrophe.jpg" });
+		const card = page.locator('p', { hasText: "grid2x2_rgb_apostrophe'.png" });
 		await expect(card).toBeVisible();
 		// The thumbnail image for this file should be loaded (not show error fallback)
 		const parentCard = card.locator(

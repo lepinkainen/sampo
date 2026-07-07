@@ -24,7 +24,7 @@ test.describe('Tree view and navigation', () => {
 
 		// Should show child directories
 		await expect(
-			page.locator('.select-none button', { hasText: 'images' }),
+			page.locator('.select-none button', { hasText: 'grid2x2' }),
 		).toBeVisible();
 		await expect(
 			page.locator('.select-none button', { hasText: 'subdir' }),
@@ -35,8 +35,8 @@ test.describe('Tree view and navigation', () => {
 		await page.goto('/');
 		await page.getByText('Sample').click();
 
-		// Click "images" directory
-		await page.locator('.select-none button', { hasText: 'images' }).click();
+		// Click "grid2x2" directory
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 
 		// Placeholder should be gone
 		await expect(
@@ -47,9 +47,45 @@ test.describe('Tree view and navigation', () => {
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 
 		// URL should reflect the selection
-		await page.waitForURL(/path=.*images/);
+		await page.waitForURL(/path=.*grid2x2/);
 		const url = new URL(page.url());
 		expect(url.searchParams.get('root')).toBeTruthy();
+	});
+
+	test('resets thumbnail scroll when selecting a different directory', async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 520, height: 320 });
+		await page.goto('/');
+		await page.getByText('Sample').click();
+
+		// Warm the target directory cache so switching back does not use the
+		// loading skeleton, which would naturally clamp scrollTop to zero.
+		await page
+			.locator('.select-none button', { hasText: 'dir&special' })
+			.click();
+		await page.waitForURL(/path=.*dir/);
+		await page.getByTestId('thumbnail-card').first().waitFor();
+
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
+		await page.waitForURL(/path=.*grid2x2/);
+		await page.getByTestId('thumbnail-card').first().waitFor();
+
+		const scroller = page.getByTestId('thumbnail-scroll');
+		const scrolledTop = await scroller.evaluate((el) => {
+			el.scrollTop = el.scrollHeight;
+			return el.scrollTop;
+		});
+		expect(scrolledTop).toBeGreaterThan(0);
+
+		await page
+			.locator('.select-none button', { hasText: 'dir&special' })
+			.click();
+		await page.waitForURL(/path=.*dir/);
+
+		await expect
+			.poll(async () => scroller.evaluate((el) => el.scrollTop))
+			.toBe(0);
 	});
 
 	test('clicking a different directory switches grid contents', async ({
@@ -58,17 +94,17 @@ test.describe('Tree view and navigation', () => {
 		await page.goto('/');
 		await page.getByText('Sample').click();
 
-		// Navigate to images and wait for URL + grid items
-		await page.locator('.select-none button', { hasText: 'images' }).click();
-		await page.waitForURL(/path=.*images/);
+		// Navigate to grid2x2 and wait for URL + grid items
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
+		await page.waitForURL(/path=.*grid2x2/);
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 		await page
 			.locator('[class*="grid-cols"] > [role="button"]')
 			.first()
 			.waitFor();
 
-		// Count thumbnails in images
-		const imagesCount = await page
+		// Count thumbnails in grid2x2
+		const gridCount = await page
 			.locator('[class*="grid-cols"] > [role="button"]')
 			.count();
 
@@ -88,7 +124,7 @@ test.describe('Tree view and navigation', () => {
 			.count();
 
 		// Both should have items but potentially different counts
-		expect(imagesCount).toBeGreaterThan(0);
+		expect(gridCount).toBeGreaterThan(0);
 		expect(specialCount).toBeGreaterThan(0);
 
 		// URL should reflect new directory

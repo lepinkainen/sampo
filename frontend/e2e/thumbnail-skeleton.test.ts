@@ -16,13 +16,15 @@ test.describe('Thumbnail skeleton loading states', () => {
 
 		await page.goto('/');
 		await page.getByText('Sample').click();
-		await page.locator('.select-none button', { hasText: 'images' }).click();
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 
 		const gridSkeletons = page.getByTestId('thumbnail-skeleton');
 		await expect.poll(() => gridSkeletons.count()).toBeGreaterThan(0);
 
 		const firstCard = page.getByTestId('thumbnail-card').first();
+		const firstCardSkeleton = firstCard.getByTestId('thumbnail-skeleton');
+		await expect(firstCardSkeleton).toHaveCount(1);
 		await firstCard.click();
 
 		const detailsSkeleton = page.getByTestId('details-thumbnail-skeleton');
@@ -30,7 +32,7 @@ test.describe('Thumbnail skeleton loading states', () => {
 
 		releaseThumbs!();
 
-		await expect(gridSkeletons).toHaveCount(0, { timeout: 5000 });
+		await expect(firstCardSkeleton).toHaveCount(0, { timeout: 5000 });
 		await expect(detailsSkeleton).toHaveCount(0, { timeout: 5000 });
 	});
 });

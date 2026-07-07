@@ -18,16 +18,16 @@ test.describe('File operations: Cut/Copy/Paste', () => {
 		mkdirSync(SRC_DIR, { recursive: true });
 		mkdirSync(DST_DIR, { recursive: true });
 		cpSync(
-			resolve(TESTDATA, 'images/test_red.jpg'),
-			resolve(SRC_DIR, 'test_red.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_rrrr.png'),
+			resolve(SRC_DIR, 'grid2x2_rgb_rrrr.png'),
 		);
 		cpSync(
-			resolve(TESTDATA, 'images/test_blue.jpg'),
-			resolve(SRC_DIR, 'test_blue.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_gggg.png'),
+			resolve(SRC_DIR, 'grid2x2_rgb_gggg.png'),
 		);
 		cpSync(
-			resolve(TESTDATA, 'images/test_green.jpg'),
-			resolve(SRC_DIR, 'test_green.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_bbbb.png'),
+			resolve(SRC_DIR, 'grid2x2_rgb_bbbb.png'),
 		);
 
 		await page.goto('/');
@@ -171,7 +171,9 @@ test.describe('File operations: Cut/Copy/Paste', () => {
 		await cards.first().click();
 
 		// Click toolbar copy button
-		await page.locator('button[title="Copy (Ctrl+C)"]').click();
+		const copyButton = page.locator('button[title="Copy (Ctrl+C)"]');
+		await expect(copyButton).not.toBeDisabled();
+		await copyButton.click();
 		await expect(page.getByText('Copied 1 item(s)')).toBeVisible();
 	});
 

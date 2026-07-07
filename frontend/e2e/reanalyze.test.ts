@@ -6,7 +6,7 @@ const freshTag = 'fresh-ui-tag';
 function imageEntry(tags: { label: string; score: number }[]) {
 	return {
 		name: 'tagged.jpg',
-		path: 'images/tagged.jpg',
+		path: 'grid2x2/tagged.png',
 		isDir: false,
 		isZip: false,
 		size: 1234,
@@ -50,7 +50,7 @@ test.describe('Re-analyze action', () => {
 				return;
 			}
 
-			if (url.pathname === '/api/tree/root-0/images') {
+			if (url.pathname === '/api/tree/root-0/grid2x2') {
 				treeRequests++;
 				await route.fulfill({
 					json: [imageEntry(currentTags)],
@@ -65,7 +65,7 @@ test.describe('Re-analyze action', () => {
 					json: {
 						running: true,
 						rootId: 'root-0',
-						path: 'images',
+						path: 'grid2x2',
 						total: 1,
 						completed: 0,
 						errors: 0,
@@ -79,7 +79,7 @@ test.describe('Re-analyze action', () => {
 					json: {
 						running: false,
 						rootId: 'root-0',
-						path: 'images',
+						path: 'grid2x2',
 						total: 1,
 						completed: 1,
 						errors: 0,
@@ -99,7 +99,7 @@ test.describe('Re-analyze action', () => {
 			await dialog.accept();
 		});
 
-		await page.goto('/?root=root-0&path=images');
+		await page.goto('/?root=root-0&path=grid2x2');
 
 		const card = page.getByTestId('thumbnail-card');
 		await expect(card).toHaveCount(1);
@@ -111,7 +111,7 @@ test.describe('Re-analyze action', () => {
 			.poll(() => analyzePayload)
 			.toEqual({
 				rootId: 'root-0',
-				path: 'images',
+				path: 'grid2x2',
 				force: true,
 			});
 		await expect(card.getByText(freshTag)).toBeVisible({ timeout: 5000 });

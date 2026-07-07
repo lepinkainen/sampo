@@ -5,8 +5,8 @@ test.describe('Media Preview', () => {
 		await page.goto('/');
 		// Expand "Sample" root
 		await page.getByText('Sample').click();
-		// Navigate to images directory (use tree node selector to avoid grid matches)
-		await page.locator('.select-none button', { hasText: 'images' }).click();
+		// Navigate to grid2x2 directory (use tree node selector to avoid grid matches)
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 		// Wait for thumbnails to load
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 	});
@@ -31,7 +31,7 @@ test.describe('Media Preview', () => {
 		await expect(img).toBeVisible();
 	});
 
-	test('arrow keys navigate between images and update URL', async ({
+	test('arrow keys navigate between grid images and update URL', async ({
 		page,
 	}) => {
 		// Open preview on first image
@@ -91,6 +91,35 @@ test.describe('Media Preview', () => {
 		await expect(page.locator('[class*="grid-cols-[repeat"]')).toBeVisible();
 		expect(page.url()).not.toContain('preview=');
 	});
+
+	for (const closeAction of ['Escape', 'button'] as const) {
+		test(`closing preview with ${closeAction} restores thumbnail scroll position`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width: 520, height: 320 });
+
+			const scroller = page.getByTestId('thumbnail-scroll');
+			const cards = page.getByTestId('thumbnail-card');
+			await cards.nth(3).scrollIntoViewIfNeeded();
+			const savedScrollTop = await scroller.evaluate((el) => el.scrollTop);
+			expect(savedScrollTop).toBeGreaterThan(0);
+
+			await cards.nth(3).dblclick();
+			await expect(page.getByLabel('Close preview')).toBeVisible();
+
+			if (closeAction === 'Escape') {
+				await page.keyboard.press('Escape');
+			} else {
+				await page.getByLabel('Close preview').click();
+			}
+
+			await expect(page.getByLabel('Close preview')).not.toBeVisible();
+			await expect(scroller).toBeVisible();
+			await expect
+				.poll(async () => scroller.evaluate((el) => el.scrollTop))
+				.toBeGreaterThan(0);
+		});
+	}
 
 	test('wrap-around navigation at boundaries', async ({ page }) => {
 		// Open preview on first image

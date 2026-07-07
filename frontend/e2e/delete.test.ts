@@ -10,22 +10,38 @@ const TESTDATA = resolve(
 const TMPDIR = resolve(TESTDATA, '_tmp_delete');
 
 test.describe('Delete files', () => {
-	test.beforeEach(async ({ page }) => {
+	test.beforeEach(async ({ page }, testInfo) => {
 		// Create a temp directory with test files
 		rmSync(TMPDIR, { recursive: true, force: true });
 		mkdirSync(TMPDIR, { recursive: true });
 		cpSync(
-			resolve(TESTDATA, 'images/test_red.jpg'),
-			resolve(TMPDIR, 'test_red.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_rrrr.png'),
+			resolve(TMPDIR, 'grid2x2_rgb_rrrr.png'),
 		);
 		cpSync(
-			resolve(TESTDATA, 'images/test_blue.jpg'),
-			resolve(TMPDIR, 'test_blue.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_gggg.png'),
+			resolve(TMPDIR, 'grid2x2_rgb_gggg.png'),
 		);
 		cpSync(
-			resolve(TESTDATA, 'images/test_green.jpg'),
-			resolve(TMPDIR, 'test_green.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_bbbb.png'),
+			resolve(TMPDIR, 'grid2x2_rgb_bbbb.png'),
 		);
+		if (testInfo.title.includes('preserves thumbnail scroll')) {
+			const colours = ['r', 'g', 'b'];
+			for (let i = 0; i < 18; i++) {
+				let n = i;
+				const pattern = Array.from({ length: 4 }, () => {
+					const colour = colours[n % colours.length];
+					n = Math.floor(n / colours.length);
+					return colour;
+				}).join('');
+				const filename = `grid2x2_rgb_${pattern}.png`;
+				cpSync(
+					resolve(TESTDATA, 'grid2x2', filename),
+					resolve(TMPDIR, `extra_${filename}`),
+				);
+			}
+		}
 
 		await page.goto('/');
 		await page.getByText('Sample').click();
@@ -101,6 +117,31 @@ test.describe('Delete files', () => {
 
 		// Grid should have one fewer item
 		await expect(cards).toHaveCount(countBefore - 1);
+	});
+
+	test('confirm delete preserves thumbnail scroll position', async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 520, height: 320 });
+
+		const scroller = page.getByTestId('thumbnail-scroll');
+		const cards = page.getByTestId('thumbnail-card');
+		const countBefore = await cards.count();
+		await cards.nth(12).scrollIntoViewIfNeeded();
+		expect(await scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+		await cards.nth(12).click();
+		await page.locator('button[title="Delete"]').click();
+		const dialog = page.locator('.fixed.inset-0.z-50');
+		await expect(dialog).toBeVisible();
+		const savedScrollTop = await scroller.evaluate((el) => el.scrollTop);
+		expect(savedScrollTop).toBeGreaterThan(0);
+		await dialog.locator('button', { hasText: 'Delete' }).click();
+
+		await expect(cards).toHaveCount(countBefore - 1, { timeout: 15000 });
+		await expect
+			.poll(async () => scroller.evaluate((el) => el.scrollTop))
+			.toBeGreaterThan(savedScrollTop - 200);
 	});
 
 	test('Delete key shortcut opens confirm dialog', async ({ page }) => {

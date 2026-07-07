@@ -15,12 +15,12 @@ test.describe('Rename files', () => {
 		rmSync(TMPDIR, { recursive: true, force: true });
 		mkdirSync(TMPDIR, { recursive: true });
 		cpSync(
-			resolve(TESTDATA, 'images/test_red.jpg'),
-			resolve(TMPDIR, 'test_red.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_rrrr.png'),
+			resolve(TMPDIR, 'grid2x2_rgb_rrrr.png'),
 		);
 		cpSync(
-			resolve(TESTDATA, 'images/test_blue.jpg'),
-			resolve(TMPDIR, 'test_blue.jpg'),
+			resolve(TESTDATA, 'grid2x2/grid2x2_rgb_gggg.png'),
+			resolve(TMPDIR, 'grid2x2_rgb_gggg.png'),
 		);
 
 		await page.goto('/');
@@ -56,7 +56,7 @@ test.describe('Rename files', () => {
 		// Input should be pre-filled with current filename
 		const input = dialog.locator('input[type="text"]');
 		const value = await input.inputValue();
-		expect(value).toMatch(/test_(red|blue)\.jpg/);
+		expect(value).toMatch(/grid2x2_rgb_(rrrr|gggg)\.png/);
 	});
 
 	test('rename dialog selects name without extension', async ({ page }) => {
@@ -98,7 +98,7 @@ test.describe('Rename files', () => {
 		await expect(renameBtn).toBeDisabled();
 
 		// Type a new name — enabled
-		await input.fill('new_name.jpg');
+		await input.fill('new_name.png');
 		await expect(renameBtn).not.toBeDisabled();
 	});
 
@@ -122,19 +122,19 @@ test.describe('Rename files', () => {
 		const dialog = page.locator('.fixed.inset-0.z-50');
 		const input = dialog.locator('input[type="text"]');
 
-		await input.fill('renamed_file.jpg');
+		await input.fill('renamed_file.png');
 		await dialog.locator('button', { hasText: 'Rename' }).click();
 
 		// Dialog should close
 		await expect(dialog).not.toBeVisible();
 
 		// Toast should show success
-		await expect(page.getByText('Renamed to "renamed_file.jpg"')).toBeVisible();
+		await expect(page.getByText('Renamed to "renamed_file.png"')).toBeVisible();
 
 		// Grid should show new filename (use grid locator to avoid matching toast text)
 		await expect(
 			page.locator('[class*="grid-cols"] > [role="button"]', {
-				hasText: 'renamed_file.jpg',
+				hasText: 'renamed_file.png',
 			}),
 		).toBeVisible();
 	});
@@ -145,11 +145,11 @@ test.describe('Rename files', () => {
 		await page.keyboard.press('F2');
 
 		const input = page.locator('.fixed.inset-0.z-50 input[type="text"]');
-		await input.fill('enter_rename.jpg');
+		await input.fill('enter_rename.png');
 		await page.keyboard.press('Enter');
 
 		// Toast should confirm rename
-		await expect(page.getByText('Renamed to "enter_rename.jpg"')).toBeVisible();
+		await expect(page.getByText('Renamed to "enter_rename.png"')).toBeVisible();
 	});
 
 	test('toolbar rename button works', async ({ page }) => {

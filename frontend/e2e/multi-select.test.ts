@@ -4,7 +4,7 @@ test.describe('Multi-selection', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/');
 		await page.getByText('Sample').click();
-		await page.locator('.select-none button', { hasText: 'images' }).click();
+		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 		// Wait for cards to actually render
 		await page
