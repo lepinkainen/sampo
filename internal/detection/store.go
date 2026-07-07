@@ -9,6 +9,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/lepinkainen/sampo/internal/filesystem"
 )
 
 // Result holds the result of a person detection scan.
@@ -111,20 +113,6 @@ func (s *Store) IsStale(rootID, relPath string, mtime int64, size int64) bool {
 	return r.Mtime != mtime || r.Size != size
 }
 
-// dirPrefix normalizes a directory path for prefix matching.
-func dirPrefix(dirPath string) string {
-	if dirPath != "" && !strings.HasSuffix(dirPath, "/") {
-		return dirPath + "/"
-	}
-	return dirPath
-}
-
-// isDirectChild returns true if relPath is a direct child under prefix (not nested).
-func isDirectChild(relPath, prefix string) bool {
-	rel := strings.TrimPrefix(relPath, prefix)
-	return !strings.Contains(rel, "/")
-}
-
 // escapeLike escapes LIKE wildcards so path characters match literally.
 // Queries using it must append `ESCAPE '\'`.
 func escapeLike(s string) string {
@@ -160,9 +148,9 @@ func newScopedPathMatch(relPath string) scopedPathMatch {
 	}
 	return scopedPathMatch{
 		first:        variants[0],
-		firstPrefix:  escapeLike(dirPrefix(variants[0])) + "%",
+		firstPrefix:  escapeLike(filesystem.DirPrefix(variants[0])) + "%",
 		second:       variants[1],
-		secondPrefix: escapeLike(dirPrefix(variants[1])) + "%",
+		secondPrefix: escapeLike(filesystem.DirPrefix(variants[1])) + "%",
 		ok:           true,
 	}
 }
@@ -175,7 +163,7 @@ type DirStatus struct {
 
 // GetDirStatus returns scan status for a directory.
 func (s *Store) GetDirStatus(rootID, dirPath string) (*DirStatus, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	row := s.db.QueryRow(
 		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN has_person THEN 1 ELSE 0 END), 0)
@@ -192,7 +180,7 @@ func (s *Store) GetDirStatus(rootID, dirPath string) (*DirStatus, error) {
 
 // GetDirDetections returns a map of relPath -> hasPerson for all scanned direct children of a directory.
 func (s *Store) GetDirDetections(rootID, dirPath string) (map[string]bool, error) {
-	prefix := dirPrefix(dirPath)
+	prefix := filesystem.DirPrefix(dirPath)
 
 	rows, err := s.db.Query(
 		`SELECT rel_path, has_person FROM detections
@@ -211,7 +199,7 @@ func (s *Store) GetDirDetections(rootID, dirPath string) (map[string]bool, error
 		if err := rows.Scan(&relPath, &hasPerson); err != nil {
 			return nil, err
 		}
-		if isDirectChild(relPath, prefix) {
+		if filesystem.IsDirectChild(relPath, prefix) {
 			result[relPath] = hasPerson
 		}
 	}
