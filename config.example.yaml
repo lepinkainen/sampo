@@ -3,6 +3,7 @@ server:
 
 cache:
   dir: ".cache"
+  max_age_days: 90
 
 roots:
   - name: "Sample"
@@ -39,3 +40,10 @@ ocr:
   dict_path: "models/ppocr-dict.txt"
   model_version: "vision-1.0"
   workers: 2
+
+# Automatic analysis triggered while browsing
+analysis:
+  auto_browse_enabled: true
+  browse_workers: 1
+  browse_queue_size: 128
+  include_videos: true
