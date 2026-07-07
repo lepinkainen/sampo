@@ -16,7 +16,7 @@ FRONTEND_URL="http://localhost:5173"
 BACKEND_MATCH="$BACKEND_BIN"
 FRONTEND_MATCH="pnpm run dev"
 BACKEND_CMD="cd '$ROOT_DIR' && go build -o '$BACKEND_BIN' ./cmd/sampo && exec '$BACKEND_BIN' --debug"
-FRONTEND_CMD="cd '$ROOT_DIR/frontend' && exec pnpm run dev -- --host 127.0.0.1 --port 5173"
+FRONTEND_CMD="cd '$ROOT_DIR/frontend' && LC_ALL=en_GB.UTF-8 exec pnpm run dev -- --host 127.0.0.1 --port 5173"
 
 mkdir -p "$RUN_DIR"
 

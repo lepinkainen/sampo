@@ -180,6 +180,8 @@ tasks:
     desc: Start frontend dev server
     deps: [sync-branding]
     dir: frontend
+    env:
+      LC_ALL: en_GB.UTF-8
     cmds:
       - pnpm run dev -- --host 127.0.0.1 --port 5173
 
