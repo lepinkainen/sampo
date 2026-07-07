@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+.themed-scroll {
+	scrollbar-width: auto;
+	scrollbar-color: rgb(55 65 81) rgb(17 24 39);
+}
+
+.themed-scroll::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+
+.themed-scroll::-webkit-scrollbar-track {
+	background: rgb(17 24 39);
+}
+
+.themed-scroll::-webkit-scrollbar-thumb {
+	background: rgb(55 65 81);
+	border: 2px solid rgb(17 24 39);
+	border-radius: 6px;
+}
+
+.themed-scroll::-webkit-scrollbar-thumb:hover {
+	background: rgb(75 85 99);
+}
+
+.themed-scroll::-webkit-scrollbar-corner {
+	background: rgb(17 24 39);
+}
+
 @keyframes thumb-shimmer {
 	0% {
 		transform: translateX(-120%);

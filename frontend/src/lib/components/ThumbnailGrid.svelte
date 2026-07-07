@@ -866,7 +866,7 @@ function handleTagFilter(e: Event) {
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				data-testid="thumbnail-scroll"
-				class="flex-1 overflow-y-auto {viewMode === 'grid' ? 'p-4' : ''}"
+				class="themed-scroll flex-1 overflow-y-auto {viewMode === 'grid' ? 'p-4' : ''}"
 				bind:this={scrollContainer}
 				onclick={() => selection.clear()}
 				ondrop={handleDrop}
