@@ -1,4 +1,5 @@
 <script lang="ts">
+import { tick, untrack } from 'svelte';
 import {
 	deleteFiles,
 	fetchDirectory,
@@ -92,6 +93,9 @@ let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let loadRequestId = 0;
 let latestVisibleLoadId = 0;
+let currentDirectoryKey: string | null = null;
+let previewScrollDirectoryKey: string | null = null;
+let previewWasOpen = false;
 
 // Search state
 let searchActive = $state(false);
@@ -106,6 +110,40 @@ let showDuplicates = $state(false);
 
 const toast = (msg: string, kind: 'success' | 'error') =>
 	toastComponent?.show(msg, kind);
+
+function getDirectoryKey(rid: string, p: string) {
+	return `${rid}:${p}`;
+}
+
+function resetScrollPosition(expectedKey = getDirectoryKey(rootId, path)) {
+	savedScrollTop = 0;
+	previewScrollDirectoryKey = null;
+	previewWasOpen = false;
+
+	const applyReset = () => {
+		if (scrollContainer && getDirectoryKey(rootId, path) === expectedKey) {
+			scrollContainer.scrollTop = 0;
+		}
+	};
+
+	applyReset();
+	if (!scrollContainer) {
+		requestAnimationFrame(applyReset);
+	}
+}
+
+async function restoreScrollPosition(scrollTop: number, expectedKey: string) {
+	await tick();
+
+	const applyRestore = () => {
+		if (scrollContainer && getDirectoryKey(rootId, path) === expectedKey) {
+			scrollContainer.scrollTop = scrollTop;
+		}
+	};
+
+	requestAnimationFrame(applyRestore);
+}
+
 const reloadAfterScan = (invalidate: boolean) =>
 	makeReloadAfterScan(
 		{
@@ -198,7 +236,14 @@ let selectedEntries = $derived(
 );
 
 $effect(() => {
+	const nextDirectoryKey = getDirectoryKey(rootId, path);
+	const directoryChanged = currentDirectoryKey !== nextDirectoryKey;
+	currentDirectoryKey = nextDirectoryKey;
+
 	closeSearch();
+	if (directoryChanged) {
+		untrack(() => resetScrollPosition(nextDirectoryKey));
+	}
 	loadDirectory(rootId, path);
 });
 
@@ -278,13 +323,24 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (!previewFile && scrollContainer && savedScrollTop > 0) {
+	const currentKey = getDirectoryKey(rootId, path);
+	if (previewFile) {
+		previewWasOpen = true;
+		return;
+	}
+
+	if (
+		previewWasOpen &&
+		savedScrollTop > 0 &&
+		previewScrollDirectoryKey === currentKey
+	) {
 		const scrollTarget = savedScrollTop;
-		requestAnimationFrame(() => {
-			if (scrollContainer) {
-				scrollContainer.scrollTop = scrollTarget;
-			}
-		});
+		const restoreKey = currentKey;
+		previewWasOpen = false;
+		previewScrollDirectoryKey = null;
+		void restoreScrollPosition(scrollTarget, restoreKey);
+	} else if (previewWasOpen) {
+		previewWasOpen = false;
 	}
 });
 
@@ -299,15 +355,23 @@ async function loadAnalysisSettings() {
 async function loadDirectory(
 	rid: string,
 	p: string,
-	options?: { preserveSelection?: boolean; silent?: boolean },
+	options?: {
+		preserveSelection?: boolean;
+		silent?: boolean;
+		preserveScroll?: boolean;
+	},
 ) {
 	const preserveSelection = options?.preserveSelection ?? false;
 	const silent = options?.silent ?? false;
+	const preserveScroll = options?.preserveScroll ?? false;
+	const scrollTopBeforeLoad = preserveScroll
+		? (scrollContainer?.scrollTop ?? 0)
+		: 0;
+	const scrollKeyBeforeLoad = preserveScroll ? getDirectoryKey(rid, p) : null;
 	const requestId = ++loadRequestId;
 
 	if (!preserveSelection) {
 		selection.clear();
-		savedScrollTop = 0;
 	}
 
 	const filterOpts: { filter?: string; tag?: string } = {};
@@ -367,6 +431,9 @@ async function loadDirectory(
 			}
 		}
 		backgroundValidating = false;
+		if (scrollKeyBeforeLoad && scrollTopBeforeLoad > 0) {
+			void restoreScrollPosition(scrollTopBeforeLoad, scrollKeyBeforeLoad);
+		}
 	}
 }
 
@@ -421,6 +488,7 @@ function handleOpen(entry: FileEntry) {
 	} else if (entry.mediaType === 'image' || entry.mediaType === 'video') {
 		if (scrollContainer) {
 			savedScrollTop = scrollContainer.scrollTop;
+			previewScrollDirectoryKey = getDirectoryKey(rootId, path);
 		}
 		selection.clear();
 		onPreviewChange?.(entry.path);
@@ -506,7 +574,7 @@ async function handleDelete() {
 			clipboard.clear();
 		}
 		invalidateDirectoryCache(rootId, path);
-		await loadDirectory(rootId, path);
+		await loadDirectory(rootId, path, { preserveScroll: true });
 	} catch (e) {
 		toastComponent?.show(
 			e instanceof Error ? e.message : 'Delete failed',
@@ -797,6 +865,7 @@ function handleTagFilter(e: Event) {
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
+				data-testid="thumbnail-scroll"
 				class="flex-1 overflow-y-auto {viewMode === 'grid' ? 'p-4' : ''}"
 				bind:this={scrollContainer}
 				onclick={() => selection.clear()}
