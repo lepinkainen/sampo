@@ -1,0 +1,43 @@
+## Config for the isolated e2e stack (docker-compose.e2e.yml).
+## Mounted over the baked /app/config.yaml so Playwright drives a throwaway
+## container instead of the developer's dogfooding dev server on :8080.
+##
+## The single root is named "Sample" to match the e2e specs
+## (page.getByText('Sample')) and points at /testdata, which is bind-mounted
+## from ./testdata so fixtures the test process writes on the host are visible
+## in the container and deletes/renames flow back to the host.
+server:
+  port: 8080
+
+cache:
+  dir: "/cache"
+
+roots:
+  - name: "Sample"
+    path: "/testdata"
+
+detection:
+  enabled: true
+  model_path: "/app/models/yolo11n.onnx"
+  model_version: "v11n-1.0"
+  threshold: 0.5
+  workers: 2
+
+classification:
+  enabled: true
+  model_path: "/app/models/clip-vit-b32-image.onnx"
+  labels_path: "/app/models/clip-labels.json"
+  model_version: "clip-vit-b32-1.0"
+  threshold: 0.2
+  workers: 2
+
+ocr:
+  enabled: true
+  det_model_path: "/app/models/ppocr-det.onnx"
+  rec_model_path: "/app/models/ppocr-rec.onnx"
+  dict_path: "/app/models/ppocr-dict.txt"
+  model_version: "ppocrv4-1.0"
+  workers: 2
+
+analysis:
+  browse_workers: 2

@@ -58,15 +58,18 @@ tasks:
       - task: lint
       - task: build-frontend
       - task: build-go
-      - task: dev-up
-      - defer: { task: dev-down }
       - task: test-e2e
 
   test-e2e:
-    desc: Run Playwright end-to-end tests (requires dev servers running)
-    dir: frontend
+    desc: Run Playwright e2e against an isolated Docker stack (never touches the dev server on :8080)
+    vars:
+      E2E_PORT: '{{.SAMPO_E2E_PORT | default "8091"}}'
+    env:
+      SAMPO_E2E_PORT: '{{.E2E_PORT}}'
     cmds:
-      - pnpm exec playwright test
+      - docker compose -f docker-compose.e2e.yml up -d --build --wait
+      - defer: docker compose -f docker-compose.e2e.yml down -v
+      - PLAYWRIGHT_BASE_URL=http://localhost:{{.E2E_PORT}} pnpm --dir frontend exec playwright test
 
   test-ci:
     desc: Run tests with coverage for CI

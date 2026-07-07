@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 task build          # Full build: test + lint + frontend + Go binary
 task test           # Run Go tests + frontend type checking
 task test-full      # Full suite: test + lint + build + e2e (run after new features)
-task test-e2e       # Playwright e2e tests only (requires dev servers running)
+task test-e2e       # Playwright e2e against an isolated Docker stack (:8091), never touches the dev server
 task lint           # goimports + go vet + golangci-lint
 task build-frontend # Build SvelteKit frontend only
 task build-go       # Build Go binary only (requires frontend/build to exist)
@@ -45,10 +45,16 @@ cd frontend && pnpm exec biome check .        # lint
 cd frontend && pnpm exec biome check --write . # lint + autofix
 ```
 
-E2E tests use Playwright (`frontend/e2e/`). Requires dev servers running:
+E2E tests use Playwright (`frontend/e2e/`). `task test-e2e` builds and starts an
+isolated throwaway backend+frontend via `docker-compose.e2e.yml` (host port 8091,
+override with `SAMPO_E2E_PORT`), runs the specs against it, then tears it down
+(`down -v`). This keeps the suite off the dogfooding dev server on :8080. The
+container uses `config.e2e.yaml` (single `Sample` root bind-mounted from
+`./testdata`, so host-written fixtures are visible and deletes/renames flow back).
 ```bash
-task dev-up
-cd frontend && pnpm exec playwright test
+task test-e2e
+# or against a manually-run server:
+PLAYWRIGHT_BASE_URL=http://localhost:8080 pnpm --dir frontend exec playwright test
 ```
 
 ### Running during development

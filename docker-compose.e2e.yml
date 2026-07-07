@@ -1,0 +1,34 @@
+---
+# Isolated stack for Playwright e2e (task test-e2e). Runs a throwaway sampo
+# container so tests never poke the developer's dogfooding dev server on :8080.
+# Host port defaults to 8091 (override with SAMPO_E2E_PORT); cache lives in an
+# anonymous volume dropped by `docker compose down -v`.
+services:
+  sampo-e2e:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-e2e}
+        GIT_HASH: ${GIT_HASH:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: sampo:e2e
+    container_name: sampo-e2e
+    ports:
+      - "${SAMPO_E2E_PORT:-8091}:8080"
+    volumes:
+      # Bind-mount testdata so host-written fixtures are visible and
+      # deletes/renames flow back to the host. Overrides the baked config with
+      # a single "Sample" root the specs expect.
+      - ./testdata:/testdata
+      - ./config.e2e.yaml:/app/config.yaml:ro
+      # Fresh, throwaway cache per run.
+      - sampo-e2e-cache:/cache
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  sampo-e2e-cache:
