@@ -30,6 +30,10 @@ function fileKey(file: DuplicateFile): string {
 	return `${file.rootId}:${file.path}`;
 }
 
+function isExact(group: DuplicateGroup): boolean {
+	return group.hashType === 'sha256' || group.hashType === 'crc32';
+}
+
 function fileName(p: string): string {
 	return p.split('/').pop() || p;
 }
@@ -91,9 +95,13 @@ $effect(() => {
 });
 
 let visibleGroups = $derived(
-	tab === 'all' ? groups : groups.filter((g) => g.hashType === tab),
+	tab === 'all'
+		? groups
+		: tab === 'sha256'
+			? groups.filter((g) => isExact(g))
+			: groups.filter((g) => g.hashType === tab),
 );
-let exactCount = $derived(groups.filter((g) => g.hashType === 'sha256').length);
+let exactCount = $derived(groups.filter((g) => isExact(g)).length);
 let similarCount = $derived(
 	groups.filter((g) => g.hashType === 'phash').length,
 );
@@ -109,7 +117,7 @@ let selectedCount = $derived(selectedFiles.length);
 let reclaimSize = $derived(selectedFiles.reduce((sum, s) => sum + s.size, 0));
 
 function groupReclaim(group: DuplicateGroup): number {
-	if (group.hashType === 'sha256') return group.size * (group.files.length - 1);
+	if (isExact(group)) return group.size * (group.files.length - 1);
 	const keeper = group.keeper ?? null;
 	if (keeper == null) {
 		// Quality tie: best case keeps the largest file.

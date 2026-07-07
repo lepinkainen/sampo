@@ -263,6 +263,43 @@ describe('DuplicatesModal', () => {
 		expect(screen.getByText('big.png')).toBeInTheDocument();
 	});
 
+	it('shows CRC32 video groups under the Exact tab', async () => {
+		findDuplicates.mockResolvedValue({
+			groups: [
+				{
+					hash: 'DEADBEEF',
+					hashType: 'crc32',
+					size: 5000000,
+					files: [
+						{ rootId: 'root-0', path: 'a/clip[DEADBEEF].mp4', size: 5000000 },
+						{ rootId: 'root-0', path: 'b/clip[DEADBEEF].mkv', size: 5000000 },
+					],
+				},
+			],
+		});
+
+		render(DuplicatesModal, {
+			rootId: 'root-0',
+			path: 'videos',
+			onClose: vi.fn(),
+		});
+		await waitFor(() => {
+			expect(screen.getByText('clip[DEADBEEF].mp4')).toBeInTheDocument();
+		});
+
+		// CRC32 groups appear under Exact alongside SHA256 groups.
+		screen.getByRole('button', { name: /Exact/ }).click();
+		await waitFor(() => {
+			expect(screen.getByText('clip[DEADBEEF].mp4')).toBeInTheDocument();
+		});
+
+		// Hidden under Similar.
+		screen.getByRole('button', { name: /Similar/ }).click();
+		await waitFor(() => {
+			expect(screen.queryByText('clip[DEADBEEF].mp4')).not.toBeInTheDocument();
+		});
+	});
+
 	it('renders empty state when no duplicates', async () => {
 		findDuplicates.mockResolvedValue({ groups: [] });
 		render(DuplicatesModal, { rootId: 'root-0', path: '', onClose: vi.fn() });
