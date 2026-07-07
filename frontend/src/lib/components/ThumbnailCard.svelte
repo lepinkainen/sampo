@@ -140,17 +140,15 @@ $effect(() => {
 			/>
 		{:else if showThumbPending}
 			<div
-				class="thumb-skeleton absolute inset-0 z-10"
+				class="thumb-skeleton pointer-events-none absolute inset-0 z-10"
 				data-testid="thumbnail-skeleton"
 			></div>
-			{#if loader.showSlowLoading}
-				<div
-					class="absolute inset-0 z-20 flex items-center justify-center text-gray-500"
-					aria-label="Loading thumbnail"
-				>
-					<Loader />
-				</div>
-			{/if}
+			<div
+				class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-gray-500"
+				aria-label="Loading thumbnail"
+			>
+				<Loader />
+			</div>
 		{:else}
 			<span class="text-gray-500">
 				<FileIcon {entry} size={48} />
