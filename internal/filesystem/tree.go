@@ -55,7 +55,7 @@ var imageExts = map[string]bool{
 
 var videoExts = map[string]bool{
 	".mp4": true, ".webm": true, ".mkv": true, ".avi": true,
-	".mov": true, ".wmv": true, ".flv": true,
+	".mov": true, ".wmv": true, ".flv": true, ".m4v": true,
 }
 
 var archiveExts = map[string]bool{
