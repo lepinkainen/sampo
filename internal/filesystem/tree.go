@@ -54,8 +54,14 @@ var imageExts = map[string]bool{
 }
 
 var videoExts = map[string]bool{
-	".mp4": true, ".webm": true, ".mkv": true, ".avi": true,
-	".mov": true, ".wmv": true, ".flv": true, ".m4v": true,
+	".mp4": true, ".m4v": true, ".webm": true, ".mkv": true,
+	".avi": true, ".mov": true, ".wmv": true, ".flv": true,
+	".ts": true, ".m2ts": true, ".mts": true, ".vob": true,
+	".ogv": true, ".ogg": true, ".3gp": true, ".3g2": true,
+	".f4v": true, ".divx": true, ".xvid": true, ".rm": true,
+	".rmvb": true, ".asf": true, ".mxf": true, ".mpeg": true,
+	".mpg": true, ".mp2": true, ".mpe": true, ".mpv": true,
+	".m2v": true, ".m4p": true,
 }
 
 var archiveExts = map[string]bool{
