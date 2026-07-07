@@ -11,8 +11,8 @@ test.describe('Special characters in paths', () => {
 			.click();
 		// Wait for thumbnail grid
 		await page.waitForSelector('[class*="grid"]');
-		// Thumbnails should load (img elements with /api/thumb/ URLs)
-		const thumbs = page.locator('img[src*="/api/thumb/"]');
+		// Thumbnails should load (img elements with /api/thumb/ URLs, fetched as blobs)
+		const thumbs = page.locator('img[src^="blob:"]');
 		await expect(thumbs.first()).toBeVisible();
 		const thumbCount = await thumbs.count();
 		expect(thumbCount).toBeGreaterThan(0);
@@ -33,7 +33,7 @@ test.describe('Special characters in paths', () => {
 		const parentCard = card.locator(
 			'xpath=ancestor::div[contains(@class,"rounded-lg")]',
 		);
-		const img = parentCard.locator('img[src*="/api/thumb/"]');
+		const img = parentCard.locator('img[src^="blob:"]');
 		await expect(img).toBeVisible();
 	});
 

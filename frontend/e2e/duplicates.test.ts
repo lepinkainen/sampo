@@ -12,10 +12,10 @@ test.describe('Duplicates modal', () => {
 
 		const modal = page.getByTestId('duplicates-modal');
 		await expect(modal).toBeVisible();
-		await expect(modal).toContainText('Duplicate Files');
+		await expect(modal).toContainText('Duplicates');
 
 		// Close with the X button inside the modal header.
-		await modal.locator('button').first().click();
+		await modal.getByTitle('Close').click();
 		await expect(modal).toHaveCount(0);
 	});
 });

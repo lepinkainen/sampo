@@ -1,4 +1,5 @@
 <script lang="ts">
+import { tick } from 'svelte';
 import { Pencil } from '@lucide/svelte';
 
 interface Props {
@@ -9,8 +10,15 @@ interface Props {
 
 let { currentName, onConfirm, onCancel }: Props = $props();
 
-let newName = $state('');
-let lastCurrentName = $state('');
+// Initialize from the prop so the input already has its value on first
+// render — seeding it from an effect lands after the focus/select effect,
+// which collapses the name-without-extension selection to the end. The
+// initial-value capture is deliberate; the $effect below syncs later
+// currentName changes.
+// svelte-ignore state_referenced_locally
+let newName = $state(currentName);
+// svelte-ignore state_referenced_locally
+let lastCurrentName = $state(currentName);
 let inputEl: HTMLInputElement | undefined = $state();
 
 let isDisabled = $derived(newName.trim() === '' || newName === currentName);
@@ -23,16 +31,22 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (inputEl) {
-		inputEl.focus();
-		// Select name without extension for files
-		const dotIndex = currentName.lastIndexOf('.');
-		if (dotIndex > 0) {
-			inputEl.setSelectionRange(0, dotIndex);
-		} else {
-			inputEl.select();
-		}
+	if (!inputEl) {
+		return;
 	}
+	const el = inputEl;
+	el.focus();
+	// Select name without extension for files. Deferred past the current
+	// flush: value writes landing after this effect reset the selection to
+	// the end of the input.
+	void tick().then(() => {
+		const dotIndex = el.value.lastIndexOf('.');
+		if (dotIndex > 0) {
+			el.setSelectionRange(0, dotIndex);
+		} else {
+			el.select();
+		}
+	});
 });
 
 function handleKeydown(e: KeyboardEvent) {

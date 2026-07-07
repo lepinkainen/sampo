@@ -5,7 +5,7 @@ test.describe('Tree view and navigation', () => {
 		await page.goto('/');
 
 		// "Sampo" header should be visible
-		await expect(page.getByText('Sampo')).toBeVisible();
+		await expect(page.getByRole('img', { name: 'Sampo' })).toBeVisible();
 
 		// "Sample" root should be visible in the tree
 		await expect(page.getByText('Sample')).toBeVisible();
