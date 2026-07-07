@@ -2,30 +2,49 @@
 
 @keyframes thumb-shimmer {
 	0% {
-		transform: translateX(-100%);
+		transform: translateX(-120%);
 	}
 	100% {
-		transform: translateX(100%);
+		transform: translateX(320%);
 	}
 }
 
 .thumb-skeleton {
 	position: relative;
+	isolation: isolate;
 	overflow: hidden;
-	background-color: rgb(31 41 55);
+	background:
+		linear-gradient(135deg, rgb(31 41 55 / 0.95) 0%, rgb(15 23 42) 100%),
+		rgb(17 24 39);
+}
+
+.thumb-skeleton::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 30% 35%, rgb(148 163 184 / 0.1), transparent 34%),
+		linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%);
 }
 
 .thumb-skeleton::after {
 	content: "";
 	position: absolute;
-	inset: 0;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 1;
+	width: 42%;
 	background: linear-gradient(
-		90deg,
-		transparent 0%,
-		rgb(255 255 255 / 0.05) 25%,
-		rgb(255 255 255 / 0.2) 50%,
-		rgb(255 255 255 / 0.05) 75%,
-		transparent 100%
+		100deg,
+		rgb(255 255 255 / 0) 0%,
+		rgb(255 255 255 / 0.1) 28%,
+		rgb(255 255 255 / 0.34) 50%,
+		rgb(255 255 255 / 0.1) 72%,
+		rgb(255 255 255 / 0) 100%
 	);
-	animation: thumb-shimmer 1.5s linear infinite;
+	filter: blur(1px);
+	animation: thumb-shimmer 1.05s ease-in-out infinite;
+	pointer-events: none;
 }

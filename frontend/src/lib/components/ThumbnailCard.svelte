@@ -1,9 +1,10 @@
 <script lang="ts">
-import { thumbnailUrl } from '$lib/api';
+import { onMount } from 'svelte';
+import { ThumbnailLoader, thumbnailKey } from '$lib/thumbnailLoader.svelte';
 import type { FileEntry } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import FileIcon from './FileIcon.svelte';
-import { Folder, ScanText, User } from '@lucide/svelte';
+import { Folder, LoaderCircle, ScanText, User } from '@lucide/svelte';
 
 interface Props {
 	rootId: string;
@@ -27,24 +28,57 @@ let {
 	ondragstart,
 }: Props = $props();
 
-let imgLoading = $state(false);
-let imgError = $state(false);
+const loader = new ThumbnailLoader();
+
+let thumbBox: HTMLDivElement | undefined = $state();
 let lastThumbKey = $state('');
-let imgEl: HTMLImageElement | undefined = $state();
-let thumbKey = $derived(`${rootId}:${entry.path}:${entry.hasThumb}`);
+let thumbVisible = $state(false);
+
+let thumbKey = $derived(thumbnailKey(rootId, entry));
+let showThumbPending = $derived(
+	entry.hasThumb && loader.state !== 'ready' && loader.state !== 'error',
+);
+let showThumbImage = $derived(
+	entry.hasThumb && loader.state === 'ready' && loader.objectUrl !== null,
+);
+let showThumbError = $derived(entry.hasThumb && loader.state === 'error');
+
+onMount(() => {
+	if (!thumbBox || typeof IntersectionObserver === 'undefined') {
+		thumbVisible = true;
+		return () => loader.cleanup();
+	}
+
+	const observer = new IntersectionObserver(
+		(entries) => {
+			if (entries.some((item) => item.isIntersecting)) {
+				thumbVisible = true;
+				observer.disconnect();
+			}
+		},
+		{ rootMargin: '500px' },
+	);
+	observer.observe(thumbBox);
+
+	return () => {
+		observer.disconnect();
+		loader.cleanup();
+	};
+});
 
 $effect(() => {
 	if (thumbKey === lastThumbKey) {
 		return;
 	}
 	lastThumbKey = thumbKey;
-	imgLoading = entry.hasThumb;
-	imgError = false;
+	loader.reset(entry.hasThumb ? 'idle' : 'error');
+});
 
-	// Check if already complete (e.g. from cache)
-	if (entry.hasThumb && imgEl?.complete) {
-		imgLoading = false;
+$effect(() => {
+	if (!thumbVisible || !entry.hasThumb || loader.state !== 'idle') {
+		return;
 	}
+	void loader.fetch(rootId, entry.path);
 });
 </script>
 
@@ -73,26 +107,30 @@ $effect(() => {
 			}
 		: undefined}
 >
-	<div class="relative flex aspect-square items-center justify-center bg-gray-900">
-		{#if entry.hasThumb && !imgError}
-			{#if imgLoading}
-				<div
-					class="thumb-skeleton absolute inset-0 z-10"
-					data-testid="thumbnail-skeleton"
-				></div>
-			{/if}
+	<div
+		bind:this={thumbBox}
+		class="relative flex aspect-square items-center justify-center bg-gray-900"
+	>
+		{#if showThumbImage && loader.objectUrl}
 			<img
-				bind:this={imgEl}
-				src={thumbnailUrl(rootId, entry.path)}
+				src={loader.objectUrl}
 				alt={entry.name}
 				class="relative z-0 h-full w-full object-cover"
-				loading="lazy"
-				onload={() => (imgLoading = false)}
-				onerror={() => {
-					imgLoading = false;
-					imgError = true;
-				}}
+				onerror={() => loader.fail()}
 			/>
+		{:else if showThumbPending}
+			<div
+				class="thumb-skeleton absolute inset-0 z-10"
+				data-testid="thumbnail-skeleton"
+			></div>
+			{#if loader.showSlowLoading}
+				<div
+					class="absolute inset-0 z-20 flex items-center justify-center text-gray-500"
+					aria-label="Loading thumbnail"
+				>
+					<LoaderCircle size={16} class="animate-spin" />
+				</div>
+			{/if}
 		{:else}
 			<span class="text-gray-500">
 				<FileIcon {entry} size={48} />
@@ -113,7 +151,7 @@ $effect(() => {
 					<ScanText size={14} />
 				</span>
 			{/if}
-			{#if entry.isDir && entry.hasThumb && !imgError}
+			{#if entry.isDir && entry.hasThumb && !showThumbError}
 				<span class="rounded bg-black/60 p-0.5 text-white">
 					<Folder size={14} />
 				</span>

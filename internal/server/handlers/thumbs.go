@@ -5,11 +5,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lepinkainen/sampo/internal/analysis"
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
+
+const autoBrowseThumbnailWait = 2 * time.Second
 
 // GetThumbnail returns a cached thumbnail or generates one on demand.
 func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -37,17 +41,27 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cacheKey := thumbnail.CacheKey(rootID, relPath, info.ModTime().Unix(), info.Size())
+	mtime := info.ModTime().Unix()
+	size := info.Size()
+	cacheKey := thumbnail.CacheKey(rootID, relPath, mtime, size)
 	mediaType := filesystem.DetectMediaType(fullPath)
 
-	// Check cache first
+	// Check cache first.
 	if cachedPath, ok := h.thumbCache.Get(rootID, cacheKey); ok {
-		h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, info.ModTime().Unix(), info.Size())
+		h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, mtime, size)
 		http.ServeFile(w, r, cachedPath)
 		return
 	}
 
-	// Generate thumbnail
+	// When auto-browse analysis is on, image thumbnails are generated inside the
+	// load-once analysis worker. Avoid generating them here too, which would read
+	// and decode the same fresh file a second time.
+	if mediaType == "image" && h.deferImageThumbnailToBrowseAnalysis(w, r, rootID, relPath, fullPath, cacheKey, mtime, size) {
+		return
+	}
+
+	// Generate thumbnail directly for non-ML media, or when auto-browse analysis
+	// is off/unavailable.
 	ensureErr := h.thumbCache.EnsureDir(rootID)
 	if ensureErr != nil {
 		h.logger.Error("creating cache dir", "error", ensureErr)
@@ -75,8 +89,46 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, info.ModTime().Unix(), info.Size())
+	h.enqueueBrowseAnalysis(rootID, relPath, fullPath, mediaType, mtime, size)
 	http.ServeFile(w, r, dstPath)
+}
+
+func (h *Handler) deferImageThumbnailToBrowseAnalysis(w http.ResponseWriter, r *http.Request, rootID, relPath, fullPath, cacheKey string, mtime, size int64) bool {
+	if !h.AutoBrowseEnabled() || h.browseCoordinator == nil {
+		return false
+	}
+
+	// EnqueueDone never drops the job on a full queue and returns a channel
+	// closed when the worker finishes, so no cache polling is needed. A nil
+	// channel means nothing needs running — the thumbnail may have appeared
+	// since the caller's cache check, so fall through to the re-check below.
+	done := h.browseCoordinator.EnqueueDone(rootID, analysis.EnqueueItem{
+		RelPath:   relPath,
+		FullPath:  fullPath,
+		MediaType: "image",
+		Mtime:     mtime,
+		Size:      size,
+	})
+	if done != nil {
+		deadline := time.NewTimer(autoBrowseThumbnailWait)
+		defer deadline.Stop()
+		select {
+		case <-r.Context().Done():
+			return false
+		case <-deadline.C:
+			// Queue backed up — fall through to synchronous generation,
+			// which gives a definitive 200 or 500. No 202 retry loop.
+		case <-done:
+			// Worker finished. A cache miss below means the image is
+			// undecodable; sync generation returns the definitive error.
+		}
+	}
+
+	if cachedPath, ok := h.thumbCache.Get(rootID, cacheKey); ok {
+		http.ServeFile(w, r, cachedPath)
+		return true
+	}
+	return false
 }
 
 func (h *Handler) serveDirThumbnail(w http.ResponseWriter, r *http.Request, rootID, relPath, fullPath string) {
