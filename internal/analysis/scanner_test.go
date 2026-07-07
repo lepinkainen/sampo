@@ -53,7 +53,7 @@ func setupPruneTest(t *testing.T) (*Scanner, *classification.Store) {
 		t.Fatal(err)
 	}
 
-	coord := NewCoordinator(nil, nil, store, nil, nil, nil, "", 1, 1, false, slog.Default())
+	coord := NewCoordinator(nil, nil, store, nil, nil, nil, nil, "", 1, 1, false, slog.Default())
 	return NewScanner(coord, roots, 1, slog.Default()), store
 }
 
@@ -118,7 +118,7 @@ func TestScanDirectoryPrunesMissingLeadingSlashRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	coord := NewCoordinator(nil, nil, store, nil, nil, nil, "", 1, 1, false, slog.Default())
+	coord := NewCoordinator(nil, nil, store, nil, nil, nil, nil, "", 1, 1, false, slog.Default())
 	s := NewScanner(coord, roots, 1, slog.Default())
 
 	if err := s.ScanDirectory("root-0", "/photos", true); err != nil {

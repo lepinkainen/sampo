@@ -181,9 +181,41 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.enrichSearchDimensions(results, rootID)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(results); err != nil {
 		h.logger.Error("encoding search response", "error", err)
+	}
+}
+
+// enrichSearchDimensions merges stored resolution/duration onto search results
+// with a single batched query instead of one query per result.
+func (h *Handler) enrichSearchDimensions(results []filesystem.FileEntry, rootID string) {
+	if h.metaStore == nil || len(results) == 0 {
+		return
+	}
+	paths := make([]string, len(results))
+	for i := range results {
+		paths[i] = results[i].Path
+	}
+	dims, err := h.metaStore.GetMany(rootID, paths)
+	if err != nil {
+		h.logger.Error("getting search result dimensions", "error", err)
+		return
+	}
+	for i := range results {
+		d, ok := dims[results[i].Path]
+		if !ok {
+			continue
+		}
+		wd, hgt := d.Width, d.Height
+		results[i].Width = &wd
+		results[i].Height = &hgt
+		if d.Duration > 0 {
+			dur := d.Duration
+			results[i].Duration = &dur
+		}
 	}
 }
 

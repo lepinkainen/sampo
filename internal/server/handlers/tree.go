@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/sampo/internal/analysis"
+	"github.com/lepinkainen/sampo/internal/classification"
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/ocr"
 )
@@ -98,24 +99,13 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Enrich entries with checksums from classification store
-	if h.classStore != nil {
-		checksums, err := h.classStore.GetDirChecksums(rootID, relPath)
-		if err != nil {
-			h.logger.Error("getting dir checksums", "error", err)
-		} else if len(checksums) > 0 {
-			for i := range entries {
-				if info, ok := checksums[entries[i].Path]; ok {
-					if info.SHA256 != "" {
-						entries[i].SHA256 = &info.SHA256
-					}
-					if info.CRC32 != "" {
-						entries[i].CRC32 = &info.CRC32
-					}
-				}
-			}
-		}
-	}
+	// Enrich entries with checksums from classification store, and persist
+	// filename-derived CRC32 values (videotagger-style filenames) so videos
+	// participate in duplicate detection without waiting for classification.
+	h.enrichChecksums(entries, rootID, relPath)
+
+	// Enrich entries with stored resolution/duration
+	h.enrichDimensions(entries, rootID, relPath)
 
 	// Enrich entries with recognized text from OCR store
 	if h.ocrStore != nil {
@@ -136,6 +126,79 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		slog.Error("encoding directory response", "error", err)
+	}
+}
+
+// enrichChecksums merges stored SHA256/CRC32 onto matching entries and upserts
+// filename-derived CRC32 values (videotagger-style filenames) so videos
+// participate in duplicate detection without waiting for classification.
+func (h *Handler) enrichChecksums(entries []filesystem.FileEntry, rootID, relPath string) {
+	if h.classStore == nil {
+		return
+	}
+	checksums, err := h.classStore.GetDirChecksums(rootID, relPath)
+	if err != nil {
+		h.logger.Error("getting dir checksums", "error", err)
+		checksums = nil
+	}
+	for i := range entries {
+		if info, ok := checksums[entries[i].Path]; ok {
+			if info.SHA256 != "" {
+				entries[i].SHA256 = &info.SHA256
+			}
+			if info.CRC32 != "" {
+				entries[i].CRC32 = &info.CRC32
+			}
+		}
+	}
+
+	var crcEntries []classification.FilenameCRC32Entry
+	for _, e := range entries {
+		if e.MediaType != "video" || e.CRC32 == nil {
+			continue
+		}
+		if info, ok := checksums[e.Path]; ok && info.CRC32 == *e.CRC32 {
+			continue
+		}
+		crcEntries = append(crcEntries, classification.FilenameCRC32Entry{
+			RelPath: e.Path,
+			Mtime:   e.ModTime.Unix(),
+			Size:    e.Size,
+			CRC32:   *e.CRC32,
+		})
+	}
+	if len(crcEntries) > 0 {
+		if err := h.classStore.PutFilenameCRC32Batch(rootID, crcEntries); err != nil {
+			h.logger.Error("storing filename CRC32", "error", err, "count", len(crcEntries))
+		}
+	}
+}
+
+// enrichDimensions merges stored resolution/duration onto matching entries.
+func (h *Handler) enrichDimensions(entries []filesystem.FileEntry, rootID, relPath string) {
+	if h.metaStore == nil {
+		return
+	}
+	dims, err := h.metaStore.GetDirDimensions(rootID, relPath)
+	if err != nil {
+		h.logger.Error("getting dir dimensions", "error", err)
+		return
+	}
+	if len(dims) == 0 {
+		return
+	}
+	for i := range entries {
+		d, ok := dims[entries[i].Path]
+		if !ok {
+			continue
+		}
+		w, hgt := d.Width, d.Height
+		entries[i].Width = &w
+		entries[i].Height = &hgt
+		if d.Duration > 0 {
+			dur := d.Duration
+			entries[i].Duration = &dur
+		}
 	}
 }
 

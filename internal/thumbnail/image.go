@@ -3,6 +3,7 @@ package thumbnail
 import (
 	"context"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"os"
 	"path/filepath"
@@ -27,25 +28,48 @@ func GenerateImageThumbnail(ctx context.Context, srcPath, dstPath string) error 
 		return fmt.Errorf("opening image %s: %w", srcPath, err)
 	}
 
-	thumb := imaging.Fit(src, thumbSize, thumbSize, imaging.Lanczos)
+	return GenerateImageThumbnailFromImage(ctx, src, dstPath)
+}
 
-	if mkdirErr := os.MkdirAll(filepath.Dir(dstPath), 0o755); mkdirErr != nil {
+// GenerateImageThumbnailFromImage creates a thumbnail from an already-decoded
+// image. Callers that already paid the file read/decode cost can share that
+// decode with thumbnail generation.
+func GenerateImageThumbnailFromImage(ctx context.Context, src image.Image, dstPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if src == nil {
+		return fmt.Errorf("nil source image")
+	}
+
+	thumb := imaging.Fit(src, thumbSize, thumbSize, imaging.Lanczos)
+	return writeJPEGAtomic(dstPath, thumb)
+}
+
+func writeJPEGAtomic(dstPath string, img image.Image) error {
+	dir := filepath.Dir(dstPath)
+	if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
 		return fmt.Errorf("creating thumbnail dir: %w", mkdirErr)
 	}
 
-	out, err := os.Create(dstPath)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dstPath)+"-*.tmp")
 	if err != nil {
-		return fmt.Errorf("creating thumbnail file: %w", err)
+		return fmt.Errorf("creating temporary thumbnail file: %w", err)
 	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
 
-	encodeErr := jpeg.Encode(out, thumb, &jpeg.Options{Quality: 80})
-	closeErr := out.Close()
+	encodeErr := jpeg.Encode(tmp, img, &jpeg.Options{Quality: 80})
+	closeErr := tmp.Close()
 
 	if encodeErr != nil {
 		return fmt.Errorf("encoding thumbnail: %w", encodeErr)
 	}
 	if closeErr != nil {
 		return fmt.Errorf("closing thumbnail file: %w", closeErr)
+	}
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		return fmt.Errorf("moving thumbnail into place: %w", err)
 	}
 
 	return nil

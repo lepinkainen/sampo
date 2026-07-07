@@ -40,7 +40,7 @@ func TestStartAnalyzeScanForceRecursesForReanalysis(t *testing.T) {
 
 	logger := slog.Default()
 	h := handlers.New(roots, cache, t.TempDir(), logger)
-	coordinator := analysis.NewCoordinator(nil, nil, nil, nil, nil, nil, t.TempDir(), 1, 1, true, logger)
+	coordinator := analysis.NewCoordinator(nil, nil, nil, nil, nil, nil, nil, t.TempDir(), 1, 1, true, logger)
 	scanner := analysis.NewScanner(coordinator, roots, 1, logger)
 	t.Cleanup(scanner.Stop)
 	h.SetAnalysisScanner(scanner)

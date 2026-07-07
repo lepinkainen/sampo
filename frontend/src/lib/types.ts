@@ -22,6 +22,10 @@ export interface FileEntry {
 	ocrText?: string | null;
 	sha256?: string | null;
 	crc32?: string | null;
+	width?: number | null;
+	height?: number | null;
+	/** Duration in seconds (videos only). */
+	duration?: number | null;
 }
 
 export interface DuplicateFile {
@@ -37,7 +41,7 @@ export interface DuplicateFile {
 
 export interface DuplicateGroup {
 	hash: string;
-	/** "sha256" (exact) or "phash" (similar images). */
+	/** "sha256" or "crc32" (exact match) or "phash" (visually similar). */
 	hashType: string;
 	size: number;
 	/** phash groups: max Hamming distance to the best file, in bits. */

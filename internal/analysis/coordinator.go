@@ -19,16 +19,19 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/lepinkainen/sampo/internal/classification"
 	"github.com/lepinkainen/sampo/internal/detection"
+	"github.com/lepinkainen/sampo/internal/metadata"
 	"github.com/lepinkainen/sampo/internal/ocr"
+	"github.com/lepinkainen/sampo/internal/thumbnail"
 	"github.com/lepinkainen/sampo/internal/videoframe"
 )
 
 // Coordinator schedules low-priority background analysis triggered by browsing.
 //
 // It is the single "load once, run every analyzer" path: a job opens the file
-// (or extracts video frames) once and runs detection, classification, and OCR
-// on it. Both the browse queue (Enqueue) and the bulk Scanner funnel through
-// process(), so adding an analyzer here lights it up everywhere.
+// (or extracts video frames) once and runs detection, classification, OCR, and
+// optional thumbnail generation on it. Both the browse queue (Enqueue) and the
+// bulk Scanner funnel through process(), so adding an analyzer here lights it
+// up everywhere.
 type Coordinator struct {
 	detectionStore *detection.Store
 	detector       *detection.Detector
@@ -36,14 +39,18 @@ type Coordinator struct {
 	classifier     *classification.Classifier
 	ocrStore       *ocr.Store
 	recognizer     *ocr.Recognizer
+	metaStore      *metadata.Store
+	thumbCache     *thumbnail.Cache
 	frameDir       string
 	includeVideos  bool
 	logger         *slog.Logger
 
 	jobs chan job
 
-	mu      sync.Mutex
-	pending map[string]struct{}
+	mu sync.Mutex
+	// pending maps in-flight job keys to a channel closed when the job
+	// finishes (or is dropped), so callers can wait without polling.
+	pending map[string]chan struct{}
 	active  atomic.Int32
 }
 
@@ -58,16 +65,18 @@ type job struct {
 	needs     needSet
 }
 
-// needSet marks which analyzers must run for a file.
+// needSet marks which analyzers or shared-decode side effects must run for a file.
 type needSet struct {
 	detect   bool
 	classify bool
 	ocr      bool
 	phash    bool
+	thumb    bool
+	meta     bool
 }
 
 func (n needSet) any() bool {
-	return n.detect || n.classify || n.ocr || n.phash
+	return n.detect || n.classify || n.ocr || n.phash || n.thumb || n.meta
 }
 
 // Status reports current browse-analysis activity.
@@ -86,6 +95,7 @@ func NewCoordinator(
 	classifier *classification.Classifier,
 	ocrStore *ocr.Store,
 	recognizer *ocr.Recognizer,
+	metaStore *metadata.Store,
 	frameDir string,
 	workers int,
 	queueSize int,
@@ -106,11 +116,12 @@ func NewCoordinator(
 		classifier:     classifier,
 		ocrStore:       ocrStore,
 		recognizer:     recognizer,
+		metaStore:      metaStore,
 		frameDir:       frameDir,
 		includeVideos:  includeVideos,
 		logger:         logger,
 		jobs:           make(chan job, queueSize),
-		pending:        make(map[string]struct{}),
+		pending:        make(map[string]chan struct{}),
 	}
 
 	for range workers {
@@ -120,8 +131,15 @@ func NewCoordinator(
 	return c
 }
 
+// SetThumbnailCache lets the coordinator create missing image thumbnails from
+// the already-decoded image, avoiding a second full file read on fresh browse.
+func (c *Coordinator) SetThumbnailCache(cache *thumbnail.Cache) {
+	c.thumbCache = cache
+}
+
 // needs reports which enabled analyzers must run for a file. When force is true,
 // every enabled analyzer runs; otherwise only those with stale cached results.
+// Missing thumbnails are treated as a decode-sharing side effect for images.
 func (c *Coordinator) needs(rootID, relPath, mediaType string, mtime, size int64, force bool) needSet {
 	var n needSet
 	if c.detectionStore != nil && c.detector != nil {
@@ -132,6 +150,14 @@ func (c *Coordinator) needs(rootID, relPath, mediaType string, mtime, size int64
 	}
 	if c.ocrStore != nil && c.recognizer != nil {
 		n.ocr = force || c.ocrStore.IsStale(rootID, relPath, mtime, size, c.recognizer.ModelVersion())
+	}
+	if c.metaStore != nil {
+		n.meta = force || c.metaStore.IsStale(rootID, relPath, mtime)
+	}
+	if c.thumbCache != nil && mediaType == "image" {
+		key := thumbnail.CacheKey(rootID, relPath, mtime, size)
+		_, ok := c.thumbCache.Get(rootID, key)
+		n.thumb = !ok
 	}
 	// Perceptual hash rides along with classification (the classify Put
 	// persists it); the standalone check backfills legacy NULL-phash rows
@@ -178,6 +204,9 @@ func (c *Coordinator) deleteCachedPath(rootID, relPath string) {
 	if c.ocrStore != nil {
 		stores["ocr"] = c.ocrStore
 	}
+	if c.metaStore != nil {
+		stores["metadata"] = c.metaStore
+	}
 	for name, store := range stores {
 		if err := store.DeletePath(rootID, relPath); err != nil {
 			c.logger.Error("purging cached analysis result", "store", name, "rootID", rootID, "path", relPath, "error", err)
@@ -205,6 +234,9 @@ func (c *Coordinator) PruneMissing(rootID, rootPath, relPath string) {
 	}
 	if c.ocrStore != nil {
 		stores["ocr"] = c.ocrStore
+	}
+	if c.metaStore != nil {
+		stores["metadata"] = c.metaStore
 	}
 
 	// The stores usually cache the same files, so remember stat results to
@@ -257,32 +289,45 @@ func (c *Coordinator) WantsMedia(mediaType string) bool {
 // claim reserves a file for analysis. It checks the pending set first so that
 // concurrent callers (the per-thumbnail Enqueue and the directory EnqueueBatch)
 // don't both run needs() — which hits SQLite IsStale per file — or queue a
-// duplicate job. ok is false when the file is already pending or nothing needs
-// running; when ok is true the caller owns the pending slot and must send a job
-// (or release the slot on a failed send).
-func (c *Coordinator) claim(rootID, relPath, mediaType string, mtime, size int64) (key string, n needSet, ok bool) {
+// duplicate job. When ok is true the caller owns the pending slot and must send
+// a job (or releasePending on a failed send); done is the channel closed when
+// the job finishes. When ok is false, done is the in-flight job's channel if
+// one exists, or nil when nothing needs running.
+func (c *Coordinator) claim(rootID, relPath, mediaType string, mtime, size int64) (key string, n needSet, done chan struct{}, ok bool) {
 	key = fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
 
 	c.mu.Lock()
-	_, exists := c.pending[key]
+	ch, exists := c.pending[key]
 	c.mu.Unlock()
 	if exists {
-		return key, needSet{}, false
+		return key, needSet{}, ch, false
 	}
 
 	n = c.needs(rootID, relPath, mediaType, mtime, size, false)
 	if !n.any() {
-		return key, needSet{}, false
+		return key, needSet{}, nil, false
 	}
 
 	c.mu.Lock()
-	if _, exists := c.pending[key]; exists {
+	if ch, exists := c.pending[key]; exists {
 		c.mu.Unlock()
-		return key, needSet{}, false
+		return key, needSet{}, ch, false
 	}
-	c.pending[key] = struct{}{}
+	done = make(chan struct{})
+	c.pending[key] = done
 	c.mu.Unlock()
-	return key, n, true
+	return key, n, done, true
+}
+
+// releasePending frees a claimed slot and wakes any completion waiters.
+func (c *Coordinator) releasePending(key string) {
+	c.mu.Lock()
+	ch := c.pending[key]
+	delete(c.pending, key)
+	c.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
 }
 
 // EnqueueBatch schedules background analysis for a batch of files (for example
@@ -304,7 +349,7 @@ func (c *Coordinator) EnqueueBatch(rootID string, items []EnqueueItem) {
 				continue
 			}
 
-			key, n, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
+			key, n, _, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
 			if !ok {
 				continue
 			}
@@ -330,7 +375,7 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 		return false
 	}
 
-	key, n, ok := c.claim(rootID, relPath, mediaType, mtime, size)
+	key, n, _, ok := c.claim(rootID, relPath, mediaType, mtime, size)
 	if !ok {
 		return false
 	}
@@ -356,12 +401,40 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 		)
 		return true
 	default:
-		c.mu.Lock()
-		delete(c.pending, key)
-		c.mu.Unlock()
+		c.releasePending(key)
 		c.logger.Debug("browse analysis queue full; dropping job", "path", relPath)
 		return false
 	}
+}
+
+// EnqueueDone schedules analysis for a single file and returns a channel that
+// is closed when the job finishes. Like EnqueueBatch the send never drops the
+// job on a full queue (it blocks in a goroutine until a worker frees a slot).
+// When the file is already in flight the existing job's channel is returned;
+// nil means nothing needs running. Callers use it to wait for a result — e.g.
+// the thumbnail handler waiting for the worker's shared-decode thumbnail —
+// without polling.
+func (c *Coordinator) EnqueueDone(rootID string, it EnqueueItem) <-chan struct{} {
+	if c == nil || !c.WantsMedia(it.MediaType) {
+		return nil
+	}
+	key, n, done, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
+	if !ok {
+		return done
+	}
+	go func() {
+		c.jobs <- job{
+			key:       key,
+			rootID:    rootID,
+			relPath:   it.RelPath,
+			fullPath:  it.FullPath,
+			mediaType: it.MediaType,
+			mtime:     it.Mtime,
+			size:      it.Size,
+			needs:     n,
+		}
+	}()
+	return done
 }
 
 func (c *Coordinator) worker() {
@@ -377,9 +450,7 @@ func (c *Coordinator) worker() {
 		c.process(context.Background(), j)
 		c.logger.Debug("worker finished job", "path", j.relPath, "duration_ms", time.Since(start).Milliseconds())
 		c.active.Add(-1)
-		c.mu.Lock()
-		delete(c.pending, j.key)
-		c.mu.Unlock()
+		c.releasePending(j.key)
 	}
 }
 
@@ -404,6 +475,20 @@ func (c *Coordinator) Status() Status {
 		Active:  active,
 		Running: pending > 0 || active > 0,
 	}
+}
+
+// IsPending reports whether a job for the given file is still queued or
+// processing. Callers use it to distinguish "worker hasn't finished yet"
+// (keep waiting) from "worker finished without producing a result" (give up).
+func (c *Coordinator) IsPending(rootID, relPath string, mtime, size int64) bool {
+	if c == nil {
+		return false
+	}
+	key := fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
+	c.mu.Lock()
+	_, exists := c.pending[key]
+	c.mu.Unlock()
+	return exists
 }
 
 // videoAnalysisFrames is the number of frames extracted for video ML analysis,
@@ -437,6 +522,18 @@ func loadImage(path string) (img image.Image, sha256Hex, crc32Hex string, err er
 		nil
 }
 
+func (c *Coordinator) generateThumbnail(ctx context.Context, j job, img image.Image) error {
+	if c.thumbCache == nil {
+		return nil
+	}
+	key := thumbnail.CacheKey(j.rootID, j.relPath, j.mtime, j.size)
+	if _, ok := c.thumbCache.Get(j.rootID, key); ok {
+		return nil
+	}
+	dstPath := c.thumbCache.Path(j.rootID, key)
+	return thumbnail.GenerateImageThumbnailFromImage(ctx, img, dstPath)
+}
+
 func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath string) {
 	// Load once, share across every analyzer (the "same byte-level file").
 	loadStart := time.Now()
@@ -452,7 +549,28 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 	}
 	loadMs := time.Since(loadStart).Milliseconds()
 
-	var detMs, clsMs, ocrMs int64
+	// Record dimensions from the already-decoded image — cheap, and decoupled
+	// from classification (which is the only other place bounds are read).
+	if j.needs.meta && c.metaStore != nil {
+		bounds := img.Bounds()
+		if err := c.metaStore.Put(j.rootID, j.relPath, j.mtime, metadata.Dims{
+			Width:  bounds.Dx(),
+			Height: bounds.Dy(),
+		}); err != nil {
+			c.logger.Warn("storing browse analysis metadata", "path", j.relPath, "error", err)
+		}
+	}
+
+	var thumbMs, detMs, clsMs, ocrMs int64
+
+	if j.needs.thumb {
+		t := time.Now()
+		thumbErr := c.generateThumbnail(ctx, j, img)
+		thumbMs = time.Since(t).Milliseconds()
+		if thumbErr != nil {
+			c.logger.Warn("browse analysis thumbnail failed", "path", j.relPath, "error", thumbErr)
+		}
+	}
 
 	if j.needs.detect {
 		t := time.Now()
@@ -515,6 +633,7 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 	c.logger.Debug("analyzed image",
 		"path", j.relPath,
 		"load_ms", loadMs,
+		"thumb_ms", thumbMs,
 		"detect_ms", detMs,
 		"classify_ms", clsMs,
 		"ocr_ms", ocrMs,
@@ -523,6 +642,32 @@ func (c *Coordinator) processImage(ctx context.Context, j job, analyzePath strin
 
 func (c *Coordinator) processVideo(ctx context.Context, j job) {
 	start := time.Now()
+
+	// Record resolution/duration via a single ffprobe — cheap, and the only
+	// source of video geometry since frames are decoded only for ML analysis.
+	if j.needs.meta && c.metaStore != nil {
+		info, probeErr := videoframe.Probe(ctx, j.fullPath)
+		if probeErr != nil {
+			c.logger.Warn("probing video metadata", "path", j.relPath, "error", probeErr)
+		} else if err := c.metaStore.Put(j.rootID, j.relPath, j.mtime, metadata.Dims{
+			Width:    info.Width,
+			Height:   info.Height,
+			Duration: info.Duration,
+		}); err != nil {
+			c.logger.Warn("storing browse analysis metadata", "path", j.relPath, "error", err)
+		}
+	}
+
+	// A meta-only job (no ML analyzer needing fresh data) has nothing left to
+	// do: skip the expensive frame extraction entirely.
+	if !j.needs.detect && !j.needs.classify && !j.needs.ocr {
+		c.logger.Debug("analyzed video metadata-only",
+			"path", j.relPath,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+		return
+	}
+
 	framePaths, cleanup, err := videoframe.ExtractFrames(ctx, c.frameDir, j.fullPath, videoAnalysisFrames)
 	if err != nil {
 		c.logger.Warn("browse analysis video frame extraction failed", "path", j.relPath, "error", err)

@@ -8,6 +8,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/classification"
 	"github.com/lepinkainen/sampo/internal/detection"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/metadata"
 	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
@@ -27,6 +28,7 @@ type Handler struct {
 	ocrStore          *ocr.Store
 	ocrRecognizer     *ocr.Recognizer
 	ocrScanner        *ocr.Scanner
+	metaStore         *metadata.Store
 	browseCoordinator *analysis.Coordinator
 	analysisScanner   *analysis.Scanner
 	autoBrowseEnabled atomic.Bool
@@ -61,6 +63,11 @@ func (h *Handler) SetOCR(store *ocr.Store, recognizer *ocr.Recognizer, scanner *
 	h.ocrStore = store
 	h.ocrRecognizer = recognizer
 	h.ocrScanner = scanner
+}
+
+// SetMetadata configures the always-on media-metadata store (dimensions/duration).
+func (h *Handler) SetMetadata(store *metadata.Store) {
+	h.metaStore = store
 }
 
 // SetBrowseCoordinator configures optional browse-triggered background analysis.

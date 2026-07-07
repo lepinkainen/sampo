@@ -2,6 +2,7 @@ package videoframe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -231,4 +232,65 @@ func ProbeDuration(ctx context.Context, videoPath string) (float64, error) {
 	}
 
 	return strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+}
+
+// Info describes a video's duration and pixel dimensions, as reported by a
+// single ffprobe invocation.
+type Info struct {
+	Duration float64
+	Width    int
+	Height   int
+}
+
+// Probe runs ffprobe once to read duration and the first video stream's
+// width/height. Duration is zero when the container omits it; dimensions are
+// zero when there is no video stream. Use this instead of ProbeDuration when
+// resolution is also needed, to avoid a second ffprobe process.
+func Probe(ctx context.Context, videoPath string) (Info, error) {
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return Info{}, fmt.Errorf("ffprobe not found in PATH: %w", err)
+	}
+
+	args := []string{
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height:format=duration",
+		"-of", "json",
+		videoPath,
+	}
+
+	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(cmdCtx, "ffprobe", args...).Output()
+	if err != nil {
+		return Info{}, fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	var probe struct {
+		Streams []struct {
+			Width  *int `json:"width"`
+			Height *int `json:"height"`
+		} `json:"streams"`
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
+	}
+	if err := json.Unmarshal(out, &probe); err != nil {
+		return Info{}, fmt.Errorf("parsing ffprobe output: %w", err)
+	}
+
+	info := Info{}
+	if probe.Format.Duration != "" {
+		info.Duration, _ = strconv.ParseFloat(strings.TrimSpace(probe.Format.Duration), 64)
+	}
+	if len(probe.Streams) > 0 {
+		s := probe.Streams[0]
+		if s.Width != nil {
+			info.Width = *s.Width
+		}
+		if s.Height != nil {
+			info.Height = *s.Height
+		}
+	}
+	return info, nil
 }

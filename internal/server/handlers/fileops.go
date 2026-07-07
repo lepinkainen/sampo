@@ -73,6 +73,11 @@ func (h *Handler) purgeAnalysisResults(rootID, relPath string) {
 			h.logger.Error("purging ocr results", "error", err, "rootID", rootID, "path", relPath)
 		}
 	}
+	if h.metaStore != nil {
+		if err := h.metaStore.DeletePath(rootID, relPath); err != nil {
+			h.logger.Error("purging metadata", "error", err, "rootID", rootID, "path", relPath)
+		}
+	}
 }
 
 type fileItem struct {

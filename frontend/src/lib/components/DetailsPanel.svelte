@@ -1,10 +1,10 @@
 <script lang="ts">
+import { onDestroy } from 'svelte';
 import {
 	getClassification,
 	getDetection,
 	getDiskUsage,
 	runOCR,
-	thumbnailUrl,
 } from '$lib/api';
 import type {
 	ClassificationResult,
@@ -12,8 +12,15 @@ import type {
 	DiskUsage,
 	OCRResult,
 } from '$lib/api';
+import { ThumbnailLoader, thumbnailKey } from '$lib/thumbnailLoader.svelte';
 import type { FileEntry } from '$lib/types';
-import { formatDate, formatSize } from '$lib/utils';
+import {
+	formatDate,
+	formatDuration,
+	formatResolution,
+	formatSize,
+} from '$lib/utils';
+import { LoaderCircle } from '@lucide/svelte';
 import FileIcon from './FileIcon.svelte';
 
 interface Props {
@@ -35,10 +42,7 @@ let ocrError = $state<string | null>(null);
 let diskUsage = $state<DiskUsage | null>(null);
 let diskUsageLoading = $state(false);
 
-let detailsThumbLoading = $state(false);
-let detailsThumbError = $state(false);
-let detailsImgEl: HTMLImageElement | undefined = $state();
-
+const detailsThumb = new ThumbnailLoader();
 let lastDetailsThumbKey = $state('');
 let lastSelectionDetailsKey = $state('');
 
@@ -53,18 +57,17 @@ let selectedDetailsTags = $derived.by(() => {
 	return sel.tags ?? [];
 });
 
+onDestroy(() => detailsThumb.cleanup());
+
 $effect(() => {
-	const thumbKey = sel ? `${rootId}:${sel.path}:${sel.hasThumb}` : '';
+	const thumbKey = sel ? thumbnailKey(rootId, sel) : '';
 	if (thumbKey === lastDetailsThumbKey) {
 		return;
 	}
 	lastDetailsThumbKey = thumbKey;
-	detailsThumbError = false;
-	detailsThumbLoading = !!sel?.hasThumb;
-
-	// Check if already complete
-	if (sel?.hasThumb && detailsImgEl?.complete) {
-		detailsThumbLoading = false;
+	detailsThumb.reset(sel?.hasThumb ? 'loading' : 'idle');
+	if (sel?.hasThumb) {
+		void detailsThumb.fetch(rootId, sel.path);
 	}
 });
 
@@ -154,24 +157,26 @@ async function handleRunOCR(entry: FileEntry) {
 	{#if sel}
 		<div class="flex flex-col gap-6">
 			<div class="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-950 shadow-inner">
-				{#if sel.hasThumb && !detailsThumbError}
-					{#if detailsThumbLoading}
-						<div
-							class="thumb-skeleton absolute inset-0 z-10"
-							data-testid="details-thumbnail-skeleton"
-						></div>
-					{/if}
+				{#if sel.hasThumb && detailsThumb.state === 'ready' && detailsThumb.objectUrl}
 					<img
-						bind:this={detailsImgEl}
-						src={thumbnailUrl(rootId, sel.path)}
+						src={detailsThumb.objectUrl}
 						alt={sel.name}
 						class="relative z-0 h-full w-full object-contain"
-						onload={() => (detailsThumbLoading = false)}
-						onerror={() => {
-							detailsThumbLoading = false;
-							detailsThumbError = true;
-						}}
+						onerror={() => detailsThumb.fail()}
 					/>
+				{:else if sel.hasThumb && detailsThumb.state !== 'error'}
+					<div
+						class="thumb-skeleton absolute inset-0 z-10"
+						data-testid="details-thumbnail-skeleton"
+					></div>
+					{#if detailsThumb.showSlowLoading}
+						<div
+							class="absolute inset-0 z-20 flex items-center justify-center text-gray-500"
+							aria-label="Loading thumbnail"
+						>
+							<LoaderCircle size={16} class="animate-spin" />
+						</div>
+					{/if}
 				{:else}
 					<div class="flex h-full items-center justify-center text-gray-700">
 						<FileIcon entry={sel} size={64} />
@@ -186,10 +191,20 @@ async function handleRunOCR(entry: FileEntry) {
 				</div>
 
 				<div class="grid grid-cols-2 gap-y-4 text-sm">
-					{#if !sel.isDir}
-						<div class="text-gray-500">Size</div>
-						<div class="text-gray-300">{formatSize(sel.size)}</div>
+				{#if !sel.isDir}
+					<div class="text-gray-500">Size</div>
+					<div class="text-gray-300">{formatSize(sel.size)}</div>
+
+					{#if sel.width && sel.height}
+						<div class="text-gray-500">Resolution</div>
+						<div class="text-gray-300">{formatResolution(sel.width, sel.height, sel.mediaType)}</div>
 					{/if}
+
+					{#if sel.duration}
+						<div class="text-gray-500">Duration</div>
+						<div class="text-gray-300">{formatDuration(sel.duration)}</div>
+					{/if}
+				{/if}
 
 					<div class="text-gray-500">Modified</div>
 					<div class="text-gray-300">{formatDate(sel.modTime)}</div>

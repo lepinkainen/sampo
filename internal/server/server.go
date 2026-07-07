@@ -14,6 +14,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/config"
 	"github.com/lepinkainen/sampo/internal/detection"
 	"github.com/lepinkainen/sampo/internal/filesystem"
+	"github.com/lepinkainen/sampo/internal/metadata"
 	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/onnxenv"
 	"github.com/lepinkainen/sampo/internal/server/handlers"
@@ -161,33 +162,44 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 		}
 	}
 
-	if cfg.Detection.Enabled || cfg.Classification.Enabled || ocrStore != nil {
-		coordinator := analysis.NewCoordinator(
-			detStore,
-			detector,
-			classStore,
-			classifier,
-			ocrStore,
-			recognizer,
-			frameDir,
-			cfg.Analysis.BrowseWorkers,
-			cfg.Analysis.BrowseQueueSize,
-			cfg.Analysis.IncludeVideos,
-			logger,
-		)
-		h.SetBrowseCoordinator(coordinator)
-
-		// Unified scan: one walk, every enabled analyzer per file. Re-analyze uses this.
-		analysisScanner := analysis.NewScanner(coordinator, rootMgr, cfg.Analysis.BrowseWorkers, logger)
-		h.SetAnalysisScanner(analysisScanner)
-
-		logger.Info("browse analysis configured",
-			"autoEnabled", cfg.Analysis.AutoBrowseEnabled,
-			"workers", cfg.Analysis.BrowseWorkers,
-			"queueSize", cfg.Analysis.BrowseQueueSize,
-			"includeVideos", cfg.Analysis.IncludeVideos,
-		)
+	// The metadata store (resolution/duration) is always available — it is
+	// not ML-dependent and powers the directory-listing resolution column.
+	metaStore, err := metadata.NewStore(cfg.Cache.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("initializing metadata store: %w", err)
 	}
+	h.SetMetadata(metaStore)
+
+	// The browse coordinator always runs so resolution/duration populate on
+	// browse and via Re-analyze even when no ML analyzer is enabled. Stores
+	// and models for disabled features are nil; the coordinator skips them.
+	coordinator := analysis.NewCoordinator(
+		detStore,
+		detector,
+		classStore,
+		classifier,
+		ocrStore,
+		recognizer,
+		metaStore,
+		frameDir,
+		cfg.Analysis.BrowseWorkers,
+		cfg.Analysis.BrowseQueueSize,
+		cfg.Analysis.IncludeVideos,
+		logger,
+	)
+	coordinator.SetThumbnailCache(thumbCache)
+	h.SetBrowseCoordinator(coordinator)
+
+	// Unified scan: one walk, every enabled analyzer per file. Re-analyze uses this.
+	analysisScanner := analysis.NewScanner(coordinator, rootMgr, cfg.Analysis.BrowseWorkers, logger)
+	h.SetAnalysisScanner(analysisScanner)
+
+	logger.Info("browse analysis configured",
+		"autoEnabled", cfg.Analysis.AutoBrowseEnabled,
+		"workers", cfg.Analysis.BrowseWorkers,
+		"queueSize", cfg.Analysis.BrowseQueueSize,
+		"includeVideos", cfg.Analysis.IncludeVideos,
+	)
 
 	s.setupRoutes(h, frontendFS)
 
