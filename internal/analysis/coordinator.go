@@ -290,33 +290,31 @@ func (c *Coordinator) WantsMedia(mediaType string) bool {
 // concurrent callers (the per-thumbnail Enqueue and the directory EnqueueBatch)
 // don't both run needs() — which hits SQLite IsStale per file — or queue a
 // duplicate job. When ok is true the caller owns the pending slot and must send
-// a job (or releasePending on a failed send); done is the channel closed when
-// the job finishes. When ok is false, done is the in-flight job's channel if
-// one exists, or nil when nothing needs running.
-func (c *Coordinator) claim(rootID, relPath, mediaType string, mtime, size int64) (key string, n needSet, done chan struct{}, ok bool) {
+// a job (or releasePending on a failed send). When ok is false nothing needs
+// queuing — either the file is already in flight or all caches are fresh.
+func (c *Coordinator) claim(rootID, relPath, mediaType string, mtime, size int64) (key string, n needSet, ok bool) {
 	key = fmt.Sprintf("%s|%s|%d|%d", rootID, relPath, mtime, size)
 
 	c.mu.Lock()
-	ch, exists := c.pending[key]
+	_, exists := c.pending[key]
 	c.mu.Unlock()
 	if exists {
-		return key, needSet{}, ch, false
+		return key, needSet{}, false
 	}
 
 	n = c.needs(rootID, relPath, mediaType, mtime, size, false)
 	if !n.any() {
-		return key, needSet{}, nil, false
+		return key, needSet{}, false
 	}
 
 	c.mu.Lock()
-	if ch, exists := c.pending[key]; exists {
+	if _, exists := c.pending[key]; exists {
 		c.mu.Unlock()
-		return key, needSet{}, ch, false
+		return key, needSet{}, false
 	}
-	done = make(chan struct{})
-	c.pending[key] = done
+	c.pending[key] = make(chan struct{})
 	c.mu.Unlock()
-	return key, n, done, true
+	return key, n, true
 }
 
 // releasePending frees a claimed slot and wakes any completion waiters.
@@ -349,7 +347,7 @@ func (c *Coordinator) EnqueueBatch(rootID string, items []EnqueueItem) {
 				continue
 			}
 
-			key, n, _, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
+			key, n, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
 			if !ok {
 				continue
 			}
@@ -375,7 +373,7 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 		return false
 	}
 
-	key, n, _, ok := c.claim(rootID, relPath, mediaType, mtime, size)
+	key, n, ok := c.claim(rootID, relPath, mediaType, mtime, size)
 	if !ok {
 		return false
 	}
@@ -405,36 +403,6 @@ func (c *Coordinator) Enqueue(rootID, relPath, fullPath, mediaType string, mtime
 		c.logger.Debug("browse analysis queue full; dropping job", "path", relPath)
 		return false
 	}
-}
-
-// EnqueueDone schedules analysis for a single file and returns a channel that
-// is closed when the job finishes. Like EnqueueBatch the send never drops the
-// job on a full queue (it blocks in a goroutine until a worker frees a slot).
-// When the file is already in flight the existing job's channel is returned;
-// nil means nothing needs running. Callers use it to wait for a result — e.g.
-// the thumbnail handler waiting for the worker's shared-decode thumbnail —
-// without polling.
-func (c *Coordinator) EnqueueDone(rootID string, it EnqueueItem) <-chan struct{} {
-	if c == nil || !c.WantsMedia(it.MediaType) {
-		return nil
-	}
-	key, n, done, ok := c.claim(rootID, it.RelPath, it.MediaType, it.Mtime, it.Size)
-	if !ok {
-		return done
-	}
-	go func() {
-		c.jobs <- job{
-			key:       key,
-			rootID:    rootID,
-			relPath:   it.RelPath,
-			fullPath:  it.FullPath,
-			mediaType: it.MediaType,
-			mtime:     it.Mtime,
-			size:      it.Size,
-			needs:     n,
-		}
-	}()
-	return done
 }
 
 func (c *Coordinator) worker(id int) {
