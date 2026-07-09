@@ -3,9 +3,11 @@ module github.com/lepinkainen/sampo
 go 1.26.4
 
 require (
+	github.com/corona10/goimagehash v1.1.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/lepinkainen/humanlog v0.2.1
+	github.com/nwaples/rardecode/v2 v2.2.5
 	github.com/spf13/viper v1.21.0
 	github.com/yalue/onnxruntime_go v1.31.0
 	golang.org/x/image v0.42.0
@@ -14,7 +16,6 @@ require (
 )
 
 require (
-	github.com/corona10/goimagehash v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
