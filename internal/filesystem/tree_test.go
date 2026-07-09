@@ -19,6 +19,10 @@ func TestDetectMediaType(t *testing.T) {
 		{"mp4", "video.mp4", "video"},
 		{"mkv", "movie.mkv", "video"},
 		{"zip", "archive.zip", "archive"},
+		{"rar", "archive.rar", "archive"},
+		{"cbz", "comic.cbz", "archive"},
+		{"cbr", "comic.cbr", "archive"},
+		{"cbr upper", "COMIC.CBR", "archive"},
 		{"txt", "readme.txt", "other"},
 		{"no ext", "Makefile", "other"},
 	}
@@ -41,7 +45,7 @@ func TestMediaTypeHasThumb(t *testing.T) {
 		{"image", true},
 		{"video", true},
 		{"pdf", true},
-		{"archive", false},
+		{"archive", true},
 		{"other", false},
 	}
 
@@ -49,6 +53,36 @@ func TestMediaTypeHasThumb(t *testing.T) {
 		t.Run(tt.mediaType, func(t *testing.T) {
 			if got := MediaTypeHasThumb(tt.mediaType); got != tt.expected {
 				t.Errorf("MediaTypeHasThumb(%q) = %v, want %v", tt.mediaType, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHasImageExt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"jpg", "photo.jpg", true},
+		{"jpeg", "photo.jpeg", true},
+		{"png", "image.png", true},
+		{"webp", "image.webp", true},
+		{"gif", "anim.gif", true},
+		{"bmp", "image.bmp", true},
+		{"tiff", "image.tiff", true},
+		{"avif", "image.avif", true},
+		{"upper case", "IMAGE.PNG", true},
+		{"txt", "readme.txt", false},
+		{"no ext", "Makefile", false},
+		{"mp4", "video.mp4", false},
+		{"zip", "archive.zip", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasImageExt(tt.input); got != tt.expected {
+				t.Errorf("HasImageExt(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
 	}

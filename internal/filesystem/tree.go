@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,7 +67,7 @@ var videoExts = map[string]bool{
 }
 
 var archiveExts = map[string]bool{
-	".zip": true,
+	".zip": true, ".rar": true, ".cbz": true, ".cbr": true,
 }
 
 var pdfExts = map[string]bool{
@@ -93,9 +92,10 @@ func DetectMediaType(name string) string {
 }
 
 // MediaTypeHasThumb reports whether files of the given media type can have a
-// generated thumbnail (image, video, or pdf).
+// generated thumbnail (image, video, pdf, or archive — archives are
+// thumbnailed via their first extractable cover image).
 func MediaTypeHasThumb(mediaType string) bool {
-	return mediaType == "image" || mediaType == "video" || mediaType == "pdf"
+	return mediaType == "image" || mediaType == "video" || mediaType == "pdf" || mediaType == "archive"
 }
 
 // ImageEntry holds metadata for an image file within a directory.
@@ -106,9 +106,15 @@ type ImageEntry struct {
 	Size    int64
 }
 
+// HasImageExt reports whether name has a recognized image file extension.
+func HasImageExt(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return imageExts[ext]
+}
+
 // isVisibleImage reports whether a directory entry is a non-hidden image file.
 func isVisibleImage(e os.DirEntry) bool {
-	return !e.IsDir() && !strings.HasPrefix(e.Name(), ".") && imageExts[strings.ToLower(filepath.Ext(e.Name()))]
+	return !e.IsDir() && !strings.HasPrefix(e.Name(), ".") && HasImageExt(e.Name())
 }
 
 // HasImageFile reports whether dirPath contains at least one image file.
@@ -173,7 +179,6 @@ func ImageFilesInDir(dirPath, relBase string) ([]ImageEntry, error) {
 
 // ListDirectory returns the contents of a directory.
 func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
-	listStart := time.Now()
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -237,10 +242,5 @@ func ListDirectory(dirPath, relBase string) ([]FileEntry, error) {
 			result = append(result, *s)
 		}
 	}
-	slog.Debug("listed directory",
-		"path", relBase,
-		"entries", len(result),
-		"duration_ms", time.Since(listStart).Milliseconds(),
-	)
 	return result, nil
 }
