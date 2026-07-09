@@ -25,6 +25,10 @@ let threshold = $state(88);
 let showConfirm = $state(false);
 let deleting = $state(false);
 let error = $state('');
+let delTotal = $state(0);
+let delDone = $state(0);
+let delCurrent = $state('');
+let aborted = $state(false);
 
 function fileKey(file: DuplicateFile): string {
 	return `${file.rootId}:${file.path}`;
@@ -142,25 +146,42 @@ function clearSelection() {
 async function handleDelete() {
 	showConfirm = false;
 	deleting = true;
+	aborted = false;
+	delDone = 0;
+	delCurrent = '';
 	error = '';
-	// Duplicates can span roots — delete per root.
-	const byRoot = new Map<string, string[]>();
-	for (const { file } of selectedFiles) {
-		const list = byRoot.get(file.rootId) || [];
-		list.push(file.path);
-		byRoot.set(file.rootId, list);
-	}
-	try {
-		for (const [root, paths] of byRoot) {
-			await deleteFiles(root, paths);
+
+	const targets = selectedFiles.map((s) => s.file);
+	delTotal = targets.length;
+	let failures = 0;
+
+	for (const f of targets) {
+		if (aborted) break;
+		delCurrent = `${f.rootId}:${f.path}`;
+		try {
+			await deleteFiles(f.rootId, [f.path]);
+		} catch {
+			failures++;
 		}
-		onDeleted?.();
-		onClose();
-	} catch (e) {
-		error = e instanceof Error ? e.message : 'Delete failed';
+		delDone += 1;
+	}
+
+	if (aborted) {
+		error = `Stopped after ${delDone} of ${delTotal}`;
 		deleting = false;
 		load();
+		return;
 	}
+
+	if (failures > 0) {
+		error = `${failures} of ${delTotal} deletions failed`;
+		deleting = false;
+		load();
+		return;
+	}
+
+	onDeleted?.();
+	onClose();
 }
 </script>
 
@@ -368,46 +389,75 @@ async function handleDelete() {
 		</div>
 
 		<div
-			class="flex items-center gap-3 rounded-b-xl border-t border-gray-800 bg-black/20 px-5 py-3.5"
+			class="flex flex-col gap-3 rounded-b-xl border-t border-gray-800 bg-black/20 px-5 py-3.5"
 		>
-			<span class="text-[13px] text-gray-400">
-				{#if error}
-					<span class="text-red-400">{error}</span>
-				{:else if selectedCount === 0}
-					Nothing selected
+			{#if deleting}
+				<!-- Progress bar -->
+				<div class="flex flex-col gap-1.5">
+					<div class="flex items-center justify-between text-xs text-gray-400">
+						<span>Deleting files…</span>
+						<span class="tabular-nums">{delDone} / {delTotal}</span>
+					</div>
+					<div class="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+						<div
+							class="h-full rounded-full bg-blue-600 transition-all duration-200"
+							style="width: {delTotal ? (delDone / delTotal) * 100 : 0}%"
+						></div>
+					</div>
+					{#if delCurrent}
+						<p class="truncate font-mono text-xs text-gray-500">{delCurrent}</p>
+					{/if}
+				</div>
+			{/if}
+			<div class="flex items-center gap-3">
+				<span class="text-[13px] text-gray-400">
+					{#if error}
+						<span class="text-red-400">{error}</span>
+					{:else if selectedCount === 0}
+						Nothing selected
+					{:else}
+						<strong class="text-gray-100">{selectedCount} file{selectedCount === 1 ? '' : 's'}</strong>
+						marked for deletion ·
+						<span class="font-semibold text-emerald-400">reclaim {formatSize(reclaimSize)}</span>
+					{/if}
+				</span>
+				<div class="flex-1"></div>
+				{#if deleting}
+					<button
+						class="rounded-lg border border-gray-700 bg-gray-800 px-4 py-1.5 text-[13px] text-gray-400 hover:text-gray-100"
+						onclick={() => { aborted = true; }}
+					>
+						Stop
+					</button>
 				{:else}
-					<strong class="text-gray-100">{selectedCount} file{selectedCount === 1 ? '' : 's'}</strong>
-					marked for deletion ·
-					<span class="font-semibold text-emerald-400">reclaim {formatSize(reclaimSize)}</span>
+					<button
+						class="rounded-lg border border-gray-700 bg-gray-800 px-4 py-1.5 text-[13px] text-gray-400 hover:text-gray-100"
+						onclick={clearSelection}
+					>
+						Clear selection
+					</button>
+					<button
+						class="rounded-lg border border-gray-700 bg-gray-800 px-4 py-1.5 text-[13px] text-gray-400 hover:text-gray-100"
+						title="Re-apply keeper suggestions"
+						onclick={autoSelect}
+					>
+						Auto-select
+					</button>
 				{/if}
-			</span>
-			<div class="flex-1"></div>
-			<button
-				class="rounded-lg border border-gray-700 bg-gray-800 px-4 py-1.5 text-[13px] text-gray-400 hover:text-gray-100"
-				onclick={clearSelection}
-			>
-				Clear selection
-			</button>
-			<button
-				class="rounded-lg border border-gray-700 bg-gray-800 px-4 py-1.5 text-[13px] text-gray-400 hover:text-gray-100"
-				title="Re-apply keeper suggestions"
-				onclick={autoSelect}
-			>
-				Auto-select
-			</button>
-			<button
-				class="rounded-lg bg-red-700 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-red-600 disabled:cursor-default disabled:opacity-40"
-				disabled={selectedCount === 0 || deleting}
-				onclick={() => {
-					showConfirm = true;
-				}}
-			>
-				{deleting
-					? 'Deleting…'
-					: selectedCount === 0
-						? 'Delete…'
-						: `Delete ${selectedCount} file${selectedCount === 1 ? '' : 's'}…`}
-			</button>
+				<button
+					class="rounded-lg bg-red-700 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-red-600 disabled:cursor-default disabled:opacity-40"
+					disabled={selectedCount === 0 || deleting}
+					onclick={() => {
+						showConfirm = true;
+					}}
+				>
+					{deleting
+						? 'Deleting…'
+						: selectedCount === 0
+							? 'Delete…'
+							: `Delete ${selectedCount} file${selectedCount === 1 ? '' : 's'}…`}
+				</button>
+			</div>
 		</div>
 	</div>
 </div>
