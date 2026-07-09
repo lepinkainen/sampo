@@ -167,6 +167,15 @@ function handleSelectDir(
 	}
 }
 
+// True when a file already lives in its target directory (same root + same
+// parent dir), so moving it would be a self-move — skip it entirely.
+function isSelfTarget(g: LocalGroup, filePath: string): boolean {
+	if (g.targetRoot !== rootId) return false;
+	const slash = filePath.lastIndexOf('/');
+	const parent = slash >= 0 ? filePath.slice(0, slash) : '';
+	return parent.replace(/^\//, '') === g.targetPath.replace(/^\//, '');
+}
+
 async function handleApply() {
 	applying = true;
 	aborted = false;
@@ -174,7 +183,11 @@ async function handleApply() {
 	moveCurrent = '';
 	moveTotal = 0;
 	for (let i = 0; i < localGroups.length; i++) {
-		if (checked[i]) moveTotal += localGroups[i].files.length;
+		if (!checked[i]) continue;
+		const g = localGroups[i];
+		for (const file of g.files) {
+			if (!isSelfTarget(g, file.path)) moveTotal += 1;
+		}
 	}
 	try {
 		const allResults: ItemResult[] = [];
@@ -183,6 +196,7 @@ async function handleApply() {
 			const g = localGroups[i];
 			for (const file of g.files) {
 				if (aborted) break outer;
+				if (isSelfTarget(g, file.path)) continue; // already in place
 				moveCurrent = `${g.targetPath}/${file.name}`;
 				try {
 					const results = await moveFiles({

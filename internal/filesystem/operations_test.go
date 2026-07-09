@@ -233,4 +233,27 @@ func TestMoveFile(t *testing.T) {
 			t.Error("moved dir content mismatch")
 		}
 	})
+
+	t.Run("same path is a no-op, not a delete", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "keep.txt")
+		writeFile(t, p, "precious")
+
+		actual, err := MoveFile(p, p)
+		if err != nil {
+			t.Fatalf("self-move should not error: %v", err)
+		}
+		if actual != p {
+			t.Errorf("expected %s, got %s", p, actual)
+		}
+		// The file must still exist with its content — a self-move must never
+		// delete the source (regression: identical-dedup removed it in place).
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("file must still exist after self-move: %v", err)
+		}
+		if string(data) != "precious" {
+			t.Errorf("content changed after self-move: %q", string(data))
+		}
+	})
 }
