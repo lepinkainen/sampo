@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lepinkainen/sampo/internal/analysis"
@@ -33,12 +34,19 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	listStart := time.Now()
 	entries, err := filesystem.ListDirectory(fullPath, relPath)
 	if err != nil {
 		h.logger.Error("listing directory", "error", err, "path", fullPath)
 		http.Error(w, "Failed to list directory", http.StatusInternalServerError)
 		return
 	}
+	h.logger.Debug("listed directory",
+		"root", rootID,
+		"path", relPath,
+		"entries", len(entries),
+		"duration_ms", time.Since(listStart).Milliseconds(),
+	)
 
 	// Enrich entries with detection data and optionally filter
 	if h.detectionStore != nil {
