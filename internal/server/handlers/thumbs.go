@@ -49,6 +49,11 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if mediaType == "archive" && h.thumbCache.GetNegative(rootID, cacheKey) {
+		http.Error(w, "No thumbnail available", http.StatusNotFound)
+		return
+	}
+
 	// Generate the thumbnail synchronously here so serving latency never depends
 	// on the ML analysis queue depth. Auto-browse analysis is enqueued
 	// fire-and-forget below; its worker sees the freshly cached thumbnail and
@@ -69,12 +74,22 @@ func (h *Handler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 		err = thumbnail.GenerateVideoThumbnail(r.Context(), fullPath, dstPath)
 	case "pdf":
 		err = thumbnail.GeneratePdfThumbnail(r.Context(), fullPath, dstPath)
+	case "archive":
+		err = thumbnail.GenerateArchiveThumbnail(r.Context(), fullPath, dstPath)
 	default:
 		http.Error(w, "No thumbnail available", http.StatusNotFound)
 		return
 	}
 
 	if err != nil {
+		if mediaType == "archive" {
+			h.logger.Warn("archive thumbnail unavailable", "error", err, "path", fullPath)
+			if putErr := h.thumbCache.PutNegative(rootID, cacheKey); putErr != nil {
+				h.logger.Error("writing negative thumbnail marker", "error", putErr, "path", fullPath)
+			}
+			http.Error(w, "No thumbnail available", http.StatusNotFound)
+			return
+		}
 		h.logger.Error("generating thumbnail", "error", err, "path", fullPath)
 		http.Error(w, "Failed to generate thumbnail", http.StatusInternalServerError)
 		return

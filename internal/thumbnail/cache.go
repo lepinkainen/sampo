@@ -50,6 +50,27 @@ func (c *Cache) EnsureDir(rootID string) error {
 	return os.MkdirAll(dir, 0o755)
 }
 
+// GetNegative reports whether a negative-result marker exists for
+// rootID/key, meaning a previous attempt to generate this thumbnail found
+// no usable image.
+func (c *Cache) GetNegative(rootID, key string) bool {
+	_, err := os.Stat(c.Path(rootID, key) + ".none")
+	return err == nil
+}
+
+// PutNegative writes a zero-byte marker recording that rootID/key has no
+// usable thumbnail, so future requests short-circuit instead of re-scanning.
+func (c *Cache) PutNegative(rootID, key string) error {
+	if err := c.EnsureDir(rootID); err != nil {
+		return err
+	}
+	f, err := os.Create(c.Path(rootID, key) + ".none")
+	if err != nil {
+		return fmt.Errorf("creating negative marker: %w", err)
+	}
+	return f.Close()
+}
+
 // Prune removes cached thumbnails older than maxAge based on file mtime.
 // Returns the number of files removed and the first error encountered.
 func (c *Cache) Prune(maxAge time.Duration) (int, error) {
