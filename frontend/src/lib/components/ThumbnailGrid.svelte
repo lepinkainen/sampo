@@ -93,6 +93,10 @@ let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let loadRequestId = 0;
 let latestVisibleLoadId = 0;
+// Counts in-flight loadDirectory() calls. The auto-refresh timer skips
+// while one is pending so slow (network-mounted) directories don't stack a
+// new fetch every 2s on top of one that's still running.
+let activeDirectoryLoads = 0;
 let currentDirectoryKey: string | null = null;
 let previewScrollDirectoryKey: string | null = null;
 let previewWasOpen = false;
@@ -295,6 +299,7 @@ $effect(() => {
 	autoRefreshTimer = setInterval(() => {
 		if (
 			loading ||
+			activeDirectoryLoads > 0 ||
 			searchLoading ||
 			detectScan.running ||
 			classifyScan.running ||
@@ -369,6 +374,7 @@ async function loadDirectory(
 		: 0;
 	const scrollKeyBeforeLoad = preserveScroll ? getDirectoryKey(rid, p) : null;
 	const requestId = ++loadRequestId;
+	activeDirectoryLoads++;
 
 	if (!preserveSelection) {
 		selection.clear();
@@ -422,6 +428,7 @@ async function loadDirectory(
 			);
 		}
 	} finally {
+		activeDirectoryLoads--;
 		if (!silent && requestId === latestVisibleLoadId) {
 			loading = false;
 			loadingSlow = false;

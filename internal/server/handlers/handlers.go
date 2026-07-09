@@ -29,6 +29,7 @@ type Handler struct {
 	ocrRecognizer     *ocr.Recognizer
 	ocrScanner        *ocr.Scanner
 	metaStore         *metadata.Store
+	dirCache          *dirListCache
 	browseCoordinator *analysis.Coordinator
 	analysisScanner   *analysis.Scanner
 	autoBrowseEnabled atomic.Bool
@@ -41,6 +42,7 @@ func New(roots *filesystem.RootManager, thumbCache *thumbnail.Cache, frameDir st
 		thumbCache: thumbCache,
 		frameDir:   frameDir,
 		logger:     logger,
+		dirCache:   newDirListCache(),
 	}
 }
 

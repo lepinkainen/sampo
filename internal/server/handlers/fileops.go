@@ -39,6 +39,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	if err := filesystem.Delete(fullPath, recursive); err != nil {
 		if os.IsNotExist(err) {
 			h.purgeAnalysisResults(rootID, relPath)
+			h.dirCache.invalidateRoot(rootID)
 			h.logger.Info("delete target missing; purged cached analysis", "rootID", rootID, "path", relPath)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -49,6 +50,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.purgeAnalysisResults(rootID, relPath)
+	h.dirCache.invalidateRoot(rootID)
 
 	h.logger.Info("deleted", "rootID", rootID, "path", relPath, "recursive", recursive)
 	w.WriteHeader(http.StatusNoContent)
@@ -174,6 +176,12 @@ func (h *Handler) bulkOp(w http.ResponseWriter, r *http.Request, op string) {
 				// don't resurface in duplicate finding or search.
 				h.purgeAnalysisResults(item.SrcRoot, item.SrcPath)
 			}
+			// Listing caches for the involved roots are stale: the source dir
+			// lost (move) or kept (copy) an entry and the dest dir gained one.
+			h.dirCache.invalidateRoot(item.SrcRoot)
+			if req.DstRoot != item.SrcRoot {
+				h.dirCache.invalidateRoot(req.DstRoot)
+			}
 			// Return relative destination path
 			res.DstPath = filepath.Base(actualDst)
 			h.logger.Info(op+" completed", "src", item.SrcPath, "dst", actualDst)
@@ -234,6 +242,8 @@ func (h *Handler) RenameFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	h.dirCache.invalidateRoot(req.RootID)
 
 	h.logger.Info("renamed", "rootID", req.RootID, "from", req.Path, "to", req.NewName)
 	w.Header().Set("Content-Type", "application/json")

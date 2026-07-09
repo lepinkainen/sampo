@@ -46,6 +46,11 @@ export function invalidateDirectoryCache(rootId: string, path: string) {
 			directoryCache.delete(key);
 		}
 	}
+	for (const key of inflightDirectories.keys()) {
+		if (key.startsWith(prefix)) {
+			inflightDirectories.delete(key);
+		}
+	}
 }
 
 export function invalidateParentDirectoryCache(
@@ -58,22 +63,48 @@ export function invalidateParentDirectoryCache(
 	invalidateDirectoryCache(rootId, parentPath);
 }
 
+// In-flight directory requests. Concurrent callers for the same
+// root/path/filter collapse onto a single network fetch, so the tree view,
+// the thumbnail grid, and the auto-refresh timer don't each issue their own
+// request for the same (potentially slow, network-mounted) directory.
+type InflightDirectoryRequest = { promise: Promise<FileEntry[]> };
+const inflightDirectories = new Map<string, InflightDirectoryRequest>();
+
 export async function fetchDirectory(
 	rootId: string,
 	path: string,
 	options?: { filter?: string; tag?: string },
 ): Promise<FileEntry[]> {
-	let url = `${BASE}/api/tree/${rootId}/${encodePath(path)}`;
-	const params = new URLSearchParams();
-	if (options?.filter) params.set('filter', options.filter);
-	if (options?.tag) params.set('tag', options.tag);
-	const qs = params.toString();
-	if (qs) url += `?${qs}`;
-	const res = await fetch(url);
-	if (!res.ok) throw new Error(`Failed to fetch directory: ${res.statusText}`);
-	const entries = await res.json();
-	directoryCache.set(getCacheKey(rootId, path, options), entries);
-	return entries;
+	const key = getCacheKey(rootId, path, options);
+	const existing = inflightDirectories.get(key);
+	if (existing) return existing.promise;
+
+	const request = {} as InflightDirectoryRequest;
+	request.promise = (async () => {
+		let url = `${BASE}/api/tree/${rootId}/${encodePath(path)}`;
+		const params = new URLSearchParams();
+		if (options?.filter) params.set('filter', options.filter);
+		if (options?.tag) params.set('tag', options.tag);
+		const qs = params.toString();
+		if (qs) url += `?${qs}`;
+		const res = await fetch(url);
+		if (!res.ok)
+			throw new Error(`Failed to fetch directory: ${res.statusText}`);
+		const entries = (await res.json()) as FileEntry[];
+		if (inflightDirectories.get(key) === request) {
+			directoryCache.set(key, entries);
+		}
+		return entries;
+	})();
+	inflightDirectories.set(key, request);
+	const cleanup = () => {
+		if (inflightDirectories.get(key) === request) {
+			inflightDirectories.delete(key);
+		}
+	};
+	// Clear the slot once settled so a failed/aborted request can be retried.
+	void request.promise.then(cleanup, cleanup);
+	return request.promise;
 }
 
 export function thumbnailUrl(rootId: string, path: string): string {

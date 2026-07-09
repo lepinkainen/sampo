@@ -35,18 +35,31 @@ func (h *Handler) ListDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	listStart := time.Now()
-	entries, err := filesystem.ListDirectory(fullPath, relPath)
-	if err != nil {
-		h.logger.Error("listing directory", "error", err, "path", fullPath)
-		http.Error(w, "Failed to list directory", http.StatusInternalServerError)
-		return
+	var entries []filesystem.FileEntry
+	if cached, ok := h.dirCache.get(rootID, relPath); ok {
+		entries = cached
+		h.logger.Debug("listed directory (cached)",
+			"root", rootID,
+			"path", relPath,
+			"entries", len(entries),
+			"duration_ms", time.Since(listStart).Milliseconds(),
+		)
+	} else {
+		var err error
+		entries, err = filesystem.ListDirectory(fullPath, relPath)
+		if err != nil {
+			h.logger.Error("listing directory", "error", err, "path", fullPath)
+			http.Error(w, "Failed to list directory", http.StatusInternalServerError)
+			return
+		}
+		h.dirCache.put(rootID, relPath, entries)
+		h.logger.Debug("listed directory",
+			"root", rootID,
+			"path", relPath,
+			"entries", len(entries),
+			"duration_ms", time.Since(listStart).Milliseconds(),
+		)
 	}
-	h.logger.Debug("listed directory",
-		"root", rootID,
-		"path", relPath,
-		"entries", len(entries),
-		"duration_ms", time.Since(listStart).Milliseconds(),
-	)
 
 	// Enrich entries with detection data and optionally filter
 	if h.detectionStore != nil {
