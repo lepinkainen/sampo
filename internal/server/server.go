@@ -18,6 +18,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/ocr"
 	"github.com/lepinkainen/sampo/internal/onnxenv"
 	"github.com/lepinkainen/sampo/internal/server/handlers"
+	"github.com/lepinkainen/sampo/internal/stash"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 	"github.com/lepinkainen/sampo/internal/videoframe"
 )
@@ -193,6 +194,27 @@ func New(cfg *config.Config, frontendFS fs.FS, logger *slog.Logger) (*Server, er
 	// Unified scan: one walk, every enabled analyzer per file. Re-analyze uses this.
 	analysisScanner := analysis.NewScanner(coordinator, rootMgr, cfg.Analysis.BrowseWorkers, logger)
 	h.SetAnalysisScanner(analysisScanner)
+
+	// Conditionally wire Stash integration for the "Organize inbox" feature.
+	if cfg.Stash.Enabled {
+		stashClient := stash.NewClient(cfg.Stash.BaseURL, cfg.Stash.APIKey, cfg.Stash.CacheTTLSec)
+
+		// Resolve the archive root ID by matching the configured root name.
+		archiveRootID := ""
+		for _, root := range rootMgr.List() {
+			if root.Name == cfg.Stash.ArchiveRoot {
+				archiveRootID = root.ID
+				break
+			}
+		}
+		if archiveRootID == "" {
+			logger.Warn("stash.archive_root name not found in roots, Stash integration disabled",
+				"archive_root", cfg.Stash.ArchiveRoot)
+		} else {
+			h.SetStash(stashClient, archiveRootID)
+			logger.Info("Stash integration enabled", "base_url", cfg.Stash.BaseURL, "archive_root", cfg.Stash.ArchiveRoot)
+		}
+	}
 
 	logger.Info("browse analysis configured",
 		"autoEnabled", cfg.Analysis.AutoBrowseEnabled,

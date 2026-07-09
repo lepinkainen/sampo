@@ -52,6 +52,11 @@ func (s *Server) setupRoutes(h *handlers.Handler, frontendFS fs.FS) {
 	s.router.Post("/api/analyze/scan", h.StartAnalyzeScan)
 	s.router.Get("/api/analyze/status", h.AnalyzeScanStatus)
 
+	// Stash organize: suggest performer moves (returns 503 if not configured)
+	s.router.Get("/api/organize/status", h.OrganizeStatus)
+	s.router.Get("/api/organize/performers", h.OrganizePerformers)
+	s.router.Post("/api/organize/suggest", h.SuggestOrganize)
+
 	// Serve frontend SPA from disk
 	fileServer := http.FileServer(http.FS(frontendFS))
 	s.router.Handle("/*", spaHandler(frontendFS, fileServer))

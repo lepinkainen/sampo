@@ -178,6 +178,13 @@ func MoveFile(src, dst string) (string, error) {
 		return "", err
 	}
 
+	// Self-move: source and destination are the same path. This must be a no-op
+	// — never fall through to the identical-dedup branch below, which would
+	// delete the source (i.e. the file itself) in place.
+	if filepath.Clean(src) == filepath.Clean(dst) {
+		return dst, nil
+	}
+
 	// Handle conflict for files
 	if !srcInfo.IsDir() {
 		dst, err = resolveConflict(src, dst)

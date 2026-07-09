@@ -151,6 +151,7 @@ export interface BulkRequest {
 	items: { srcRoot: string; srcPath: string }[];
 	dstRoot: string;
 	dstPath: string;
+	createDst?: boolean;
 }
 
 export interface ItemResult {
@@ -417,6 +418,57 @@ export async function getDiskUsage(
 	const res = await fetch(`${BASE}/api/usage/${rootId}/${encodePath(path)}`);
 	if (!res.ok) throw new Error(`Usage failed: ${res.statusText}`);
 	return res.json();
+}
+
+// Organize API (Stash performer folder suggestions)
+
+export interface OrganizeFile {
+	path: string;
+	name: string;
+}
+
+export interface OrganizeGroup {
+	performer: string;
+	targetRoot: string;
+	targetPath: string;
+	exists: boolean;
+	matchedBy: 'filename' | 'dirname';
+	candidates: string[];
+	files: OrganizeFile[];
+}
+
+export interface OrganizeResponse {
+	groups: OrganizeGroup[];
+	unmatched: OrganizeFile[];
+}
+
+export async function getOrganizeStatus(): Promise<{
+	enabled: boolean;
+	archiveRootId: string;
+}> {
+	const res = await fetch(`${BASE}/api/organize/status`);
+	if (!res.ok) return { enabled: false, archiveRootId: '' };
+	return res.json();
+}
+
+export async function suggestOrganize(
+	rootId: string,
+	path: string,
+): Promise<OrganizeResponse> {
+	const res = await fetch(`${BASE}/api/organize/suggest`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ rootId, path }),
+	});
+	if (!res.ok) throw new Error(`Organize suggest failed: ${res.statusText}`);
+	return res.json();
+}
+
+export async function getOrganizePerformers(): Promise<string[]> {
+	const res = await fetch(`${BASE}/api/organize/performers`);
+	if (!res.ok) throw new Error(`Organize performers failed: ${res.statusText}`);
+	const data = await res.json();
+	return data.performers as string[];
 }
 
 // Duplicates API

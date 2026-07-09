@@ -4,6 +4,7 @@ import {
 	ClipboardPaste,
 	Copy,
 	Files,
+	FolderInput,
 	LayoutGrid,
 	List,
 	Pencil,
@@ -58,6 +59,8 @@ interface Props {
 	onOCR: () => void;
 	onReanalyze: () => void;
 	onFindDuplicates: () => void;
+	onSuggestOrganize?: () => void;
+	organizeEnabled?: boolean;
 	onTagFilter: (e: Event) => void;
 	onViewMode: (mode: 'grid' | 'list') => void;
 	onThumbSize: (size: 'small' | 'medium' | 'large') => void;
@@ -102,6 +105,8 @@ let {
 	onOCR,
 	onReanalyze,
 	onFindDuplicates,
+	onSuggestOrganize,
+	organizeEnabled = false,
 	onTagFilter,
 	onViewMode,
 	onThumbSize,
@@ -283,6 +288,15 @@ let {
 			>
 				<Files size={16} />
 			</button>
+			{#if organizeEnabled}
+				<button
+					class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-blue-400"
+					title="Suggest performer folders from Stash"
+					onclick={onSuggestOrganize}
+				>
+					<FolderInput size={16} />
+				</button>
+			{/if}
 			{#if availableTags.length > 0}
 				<div class="relative flex items-center">
 					<Tag size={14} class="absolute left-1.5 text-gray-500 pointer-events-none" />

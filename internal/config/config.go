@@ -54,6 +54,16 @@ type AnalysisConfig struct {
 	IncludeVideos     bool `mapstructure:"include_videos"`
 }
 
+// StashConfig holds StashApp integration settings for the "Organize inbox" feature.
+// The API key is kept server-side and never logged or sent to the browser.
+type StashConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	BaseURL     string `mapstructure:"base_url"`      // e.g. https://stash.example.com
+	APIKey      string `mapstructure:"api_key"`       // never logged
+	ArchiveRoot string `mapstructure:"archive_root"`  // RootConfig.Name of the performer tree
+	CacheTTLSec int    `mapstructure:"cache_ttl_sec"` // performer-list cache TTL in seconds; 0 = always fetch live (default)
+}
+
 // Config holds the application configuration.
 type Config struct {
 	Server struct {
@@ -68,6 +78,7 @@ type Config struct {
 	Classification ClassificationConfig `mapstructure:"classification"`
 	OCR            OCRConfig            `mapstructure:"ocr"`
 	Analysis       AnalysisConfig       `mapstructure:"analysis"`
+	Stash          StashConfig          `mapstructure:"stash"`
 }
 
 // Load reads configuration from file and environment.
@@ -99,6 +110,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("analysis.browse_workers", 1)
 	viper.SetDefault("analysis.browse_queue_size", 128)
 	viper.SetDefault("analysis.include_videos", true)
+	viper.SetDefault("stash.enabled", false)
+	viper.SetDefault("stash.cache_ttl_sec", 0)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

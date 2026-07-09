@@ -88,9 +88,10 @@ type fileItem struct {
 }
 
 type bulkRequest struct {
-	Items   []fileItem `json:"items"`
-	DstRoot string     `json:"dstRoot"`
-	DstPath string     `json:"dstPath"`
+	Items     []fileItem `json:"items"`
+	DstRoot   string     `json:"dstRoot"`
+	DstPath   string     `json:"dstPath"`
+	CreateDst bool       `json:"createDst"`
 }
 
 type itemResult struct {
@@ -128,6 +129,15 @@ func (h *Handler) bulkOp(w http.ResponseWriter, r *http.Request, op string) {
 		h.logger.Error("resolving destination", "error", err, "rootID", req.DstRoot, "path", req.DstPath)
 		http.Error(w, "Invalid destination", http.StatusBadRequest)
 		return
+	}
+
+	// Optionally create the destination directory if it doesn't exist yet.
+	if req.CreateDst {
+		if err := os.MkdirAll(dstDir, 0o755); err != nil {
+			h.logger.Error("creating destination directory", "error", err, "path", dstDir)
+			http.Error(w, "Failed to create destination directory", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	results := make([]itemResult, 0, len(req.Items))
