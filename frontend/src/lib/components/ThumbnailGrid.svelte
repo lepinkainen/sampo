@@ -21,8 +21,10 @@ import {
 	invalidateDirectoryCache,
 	invalidateParentDirectoryCache,
 	fileUrl,
+	getOrganizeStatus,
+	suggestOrganize,
 } from '$lib/api';
-import type { AnalysisSettings } from '$lib/api';
+import type { AnalysisSettings, OrganizeGroup, OrganizeFile } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
@@ -38,6 +40,7 @@ import Toast from './Toast.svelte';
 import GridToolbar from './GridToolbar.svelte';
 import DetailsPanel from './DetailsPanel.svelte';
 import DuplicatesModal from './DuplicatesModal.svelte';
+import OrganizeModal from './OrganizeModal.svelte';
 import Loader from './Loader.svelte';
 import {
 	Trash2,
@@ -111,6 +114,13 @@ let searchInput: HTMLInputElement | undefined = $state();
 
 // Duplicates state
 let showDuplicates = $state(false);
+
+// Organize state
+let organizeEnabled = $state(false);
+let organizeArchiveRootId = $state('');
+let showOrganize = $state(false);
+let organizeGroups = $state<OrganizeGroup[]>([]);
+let organizeUnmatched = $state<OrganizeFile[]>([]);
 
 const toast = (msg: string, kind: 'success' | 'error') =>
 	toastComponent?.show(msg, kind);
@@ -259,6 +269,19 @@ $effect(() => {
 	analysisPollTimer = setInterval(() => {
 		void loadAnalysisSettings();
 	}, 2000);
+});
+
+// Check once whether the Stash organize feature is enabled on the server.
+$effect(() => {
+	getOrganizeStatus()
+		.then((s) => {
+			organizeEnabled = s.enabled;
+			organizeArchiveRootId = s.archiveRootId;
+		})
+		.catch(() => {
+			organizeEnabled = false;
+			organizeArchiveRootId = '';
+		});
 });
 
 $effect(() => {
@@ -804,6 +827,20 @@ function handleTagFilter(e: Event) {
 	filterTag = target.value;
 	loadDirectory(rootId, path);
 }
+
+async function handleSuggestOrganize() {
+	try {
+		const result = await suggestOrganize(rootId, path);
+		organizeGroups = result.groups;
+		organizeUnmatched = result.unmatched;
+		showOrganize = true;
+	} catch (err) {
+		toast(
+			`Organize failed: ${err instanceof Error ? err.message : String(err)}`,
+			'error',
+		);
+	}
+}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -863,6 +900,8 @@ function handleTagFilter(e: Event) {
 			onOCR={() => ocrScan.run(rootId, path)}
 			onReanalyze={handleReanalyzeAll}
 			onFindDuplicates={() => (showDuplicates = true)}
+			onSuggestOrganize={handleSuggestOrganize}
+			{organizeEnabled}
 			onTagFilter={handleTagFilter}
 			onViewMode={(m) => (viewMode = m)}
 			onThumbSize={(s) => (thumbSize = s)}
@@ -981,6 +1020,21 @@ function handleTagFilter(e: Event) {
 		{path}
 		onClose={() => (showDuplicates = false)}
 		onDeleted={() => loadDirectory(rootId, path)}
+	/>
+{/if}
+
+{#if showOrganize}
+	<OrganizeModal
+		{rootId}
+		archiveRootId={organizeArchiveRootId}
+		groups={organizeGroups}
+		unmatched={organizeUnmatched}
+		onClose={() => (showOrganize = false)}
+		onMoved={() => {
+			invalidateDirectoryCache(rootId, path);
+			loadDirectory(rootId, path, { silent: true });
+		}}
+		onToast={toast}
 	/>
 {/if}
 
