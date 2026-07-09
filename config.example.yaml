@@ -8,6 +8,9 @@ cache:
 roots:
   - name: "Sample"
     path: "./testdata"
+  # Archive root: top-level performer folders live here (used by the Stash organizer).
+  # - name: "Archive"
+  #   path: "/storage/archive"
 
 # Person detection (opt-in, requires ONNX Runtime installed)
 detection:
@@ -47,3 +50,14 @@ analysis:
   browse_workers: 1
   browse_queue_size: 128
   include_videos: true
+
+# StashApp integration — "Organize inbox" button.
+# Fetches performer names+aliases from Stash GraphQL, matches inbox files
+# against existing archive performer folders, and suggests moves.
+# The API key stays server-side; it is never logged or sent to the browser.
+stash:
+  enabled: false
+  base_url: "https://stash.example.com"
+  api_key: ""             # leave empty for an internal Stash with no auth; else set in local config.yaml
+  archive_root: "Archive" # must match a roots[].name above
+  cache_ttl_sec: 0        # seconds to cache the performer list; 0 = always live (~50ms fetch)
