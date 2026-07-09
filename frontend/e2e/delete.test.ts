@@ -1,12 +1,8 @@
 import { cpSync, mkdirSync, rmSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { TESTDATA } from './testdata';
 
-const TESTDATA = resolve(
-	dirname(fileURLToPath(import.meta.url)),
-	'../../testdata',
-);
 const TMPDIR = resolve(TESTDATA, '_tmp_delete');
 
 test.describe('Delete files', () => {

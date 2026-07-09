@@ -16,10 +16,12 @@ services:
     ports:
       - "${SAMPO_E2E_PORT:-8091}:8080"
     volumes:
-      # Bind-mount testdata so host-written fixtures are visible and
-      # deletes/renames flow back to the host. Overrides the baked config with
-      # a single "Sample" root the specs expect.
-      - ./testdata:/testdata
+      # Bind-mount a per-run sandbox copy (created by `task test-e2e` from
+      # testdata/ into .run/e2e-testdata/) rather than testdata/ itself, so the
+      # checked-in fixtures are never mutated. Specs also target the sandbox,
+      # so host-written fixtures and deletes/renames still flow through.
+      # Overrides the baked config with a single "Sample" root the specs expect.
+      - ./.run/e2e-testdata:/testdata
       - ./config.e2e.yaml:/app/config.yaml:ro
       # Fresh, throwaway cache per run.
       - sampo-e2e-cache:/cache

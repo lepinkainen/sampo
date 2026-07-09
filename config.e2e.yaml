@@ -4,8 +4,10 @@
 ##
 ## The single root is named "Sample" to match the e2e specs
 ## (page.getByText('Sample')) and points at /testdata, which is bind-mounted
-## from ./testdata so fixtures the test process writes on the host are visible
-## in the container and deletes/renames flow back to the host.
+## from ./.run/e2e-testdata (a per-run sandbox copy of ./testdata created by
+## `task test-e2e`) so fixtures the test process writes on the host are
+## visible in the container and deletes/renames flow back to the sandbox —
+## the checked-in ./testdata is never touched.
 server:
   port: 8080
 

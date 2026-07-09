@@ -49,8 +49,10 @@ E2E tests use Playwright (`frontend/e2e/`). `task test-e2e` builds and starts an
 isolated throwaway backend+frontend via `docker-compose.e2e.yml` (host port 8091,
 override with `SAMPO_E2E_PORT`), runs the specs against it, then tears it down
 (`down -v`). This keeps the suite off the dogfooding dev server on :8080. The
-container uses `config.e2e.yaml` (single `Sample` root bind-mounted from
-`./testdata`, so host-written fixtures are visible and deletes/renames flow back).
+task first refreshes a throwaway sandbox copy at `.run/e2e-testdata/` from
+checked-in `testdata/`; the container uses `config.e2e.yaml` (single `Sample`
+root bind-mounted from that sandbox) and specs target the same sandbox, so
+checked-in `testdata/` is never mutated.
 ```bash
 task test-e2e
 # or against a manually-run server:

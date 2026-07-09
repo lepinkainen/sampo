@@ -67,6 +67,11 @@ tasks:
     env:
       SAMPO_E2E_PORT: '{{.E2E_PORT}}'
     cmds:
+      # Refresh the throwaway sandbox from checked-in testdata/ so specs never
+      # mutate the tracked fixtures — the container bind-mounts this copy.
+      - rm -rf .run/e2e-testdata
+      - mkdir -p .run
+      - cp -R testdata .run/e2e-testdata
       - docker compose -f docker-compose.e2e.yml up -d --build --wait
       - defer: docker compose -f docker-compose.e2e.yml down -v
       - PLAYWRIGHT_BASE_URL=http://localhost:{{.E2E_PORT}} pnpm --dir frontend exec playwright test
