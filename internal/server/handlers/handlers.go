@@ -10,6 +10,7 @@ import (
 	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/metadata"
 	"github.com/lepinkainen/sampo/internal/ocr"
+	"github.com/lepinkainen/sampo/internal/stash"
 	"github.com/lepinkainen/sampo/internal/thumbnail"
 )
 
@@ -33,6 +34,8 @@ type Handler struct {
 	browseCoordinator *analysis.Coordinator
 	analysisScanner   *analysis.Scanner
 	autoBrowseEnabled atomic.Bool
+	stashClient       *stash.Client
+	archiveRootID     string
 }
 
 // New creates a new Handler.
@@ -80,6 +83,12 @@ func (h *Handler) SetBrowseCoordinator(coordinator *analysis.Coordinator) {
 // SetAnalysisScanner configures the unified (load-once, run-all) analysis scanner.
 func (h *Handler) SetAnalysisScanner(scanner *analysis.Scanner) {
 	h.analysisScanner = scanner
+}
+
+// SetStash configures the optional Stash integration.
+func (h *Handler) SetStash(client *stash.Client, archiveRootID string) {
+	h.stashClient = client
+	h.archiveRootID = archiveRootID
 }
 
 // SetAutoBrowseEnabled updates the runtime browse-triggered analysis flag.
