@@ -30,13 +30,13 @@ import { sortEntries } from '$lib/utils';
 import { createSelection } from '$lib/selection.svelte';
 import { createClipboard } from '$lib/clipboard.svelte';
 import { createScan, makeReloadAfterScan } from '$lib/scans.svelte';
+import { showToast, summarizeItemErrors } from '$lib/toast.svelte';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 import ListView from './ListView.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
 import RenameDialog from './RenameDialog.svelte';
 import ContextMenu from './ContextMenu.svelte';
-import Toast from './Toast.svelte';
 import GridToolbar from './GridToolbar.svelte';
 import DetailsPanel from './DetailsPanel.svelte';
 import DuplicatesModal from './DuplicatesModal.svelte';
@@ -87,7 +87,6 @@ const clipboard = createClipboard();
 let showDeleteConfirm = $state(false);
 let showRenameDialog = $state(false);
 let contextMenu = $state<{ x: number; y: number } | null>(null);
-let toastComponent: Toast | undefined = $state();
 let filterPeople = $state(false);
 let filterTag = $state<string>('');
 let analysisSettings = $state<AnalysisSettings | null>(null);
@@ -122,8 +121,7 @@ let showOrganize = $state(false);
 let organizeGroups = $state<OrganizeGroup[]>([]);
 let organizeUnmatched = $state<OrganizeFile[]>([]);
 
-const toast = (msg: string, kind: 'success' | 'error') =>
-	toastComponent?.show(msg, kind);
+const toast = (msg: string, kind: 'success' | 'error') => showToast(msg, kind);
 
 function getDirectoryKey(rid: string, p: string) {
 	return `${rid}:${p}`;
@@ -443,7 +441,7 @@ async function loadDirectory(
 			error = e instanceof Error ? e.message : 'Failed to load directory';
 			entries = [];
 		} else {
-			toastComponent?.show(
+			showToast(
 				e instanceof Error
 					? `Failed to refresh: ${e.message}`
 					: 'Failed to refresh folder contents',
@@ -567,13 +565,13 @@ function handleKeydown(e: KeyboardEvent) {
 		if (selection.size > 0) {
 			e.preventDefault();
 			clipboard.copy(rootId, selection.paths);
-			toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+			showToast(`Copied ${selection.size} item(s)`, 'success');
 		}
 	} else if (mod && e.key === 'x') {
 		if (selection.size > 0) {
 			e.preventDefault();
 			clipboard.cut(rootId, selection.paths);
-			toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+			showToast(`Cut ${selection.size} item(s)`, 'success');
 		}
 	} else if (mod && e.key === 'v') {
 		if (clipboard.hasItems) {
@@ -595,7 +593,7 @@ async function handleDelete() {
 
 	try {
 		await deleteFiles(rootId, paths, hasDirectories);
-		toastComponent?.show(`Deleted ${paths.length} item(s)`, 'success');
+		showToast(`Deleted ${paths.length} item(s)`, 'success');
 		// Also clear clipboard if deleted items were cut
 		if (
 			clipboard.mode === 'cut' &&
@@ -606,10 +604,7 @@ async function handleDelete() {
 		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path, { preserveScroll: true });
 	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Delete failed',
-			'error',
-		);
+		showToast(e instanceof Error ? e.message : 'Delete failed', 'error');
 	}
 }
 
@@ -624,14 +619,11 @@ async function handlePaste() {
 			dstRoot: rootId,
 			dstPath: path || '/',
 		});
-		const errors = results.filter((r) => r.error);
-		if (errors.length > 0) {
-			toastComponent?.show(
-				`${errors.length} item(s) failed to ${clipboard.mode}`,
-				'error',
-			);
+		const summary = summarizeItemErrors(results);
+		if (summary) {
+			showToast(`Failed to ${clipboard.mode}: ${summary}`, 'error');
 		} else {
-			toastComponent?.show(
+			showToast(
 				`${clipboard.mode === 'cut' ? 'Moved' : 'Copied'} ${results.length} item(s)`,
 				'success',
 			);
@@ -645,10 +637,7 @@ async function handlePaste() {
 		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path);
 	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Paste failed',
-			'error',
-		);
+		showToast(e instanceof Error ? e.message : 'Paste failed', 'error');
 	}
 }
 
@@ -657,51 +646,55 @@ async function handleRename(newName: string) {
 	const entry = selectedEntries[0];
 	try {
 		await renameFile(rootId, entry.path, newName);
-		toastComponent?.show(`Renamed to "${newName}"`, 'success');
+		showToast(`Renamed to "${newName}"`, 'success');
 		invalidateDirectoryCache(rootId, path);
 		await loadDirectory(rootId, path);
 	} catch (e) {
-		toastComponent?.show(
-			e instanceof Error ? e.message : 'Rename failed',
-			'error',
-		);
+		showToast(e instanceof Error ? e.message : 'Rename failed', 'error');
 	}
 }
 
-function handleDrop(e: DragEvent) {
+async function handleDrop(e: DragEvent) {
 	e.preventDefault();
 	const data = e.dataTransfer?.getData('application/json');
 	if (!data) return;
 
+	let payload: { rootId: string; paths: string[]; mode: 'move' | 'copy' };
 	try {
-		const payload = JSON.parse(data) as {
-			rootId: string;
-			paths: string[];
-			mode: 'move' | 'copy';
-		};
+		payload = JSON.parse(data) as typeof payload;
+	} catch {
+		// ignore invalid drag data
+		return;
+	}
+
+	try {
 		const op = payload.mode === 'copy' ? copyFiles : moveFiles;
-		op({
+		const results = await op({
 			items: payload.paths.map((p: string) => ({
 				srcRoot: payload.rootId,
 				srcPath: p,
 			})),
 			dstRoot: rootId,
 			dstPath: path || '/',
-		}).then(async () => {
-			toastComponent?.show(
+		});
+		const summary = summarizeItemErrors(results);
+		if (summary) {
+			showToast(`Failed to ${payload.mode}: ${summary}`, 'error');
+		} else {
+			showToast(
 				`${payload.mode === 'copy' ? 'Copied' : 'Moved'} ${payload.paths.length} item(s)`,
 				'success',
 			);
-			if (payload.mode === 'move') {
-				for (const p of payload.paths) {
-					invalidateParentDirectoryCache(payload.rootId, p);
-				}
+		}
+		if (payload.mode === 'move') {
+			for (const p of payload.paths) {
+				invalidateParentDirectoryCache(payload.rootId, p);
 			}
-			invalidateDirectoryCache(rootId, path);
-			await loadDirectory(rootId, path);
-		});
-	} catch {
-		// ignore invalid drag data
+		}
+		invalidateDirectoryCache(rootId, path);
+		await loadDirectory(rootId, path);
+	} catch (err) {
+		showToast(err instanceof Error ? err.message : 'Move failed', 'error');
 	}
 }
 
@@ -754,7 +747,7 @@ function getContextMenuItems() {
 			icon: Scissors,
 			action: () => {
 				clipboard.cut(rootId, selection.paths);
-				toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+				showToast(`Cut ${selection.size} item(s)`, 'success');
 			},
 			disabled: !hasSelection,
 		},
@@ -763,7 +756,7 @@ function getContextMenuItems() {
 			icon: Copy,
 			action: () => {
 				clipboard.copy(rootId, selection.paths);
-				toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+				showToast(`Copied ${selection.size} item(s)`, 'success');
 			},
 			disabled: !hasSelection,
 		},
@@ -796,14 +789,14 @@ async function toggleAutoBrowseAnalysis() {
 	analysisSettingsSaving = true;
 	try {
 		analysisSettings = await setAnalysisSettings(next);
-		toastComponent?.show(
+		showToast(
 			next
 				? 'Auto analyze while browsing enabled'
 				: 'Auto analyze while browsing disabled',
 			'success',
 		);
 	} catch {
-		toastComponent?.show('Failed to update auto analysis setting', 'error');
+		showToast('Failed to update auto analysis setting', 'error');
 	} finally {
 		analysisSettingsSaving = false;
 	}
@@ -830,7 +823,16 @@ function handleTagFilter(e: Event) {
 
 async function handleSuggestOrganize() {
 	try {
-		const result = await suggestOrganize(rootId, path);
+		// Root-relative paths: search results can live in subdirectories,
+		// and the backend resolves each selected path individually.
+		const selectedFiles = selectedEntries
+			.filter((e) => !e.isDir)
+			.map((e) => e.path);
+		const result = await suggestOrganize(
+			rootId,
+			path,
+			selectedFiles.length > 0 ? selectedFiles : undefined,
+		);
 		organizeGroups = result.groups;
 		organizeUnmatched = result.unmatched;
 		showOrganize = true;
@@ -884,11 +886,11 @@ async function handleSuggestOrganize() {
 			onSearchInput={handleSearchInput}
 			onCut={() => {
 				clipboard.cut(rootId, selection.paths);
-				toastComponent?.show(`Cut ${selection.size} item(s)`, 'success');
+				showToast(`Cut ${selection.size} item(s)`, 'success');
 			}}
 			onCopy={() => {
 				clipboard.copy(rootId, selection.paths);
-				toastComponent?.show(`Copied ${selection.size} item(s)`, 'success');
+				showToast(`Copied ${selection.size} item(s)`, 'success');
 			}}
 			onPaste={handlePaste}
 			onRename={() => (showRenameDialog = true)}
@@ -1037,5 +1039,3 @@ async function handleSuggestOrganize() {
 		onToast={toast}
 	/>
 {/if}
-
-<Toast bind:this={toastComponent} />

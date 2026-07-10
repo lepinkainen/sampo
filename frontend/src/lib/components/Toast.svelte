@@ -1,26 +1,8 @@
 <script lang="ts">
 import { CheckCircle, XCircle, X } from '@lucide/svelte';
+import { getToasts, dismissToast } from '$lib/toast.svelte';
 
-interface Toast {
-	id: number;
-	message: string;
-	type: 'success' | 'error';
-}
-
-let toasts = $state<Toast[]>([]);
-let nextId = 0;
-
-export function show(message: string, type: 'success' | 'error' = 'success') {
-	const id = nextId++;
-	toasts = [...toasts, { id, message, type }];
-	setTimeout(() => {
-		toasts = toasts.filter((t) => t.id !== id);
-	}, 3000);
-}
-
-function dismiss(id: number) {
-	toasts = toasts.filter((t) => t.id !== id);
-}
+const toasts = $derived(getToasts());
 </script>
 
 <div class="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2">
@@ -37,7 +19,7 @@ function dismiss(id: number) {
 			<span>{toast.message}</span>
 			<button
 				class="ml-2 opacity-60 hover:opacity-100"
-				onclick={() => dismiss(toast.id)}
+				onclick={() => dismissToast(toast.id)}
 			>
 				<X size={14} />
 			</button>

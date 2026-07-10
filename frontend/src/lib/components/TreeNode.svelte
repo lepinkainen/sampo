@@ -1,5 +1,6 @@
 <script lang="ts">
 import { fetchDirectory, moveFiles, copyFiles } from '$lib/api';
+import { showToast, summarizeItemErrors } from '$lib/toast.svelte';
 import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
 import { ChevronDown, ChevronRight } from '@lucide/svelte';
@@ -129,14 +130,17 @@ async function handleDrop(e: DragEvent) {
 	const data = e.dataTransfer?.getData('application/json');
 	if (!data) return;
 
+	let payload: { rootId: string; paths: string[]; mode: 'move' | 'copy' };
 	try {
-		const payload = JSON.parse(data) as {
-			rootId: string;
-			paths: string[];
-			mode: 'move' | 'copy';
-		};
+		payload = JSON.parse(data) as typeof payload;
+	} catch {
+		// ignore invalid drag data
+		return;
+	}
+
+	try {
 		const op = payload.mode === 'copy' ? copyFiles : moveFiles;
-		await op({
+		const results = await op({
 			items: payload.paths.map((p: string) => ({
 				srcRoot: payload.rootId,
 				srcPath: p,
@@ -144,9 +148,13 @@ async function handleDrop(e: DragEvent) {
 			dstRoot: rootId,
 			dstPath: entry.path,
 		});
+		const summary = summarizeItemErrors(results);
+		if (summary) {
+			showToast(`Failed to ${payload.mode}: ${summary}`, 'error');
+		}
 		onRefresh?.();
-	} catch {
-		// ignore
+	} catch (err) {
+		showToast(err instanceof Error ? err.message : 'Move failed', 'error');
 	}
 }
 </script>

@@ -4,6 +4,7 @@ import { page } from '$app/stores';
 import { fetchRoots } from '$lib/api';
 import ThumbnailGrid from '$lib/components/ThumbnailGrid.svelte';
 import TreeView from '$lib/components/TreeView.svelte';
+import Toast from '$lib/components/Toast.svelte';
 import type { Root } from '$lib/types';
 
 // Derived state from URL
@@ -92,3 +93,5 @@ function handleRefresh() {
 		{/if}
 	</div>
 </div>
+
+<Toast />
