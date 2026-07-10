@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/lepinkainen/sampo/internal/filesystem"
 	"github.com/lepinkainen/sampo/internal/stash"
 )
 
@@ -39,6 +41,14 @@ type organizeResponse struct {
 type organizeRequest struct {
 	RootID string `json:"rootId"`
 	Path   string `json:"path"`
+	// Files optionally restricts the suggestion to an explicit selection of
+	// files. Entries are root-relative file paths (as returned in
+	// FileEntry.path by the tree and search APIs), so selections made from
+	// recursive search results may point into subdirectories of Path.
+	// Anything invalid (nonexistent, a directory, a dotfile, or a path that
+	// fails to resolve) is silently ignored. Empty/omitted means "all files
+	// directly in Path", preserving prior whole-directory behavior.
+	Files []string `json:"files,omitempty"`
 }
 
 // organizeStatusResponse is the response body for GET /api/organize/status.
@@ -100,11 +110,60 @@ func (h *Handler) OrganizePerformers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// collectOrganizeFiles collects (relPath, name) pairs for regular, non-dotfile
+// entries in srcEntries (the whole-directory case).
+func collectOrganizeFiles(srcEntries []os.DirEntry, reqPath string) [][2]string {
+	var files [][2]string
+	for _, e := range srcEntries {
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		// Path relative to the source root is the requested path + filename.
+		relPath := strings.TrimPrefix(reqPath+"/"+e.Name(), "/")
+		files = append(files, [2]string{relPath, e.Name()})
+	}
+	return files
+}
+
+// selectedOrganizeFiles collects (relPath, name) pairs for an explicit
+// selection of root-relative file paths. Each path is resolved within the
+// root and stat'd; anything invalid — nonexistent, a directory, a dotfile,
+// or a path that fails to resolve (e.g. traversal) — is silently skipped.
+// Paths may point into subdirectories (e.g. selections made from recursive
+// search results); the returned relPath is the cleaned root-relative path so
+// downstream move operations target the actual file.
+func selectedOrganizeFiles(roots *filesystem.RootManager, rootID string, paths []string) [][2]string {
+	var files [][2]string
+	for _, p := range paths {
+		cleaned := strings.TrimPrefix(path.Clean("/"+p), "/")
+		if cleaned == "" {
+			continue
+		}
+		name := path.Base(cleaned)
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		absPath, err := roots.ResolvePath(rootID, cleaned)
+		if err != nil {
+			continue
+		}
+		info, err := os.Stat(absPath)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		files = append(files, [2]string{cleaned, name})
+	}
+	return files
+}
+
 // SuggestOrganize handles POST /api/organize/suggest.
 // It fetches performers from StashApp, lists existing archive dirs, matches
 // the source directory's files against ALL performers, then preselects the
 // target dir: existing dirs use their exact-case name (exists=true), new
-// dirs use the performer name (exists=false).
+// dirs use the performer name (exists=false). If req.Files is non-empty,
+// matching is restricted to that explicit selection of root-relative file
+// paths (which may live in subdirectories of Path, e.g. when selected from
+// recursive search results) instead of every file directly in Path.
 func (h *Handler) SuggestOrganize(w http.ResponseWriter, r *http.Request) {
 	if h.stashClient == nil {
 		http.Error(w, "Stash integration not configured", http.StatusServiceUnavailable)
@@ -179,30 +238,28 @@ func (h *Handler) SuggestOrganize(w http.ResponseWriter, r *http.Request) {
 		sort.Strings(candidatesByLeaf[k])
 	}
 
-	// Resolve source directory and list its files (non-recursive, non-dotfiles).
-	srcPath, err := h.roots.ResolvePath(req.RootID, req.Path)
-	if err != nil {
-		h.logger.Error("resolving source path", "error", err, "rootID", req.RootID, "path", req.Path)
-		http.Error(w, "Source path not found", http.StatusNotFound)
-		return
-	}
-
-	srcEntries, err := os.ReadDir(srcPath)
-	if err != nil {
-		h.logger.Error("reading source directory", "error", err, "path", srcPath)
-		http.Error(w, "Failed to read source directory", http.StatusInternalServerError)
-		return
-	}
-
-	// Collect files (skip subdirs and dotfiles).
+	// Collect the files to match: an explicit selection (root-relative
+	// paths, possibly in subdirectories) if provided, otherwise every file
+	// directly in the source directory (non-recursive, non-dotfiles).
 	var files [][2]string
-	for _, e := range srcEntries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
+	if len(req.Files) > 0 {
+		files = selectedOrganizeFiles(h.roots, req.RootID, req.Files)
+	} else {
+		srcPath, err := h.roots.ResolvePath(req.RootID, req.Path)
+		if err != nil {
+			h.logger.Error("resolving source path", "error", err, "rootID", req.RootID, "path", req.Path)
+			http.Error(w, "Source path not found", http.StatusNotFound)
+			return
 		}
-		// Path relative to the source root is the requested path + filename.
-		relPath := strings.TrimPrefix(req.Path+"/"+e.Name(), "/")
-		files = append(files, [2]string{relPath, e.Name()})
+
+		srcEntries, err := os.ReadDir(srcPath)
+		if err != nil {
+			h.logger.Error("reading source directory", "error", err, "path", srcPath)
+			http.Error(w, "Failed to read source directory", http.StatusInternalServerError)
+			return
+		}
+
+		files = collectOrganizeFiles(srcEntries, req.Path)
 	}
 
 	// Determine the directory name for dirname-fallback matching.

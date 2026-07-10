@@ -451,14 +451,28 @@ export async function getOrganizeStatus(): Promise<{
 	return res.json();
 }
 
+/**
+ * Request archive suggestions for a directory. `files` optionally restricts
+ * matching to a selection of root-relative file paths (as in FileEntry.path,
+ * so search results in subdirectories work); omitted/empty means all files
+ * directly in `path`.
+ */
 export async function suggestOrganize(
 	rootId: string,
 	path: string,
+	files?: string[],
 ): Promise<OrganizeResponse> {
+	const body: { rootId: string; path: string; files?: string[] } = {
+		rootId,
+		path,
+	};
+	if (files && files.length > 0) {
+		body.files = files;
+	}
 	const res = await fetch(`${BASE}/api/organize/suggest`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ rootId, path }),
+		body: JSON.stringify(body),
 	});
 	if (!res.ok) throw new Error(`Organize suggest failed: ${res.statusText}`);
 	return res.json();
