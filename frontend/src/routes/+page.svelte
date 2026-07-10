@@ -59,6 +59,29 @@ function handlePreviewChange(path: string | null) {
 function handleRefresh() {
 	refreshKey++;
 }
+
+// If a tree-originated rename/move/delete affected the directory currently
+// being browsed, update the URL/selection to match. Scope-limited to an
+// exact path match (not ancestor-aware) — renaming/deleting/moving an
+// ancestor of the currently browsed directory won't follow along; this is an
+// accepted simplification.
+function handlePathChanged(
+	rootId: string,
+	oldPath: string,
+	newPath: string | null,
+) {
+	if (rootId !== selectedRootId || oldPath !== selectedPath) return;
+	if (newPath === null) {
+		// Deleted: clear the preview and navigate up to the parent directory.
+		// Paths are leading-slash rooted ("/a/b" → parent "/a"; top-level "/a"
+		// → root "/"), matching tree entry paths so selectedKey keeps working.
+		const parts = oldPath.split('/').filter(Boolean);
+		parts.pop();
+		updateUrl(rootId, `/${parts.join('/')}`, null);
+	} else {
+		updateUrl(rootId, newPath, null);
+	}
+}
 </script>
 
 <div class="flex h-screen bg-gray-950 text-gray-100">
@@ -68,7 +91,12 @@ function handleRefresh() {
 			<img src="/sampo-banner.svg" alt="Sampo" class="h-7 w-auto" />
 		</div>
 		<div class="h-[calc(100vh-3rem)]">
-			<TreeView selectedPath={selectedKey} onSelect={handleSelect} onRefresh={handleRefresh} />
+			<TreeView
+				selectedPath={selectedKey}
+				onSelect={handleSelect}
+				onRefresh={handleRefresh}
+				onPathChanged={handlePathChanged}
+			/>
 		</div>
 	</div>
 
