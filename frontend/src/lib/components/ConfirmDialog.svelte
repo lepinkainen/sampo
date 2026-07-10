@@ -1,9 +1,9 @@
 <script lang="ts">
-import { Trash2 } from '@lucide/svelte';
+import { ImageOff, Trash2 } from '@lucide/svelte';
 
 interface Props {
 	title: string;
-	items: string[];
+	items: Array<{ name: string; thumbUrl?: string }>;
 	confirmLabel?: string;
 	onConfirm: () => void;
 	onCancel: () => void;
@@ -16,6 +16,8 @@ let {
 	onConfirm,
 	onCancel,
 }: Props = $props();
+
+let thumbErrors = $state<Record<number, boolean>>({});
 
 function handleKeydown(e: KeyboardEvent) {
 	if (e.key === 'Escape') onCancel();
@@ -46,8 +48,27 @@ function handleKeydown(e: KeyboardEvent) {
 
 		{#if items.length > 0}
 			<div class="mb-4 max-h-40 overflow-y-auto rounded-lg bg-gray-950 p-3">
-				{#each items as item}
-					<p class="truncate text-sm text-gray-400">{item}</p>
+				{#each items as item, i}
+					<div class="flex items-center gap-2 py-0.5">
+						{#if item.thumbUrl && !thumbErrors[i]}
+							<img
+								src={item.thumbUrl}
+								alt=""
+								loading="lazy"
+								class="h-9 w-9 shrink-0 rounded-md border border-gray-800 object-cover"
+								onerror={() => {
+									thumbErrors[i] = true;
+								}}
+							/>
+						{:else}
+							<div
+								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-800 bg-gray-800"
+							>
+								<ImageOff size={16} class="text-gray-600" />
+							</div>
+						{/if}
+						<p class="truncate text-sm text-gray-400">{item.name}</p>
+					</div>
 				{/each}
 			</div>
 		{/if}
