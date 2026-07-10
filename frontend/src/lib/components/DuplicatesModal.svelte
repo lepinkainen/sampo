@@ -465,7 +465,10 @@ async function handleDelete() {
 {#if showConfirm}
 	<ConfirmDialog
 		title="Delete {selectedCount} duplicate{selectedCount === 1 ? '' : 's'}?"
-		items={selectedFiles.map((s) => `${s.file.rootId}:${s.file.path}`)}
+		items={selectedFiles.map((s) => ({
+			name: `${s.file.rootId}:${s.file.path}`,
+			thumbUrl: thumbnailUrl(s.file.rootId, s.file.path),
+		}))}
 		onConfirm={handleDelete}
 		onCancel={() => {
 			showConfirm = false;

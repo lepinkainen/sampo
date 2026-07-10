@@ -21,6 +21,7 @@ import {
 	invalidateDirectoryCache,
 	invalidateParentDirectoryCache,
 	fileUrl,
+	thumbnailUrl,
 	getOrganizeStatus,
 	suggestOrganize,
 } from '$lib/api';
@@ -993,7 +994,13 @@ async function handleSuggestOrganize() {
 {#if showDeleteConfirm}
 	<ConfirmDialog
 		title="Delete {selectedEntries.length} item(s)?"
-		items={selectedEntries.map((e) => e.name)}
+		items={selectedEntries.map((e) => ({
+			name: e.name,
+			thumbUrl:
+				!e.isDir && e.hasThumb && (e.mediaType === 'image' || e.mediaType === 'video')
+					? thumbnailUrl(rootId, e.path)
+					: undefined,
+		}))}
 		onConfirm={handleDelete}
 		onCancel={() => (showDeleteConfirm = false)}
 	/>
