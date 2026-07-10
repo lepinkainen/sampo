@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileEntry, Root } from '$lib/types';
+import TreeNode from './TreeNode.svelte';
 import TreeView from './TreeView.svelte';
 
 const roots: Root[] = [{ id: 'root-0', name: 'Sample' }];
@@ -35,6 +36,10 @@ vi.mock('$lib/api', () => ({
 		fetchDirectory(rootId, path),
 	moveFiles: vi.fn(),
 	copyFiles: vi.fn(),
+	deleteFiles: vi.fn(),
+	renameFile: vi.fn(),
+	invalidateDirectoryCache: vi.fn(),
+	invalidateParentDirectoryCache: vi.fn(),
 }));
 
 describe('TreeView URL-driven expansion', () => {
@@ -80,5 +85,45 @@ describe('TreeView URL-driven expansion', () => {
 		const selected = await screen.findByText('sub');
 		// isSelected applies the active bg/text classes on the row button.
 		expect(selected.closest('button')).toHaveClass('bg-gray-700');
+	});
+});
+
+describe('TreeNode context menu opt-in', () => {
+	beforeEach(() => {
+		fetchDirectory.mockClear();
+	});
+
+	it('shows a context menu on right-click when reached via TreeView (enabled by default)', async () => {
+		render(TreeView, { selectedPath: null, onSelect: vi.fn() });
+		const rootButton = await screen.findByText('Sample');
+		await fireEvent.click(rootButton);
+		const node = await screen.findByText('nesterally2015');
+
+		await fireEvent.contextMenu(node.closest('button')!);
+
+		expect(await screen.findByText('Rename')).toBeInTheDocument();
+		expect(screen.getByText('Cut')).toBeInTheDocument();
+		expect(screen.getByText('Copy')).toBeInTheDocument();
+		expect(screen.getByText('Paste')).toBeInTheDocument();
+		expect(screen.getByText('Delete')).toBeInTheDocument();
+	});
+
+	it('does NOT show a context menu when enableContextMenu is left unset (OrganizeModal-style usage)', async () => {
+		const entry: FileEntry = dir('nesterally2015', '/nesterally2015');
+		render(TreeNode, {
+			rootId: 'root-0',
+			entry,
+			depth: 0,
+			selectedPath: null,
+			onSelect: vi.fn(),
+			// enableContextMenu intentionally omitted, matching how
+			// OrganizeModal instantiates TreeNode as a read-only picker.
+		});
+
+		const node = await screen.findByText('nesterally2015');
+		await fireEvent.contextMenu(node.closest('button')!);
+
+		expect(screen.queryByText('Rename')).not.toBeInTheDocument();
+		expect(screen.queryByText('Delete')).not.toBeInTheDocument();
 	});
 });

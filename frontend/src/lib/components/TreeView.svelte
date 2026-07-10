@@ -3,6 +3,7 @@ import { onMount } from 'svelte';
 import { fetchDirectory, fetchRoots, moveFiles, copyFiles } from '$lib/api';
 import type { FileEntry, Root } from '$lib/types';
 import { sortEntries } from '$lib/utils';
+import { createClipboard } from '$lib/clipboard.svelte';
 import { Folder, FolderOpen, ChevronDown, ChevronRight } from '@lucide/svelte';
 import Loader from './Loader.svelte';
 import TreeNode from './TreeNode.svelte';
@@ -11,9 +12,19 @@ interface Props {
 	selectedPath: string | null;
 	onSelect: (rootId: string, path: string, isDir: boolean) => void;
 	onRefresh?: () => void;
+	onPathChanged?: (
+		rootId: string,
+		oldPath: string,
+		newPath: string | null,
+	) => void;
 }
 
-let { selectedPath, onSelect, onRefresh }: Props = $props();
+let { selectedPath, onSelect, onRefresh, onPathChanged }: Props = $props();
+
+// One clipboard shared across the whole tree (not per-node — TreeNode
+// recurses, and an independent clipboard per node would make cut/copy in one
+// branch invisible to paste in another).
+const clipboard = createClipboard();
 
 let roots = $state<Root[]>([]);
 let rootChildren = $state<Record<string, FileEntry[]>>({});
@@ -46,18 +57,26 @@ $effect(() => {
 	}
 });
 
+// Shared fetch-and-set logic for a root's top-level children. Used for
+// initial expansion (autoExpandRoot/toggleRoot) and as the onRefreshParent
+// callback threaded into top-level TreeNode instances, so a cut/delete/rename
+// of a top-level directory refreshes the root's own listing.
+async function refreshRootChildren(rootId: string) {
+	loadingRoots.add(rootId);
+	loadingRoots = new Set(loadingRoots);
+	try {
+		const entries = sortEntries(await fetchDirectory(rootId, '/'));
+		rootChildren[rootId] = entries.filter((e) => e.isDir);
+	} catch (e) {
+		console.error('Failed to load root', rootId, e);
+	}
+	loadingRoots.delete(rootId);
+	loadingRoots = new Set(loadingRoots);
+}
+
 async function autoExpandRoot(rootId: string) {
 	if (!rootChildren[rootId]) {
-		loadingRoots.add(rootId);
-		loadingRoots = new Set(loadingRoots);
-		try {
-			const entries = sortEntries(await fetchDirectory(rootId, '/'));
-			rootChildren[rootId] = entries.filter((e) => e.isDir);
-		} catch (e) {
-			console.error('Failed to load root', rootId, e);
-		}
-		loadingRoots.delete(rootId);
-		loadingRoots = new Set(loadingRoots);
+		await refreshRootChildren(rootId);
 	}
 	expandedRoots.add(rootId);
 	expandedRoots = new Set(expandedRoots);
@@ -69,16 +88,7 @@ async function toggleRoot(rootId: string) {
 		expandedRoots = new Set(expandedRoots);
 	} else {
 		if (!rootChildren[rootId]) {
-			loadingRoots.add(rootId);
-			loadingRoots = new Set(loadingRoots);
-			try {
-				const entries = sortEntries(await fetchDirectory(rootId, '/'));
-				rootChildren[rootId] = entries.filter((e) => e.isDir);
-			} catch (e) {
-				console.error('Failed to load root', rootId, e);
-			}
-			loadingRoots.delete(rootId);
-			loadingRoots = new Set(loadingRoots);
+			await refreshRootChildren(rootId);
 		}
 		expandedRoots.add(rootId);
 		expandedRoots = new Set(expandedRoots);
@@ -173,6 +183,10 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 							{selectedPath}
 							{onSelect}
 							{onRefresh}
+							enableContextMenu={true}
+							{clipboard}
+							onRefreshParent={() => refreshRootChildren(root.id)}
+							{onPathChanged}
 						/>
 					{/each}
 				{/if}

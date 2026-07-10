@@ -5,6 +5,8 @@ export interface ClipboardItem {
 	path: string;
 }
 
+export type ClipboardStore = ReturnType<typeof createClipboard>;
+
 export function createClipboard() {
 	let items = $state<ClipboardItem[]>([]);
 	let mode = $state<ClipboardMode>('copy');
