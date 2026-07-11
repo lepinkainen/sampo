@@ -337,9 +337,9 @@ function getContextMenuItems() {
 
 <div class="select-none">
 	<button
-		class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm hover:bg-gray-700
-		{isSelected ? 'bg-gray-700 text-white' : 'text-gray-300'}
-		{dragOver ? 'ring-2 ring-blue-500 bg-blue-900/20' : ''}"
+		class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm hover:bg-muted
+		{isSelected ? 'bg-select text-select-text' : 'text-body'}
+		{dragOver ? 'ring-2 ring-accent-hover bg-accent-deep/20' : ''}"
 		style="padding-left: {depth * 16 + 4}px"
 		onclick={toggle}
 		oncontextmenu={handleContextMenu}
@@ -348,7 +348,7 @@ function getContextMenuItems() {
 		ondrop={handleDrop}
 	>
 		{#if entry.isDir}
-			<span class="w-4 shrink-0 text-gray-500">
+			<span class="w-4 shrink-0 text-faint">
 				{#if loading}
 					<Loader size={14} />
 				{:else if expanded}
@@ -361,12 +361,12 @@ function getContextMenuItems() {
 			<span class="w-4 shrink-0"></span>
 		{/if}
 
-		<span class="w-5 shrink-0 text-gray-400">
+		<span class="w-5 shrink-0 text-dim">
 			<FileIcon {entry} open={expanded} size={16} />
 		</span>
 		<span class="truncate">{entry.name}</span>
 		{#if loadingSlow}
-			<span class="ml-1 shrink-0 text-xs text-amber-400">(network drive...)</span>
+			<span class="ml-1 shrink-0 text-xs text-warn">(network drive...)</span>
 		{/if}
 	</button>
 

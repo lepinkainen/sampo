@@ -857,7 +857,7 @@ async function handleSuggestOrganize() {
 		onIndexChange={(idx) => onPreviewChange?.(mediaEntries[idx].path)}
 	/>
 {:else}
-	<div class="flex h-full flex-col bg-gray-950">
+	<div class="flex h-full flex-col bg-canvas">
 		<GridToolbar
 			{rootId}
 			{rootName}
@@ -925,26 +925,26 @@ async function handleSuggestOrganize() {
 					<div class="flex h-full flex-col items-center justify-center gap-4 px-4">
 						<div class="flex flex-wrap justify-center gap-3">
 							{#each Array(8)}
-								<div class="h-32 w-44 animate-pulse rounded-lg bg-gray-800"></div>
+								<div class="h-32 w-44 animate-pulse rounded-lg bg-raised"></div>
 							{/each}
 						</div>
 						<div class="text-center">
-							<p class="text-gray-500">
+							<p class="text-faint">
 								<Loader class="mr-2 inline" />
 								Loading...
 							</p>
 							{#if loadingSlow}
-								<p class="mt-1 text-sm text-amber-400">Still loading — network drives may respond slowly</p>
+								<p class="mt-1 text-sm text-warn">Still loading — network drives may respond slowly</p>
 							{/if}
 						</div>
 					</div>
 				{:else if error}
 					<div class="flex h-full items-center justify-center">
-						<p class="text-red-400">{error}</p>
+						<p class="text-danger-soft">{error}</p>
 					</div>
 				{:else if displayEntries.length === 0}
 					<div class="flex h-full items-center justify-center">
-						<p class="text-gray-500">{searchActive && searchQuery ? 'No results found' : 'Empty directory'}</p>
+						<p class="text-faint">{searchActive && searchQuery ? 'No results found' : 'Empty directory'}</p>
 					</div>
 				{:else if viewMode === 'list'}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->

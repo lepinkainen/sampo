@@ -9,7 +9,7 @@ const toasts = $derived(getToasts());
 	{#each toasts as toast (toast.id)}
 		<div
 			class="pointer-events-auto flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium shadow-lg transition-all
-			{toast.type === 'success' ? 'bg-green-900/90 text-green-100' : 'bg-red-900/90 text-red-100'}"
+			{toast.type === 'success' ? 'bg-ok-deep/90 text-ok-faint' : 'bg-danger-deep/90 text-danger-faint'}"
 		>
 			{#if toast.type === 'success'}
 				<CheckCircle size={16} />

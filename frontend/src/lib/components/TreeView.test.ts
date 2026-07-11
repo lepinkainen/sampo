@@ -84,7 +84,7 @@ describe('TreeView URL-driven expansion', () => {
 		});
 		const selected = await screen.findByText('sub');
 		// isSelected applies the active bg/text classes on the row button.
-		expect(selected.closest('button')).toHaveClass('bg-gray-700');
+		expect(selected.closest('button')).toHaveClass('bg-select');
 	});
 });
 

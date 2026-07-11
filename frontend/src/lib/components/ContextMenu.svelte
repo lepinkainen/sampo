@@ -51,7 +51,7 @@ function handleKeydown(e: KeyboardEvent) {
 <div class="fixed inset-0 z-40" onclick={onClose}>
 	<div
 		bind:this={menuEl}
-		class="fixed z-50 min-w-[160px] rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl"
+		class="fixed z-50 min-w-[160px] rounded-lg border border-muted bg-surface py-1 shadow-xl"
 		style="left: {adjustedX}px; top: {adjustedY}px"
 		onclick={(e) => e.stopPropagation()}
 	>
@@ -59,10 +59,10 @@ function handleKeydown(e: KeyboardEvent) {
 			<button
 				class="flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors
 				{item.disabled
-					? 'text-gray-600 cursor-not-allowed'
+					? 'text-ghost cursor-not-allowed'
 					: item.destructive
-						? 'text-red-400 hover:bg-red-900/30'
-						: 'text-gray-300 hover:bg-gray-800'}"
+						? 'text-danger-soft hover:bg-danger-deep/30'
+						: 'text-body hover:bg-raised'}"
 				disabled={item.disabled}
 				onclick={() => {
 					item.action();

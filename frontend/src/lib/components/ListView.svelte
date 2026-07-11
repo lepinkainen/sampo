@@ -76,19 +76,19 @@ function sortIndicator(key: SortKey): string {
 
 <div class="w-full">
 	<table class="w-full text-sm text-left">
-		<thead class="text-xs text-gray-400 uppercase border-b border-gray-700 sticky top-0 bg-gray-950 z-10">
+		<thead class="text-xs text-dim uppercase border-b border-muted sticky top-0 bg-canvas z-10">
 			<tr>
 				<th class="w-10 px-2 py-2"></th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-gray-200" onclick={() => handleSort('name')}>
+				<th class="px-2 py-2 cursor-pointer select-none hover:text-body" onclick={() => handleSort('name')}>
 					Name{sortIndicator('name')}
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-gray-200 w-24 text-right" onclick={() => handleSort('size')}>
+				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-24 text-right" onclick={() => handleSort('size')}>
 					Size{sortIndicator('size')}
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-gray-200 w-44" onclick={() => handleSort('modTime')}>
+				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-44" onclick={() => handleSort('modTime')}>
 					Modified{sortIndicator('modTime')}
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-gray-200 w-20" onclick={() => handleSort('mediaType')}>
+				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-20" onclick={() => handleSort('mediaType')}>
 					Type{sortIndicator('mediaType')}
 				</th>
 				<th class="px-2 py-2 w-32">Tags</th>
@@ -98,10 +98,10 @@ function sortIndicator(key: SortKey): string {
 			{#each sortedEntries as entry (entry.path)}
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<tr
-					class="border-b border-gray-800/50 transition-colors cursor-pointer
+					class="border-b border-raised/50 transition-colors cursor-pointer
 					{isSelected(entry.path)
-						? 'bg-blue-900/30'
-						: 'hover:bg-gray-800/50'}
+						? 'bg-accent-deep/30'
+						: 'hover:bg-raised/50'}
 					{isCut(entry.path) ? ' opacity-50' : ''}"
 					tabindex={0}
 					draggable={true}
@@ -116,34 +116,34 @@ function sortIndicator(key: SortKey): string {
 						}
 					}}
 				>
-					<td class="px-2 py-1.5 text-gray-500">
+					<td class="px-2 py-1.5 text-faint">
 						<FileIcon {entry} size={16} />
 					</td>
-					<td class="px-2 py-1.5 text-gray-200">
+					<td class="px-2 py-1.5 text-body">
 						<div class="flex items-center gap-2">
 							<span class="truncate" title={entry.name}>{entry.name}</span>
 							{#if entry.ocrText}
-								<span class="text-amber-400 shrink-0" title="Contains text (OCR)"><ScanText size={12} /></span>
+								<span class="text-warn shrink-0" title="Contains text (OCR)"><ScanText size={12} /></span>
 							{/if}
 							{#if entry.hasPerson === true}
-								<span class="text-orange-400 shrink-0"><User size={12} /></span>
+								<span class="text-warn shrink-0"><User size={12} /></span>
 							{/if}
 						</div>
 					</td>
-					<td class="px-2 py-1.5 text-gray-400 text-right tabular-nums">
+					<td class="px-2 py-1.5 text-dim text-right tabular-nums">
 						{entry.isDir ? '\u2014' : formatSize(entry.size)}
 					</td>
-					<td class="px-2 py-1.5 text-gray-400 tabular-nums">
+					<td class="px-2 py-1.5 text-dim tabular-nums">
 						{formatDate(entry.modTime)}
 					</td>
-					<td class="px-2 py-1.5 text-gray-400">
+					<td class="px-2 py-1.5 text-dim">
 						{entry.isDir ? 'folder' : entry.mediaType}
 					</td>
 					<td class="px-2 py-1.5">
 						{#if entry.tags && entry.tags.length > 0}
 							<div class="flex flex-wrap gap-0.5">
 								{#each entry.tags.slice(0, 3) as tag}
-									<span class="rounded bg-purple-600/80 px-1 py-0.5 text-[10px] font-medium leading-none text-white">
+									<span class="rounded bg-tag/80 px-1 py-0.5 text-[10px] font-medium leading-none text-white">
 										{tag.label}
 									</span>
 								{/each}

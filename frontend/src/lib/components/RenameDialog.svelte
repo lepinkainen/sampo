@@ -70,33 +70,33 @@ function handleKeydown(e: KeyboardEvent) {
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="mx-4 w-full max-w-md rounded-xl bg-gray-900 p-6 shadow-2xl border border-gray-700"
+		class="mx-4 w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-muted"
 		onclick={(e) => e.stopPropagation()}
 		onkeydown={handleKeydown}
 	>
 		<div class="flex items-center gap-3 mb-4">
-			<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-900/50">
-				<Pencil size={20} class="text-blue-400" />
+			<div class="flex h-10 w-10 items-center justify-center rounded-full bg-accent-deep/50">
+				<Pencil size={20} class="text-accent-soft" />
 			</div>
-			<h2 class="text-lg font-semibold text-gray-100">Rename</h2>
+			<h2 class="text-lg font-semibold text-bright">Rename</h2>
 		</div>
 
 		<input
 			bind:this={inputEl}
 			bind:value={newName}
-			class="mb-4 w-full rounded-lg bg-gray-950 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+			class="mb-4 w-full rounded-lg bg-canvas border border-muted px-3 py-2 text-sm text-body focus:outline-none focus:border-accent-hover"
 			type="text"
 		/>
 
 		<div class="flex justify-end gap-3">
 			<button
-				class="rounded-lg px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors"
+				class="rounded-lg px-4 py-2 text-sm font-medium text-body hover:bg-raised transition-colors"
 				onclick={onCancel}
 			>
 				Cancel
 			</button>
 			<button
-				class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+				class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 				disabled={isDisabled}
 				onclick={() => onConfirm(newName.trim())}
 			>

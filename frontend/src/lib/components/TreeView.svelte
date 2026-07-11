@@ -139,23 +139,23 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 }
 </script>
 
-<div class="h-full overflow-y-auto bg-gray-900 p-2">
+<div class="h-full overflow-y-auto bg-surface p-2">
 	{#if loading}
-		<p class="text-sm text-gray-500">Loading...</p>
+		<p class="text-sm text-faint">Loading...</p>
 	{:else if roots.length === 0}
-		<p class="text-sm text-gray-500">No roots configured</p>
+		<p class="text-sm text-faint">No roots configured</p>
 	{:else}
 		{#each roots as root (root.id)}
 			<div class="mb-1">
 				<button
-					class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-1 text-left text-sm font-semibold text-gray-200 hover:bg-gray-700
-					{dragOverRoot === root.id ? 'ring-2 ring-blue-500 bg-blue-900/20' : ''}"
+					class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-1 text-left text-sm font-semibold text-body hover:bg-muted
+					{dragOverRoot === root.id ? 'ring-2 ring-accent-hover bg-accent-deep/20' : ''}"
 					onclick={() => toggleRoot(root.id)}
 					ondragover={(e) => handleRootDragOver(e, root.id)}
 					ondragleave={handleRootDragLeave}
 					ondrop={(e) => handleRootDrop(e, root.id)}
 				>
-					<span class="w-4 shrink-0 text-gray-500">
+					<span class="w-4 shrink-0 text-faint">
 						{#if loadingRoots.has(root.id)}
 							<Loader size={14} />
 						{:else if expandedRoots.has(root.id)}
@@ -164,7 +164,7 @@ async function handleRootDrop(e: DragEvent, rootId: string) {
 							<ChevronRight size={14} />
 						{/if}
 					</span>
-					<span class="w-5 shrink-0 text-gray-400">
+					<span class="w-5 shrink-0 text-dim">
 						{#if expandedRoots.has(root.id)}
 							<FolderOpen size={16} />
 						{:else}

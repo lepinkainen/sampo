@@ -107,8 +107,8 @@ $effect(() => {
 	data-testid="thumbnail-card"
 	class="group flex flex-col overflow-hidden rounded-lg border transition-colors
 	{selected
-		? 'border-blue-500 bg-blue-900/30'
-		: 'border-gray-700 bg-gray-800 hover:border-gray-500'}
+		? 'border-accent-hover bg-accent-deep/30'
+		: 'border-muted bg-raised hover:border-faint'}
 	{cut ? ' opacity-50' : ''}
 	{onclick ? ' cursor-pointer' : ''}"
 	role={onclick ? 'button' : undefined}
@@ -129,7 +129,7 @@ $effect(() => {
 >
 	<div
 		bind:this={thumbBox}
-		class="relative flex aspect-square items-center justify-center bg-gray-900"
+		class="relative flex aspect-square items-center justify-center bg-surface"
 	>
 		{#if showThumbImage && loader.objectUrl}
 			<img
@@ -144,20 +144,20 @@ $effect(() => {
 				data-testid="thumbnail-skeleton"
 			></div>
 			<div
-				class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-gray-500"
+				class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-faint"
 				aria-label="Loading thumbnail"
 			>
 				<Loader />
 			</div>
 		{:else}
-			<span class="text-gray-500">
+			<span class="text-faint">
 				<FileIcon {entry} size={48} />
 			</span>
 		{/if}
 		{#if entry.tags && entry.tags.length > 0}
 			<div class="absolute bottom-1 left-1 flex flex-wrap gap-0.5">
 				{#each entry.tags.slice(0, 3) as tag}
-					<span class="rounded bg-purple-600/80 px-1 py-0.5 text-[10px] font-medium leading-none text-white">
+					<span class="rounded bg-tag/80 px-1 py-0.5 text-[10px] font-medium leading-none text-white">
 						{tag.label}
 					</span>
 				{/each}
@@ -181,9 +181,9 @@ $effect(() => {
 		</div>
 	</div>
 	<div class="p-2">
-		<p class="truncate text-sm text-gray-200" title={entry.name}>{entry.name}</p>
+		<p class="truncate text-sm text-body" title={entry.name}>{entry.name}</p>
 		{#if !entry.isDir}
-			<p class="text-xs text-gray-500">{formatSize(entry.size)}</p>
+			<p class="text-xs text-faint">{formatSize(entry.size)}</p>
 		{/if}
 	</div>
 </div>

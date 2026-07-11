@@ -85,10 +85,10 @@ function handlePathChanged(
 }
 </script>
 
-<div class="flex h-screen bg-gray-950 text-gray-100">
+<div class="flex h-screen bg-canvas text-bright">
 	<!-- Tree sidebar -->
-	<div class="w-72 flex-shrink-0 border-r border-gray-800">
-		<div class="flex h-12 items-center border-b border-gray-800 px-3">
+	<div class="w-72 flex-shrink-0 border-r border-raised">
+		<div class="flex h-12 items-center border-b border-raised px-3">
 			<img src="/sampo-banner.svg" alt="Sampo" class="h-7 w-auto" />
 		</div>
 		<div class="h-[calc(100vh-3rem)]">
@@ -116,7 +116,7 @@ function handlePathChanged(
 			{/key}
 		{:else}
 			<div class="flex h-full items-center justify-center">
-				<p class="text-gray-600">Select a directory to browse</p>
+				<p class="text-ghost">Select a directory to browse</p>
 			</div>
 		{/if}
 	</div>

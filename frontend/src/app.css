@@ -1,8 +1,214 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Semantic theme tokens. Default values reproduce the original dark theme
+   exactly (hexes match the Tailwind gray/blue/etc shades previously used
+   inline). Themes override these variables under [data-theme="..."] — the
+   utilities (bg-surface, text-dim, ...) resolve through var() at runtime.
+
+   Roles:
+   - canvas/surface/raised/muted: page → panel → card → hover surfaces
+   - bright/body/dim/faint/ghost: text emphasis, strongest → weakest
+   - accent*: primary interactive color
+   - danger/ok/warn/tag: status colors; "-deep" = tinted background,
+     "-faint" = contrast text on that background (both flip in light themes)
+   - select-bg/select-text: selected row/item state
+--------------------------------------------------------------------------- */
+@theme {
+	--color-canvas: #030712;
+	--color-surface: #111827;
+	--color-raised: #1f2937;
+	--color-muted: #374151;
+
+	--color-bright: #f3f4f6;
+	--color-body: #d1d5db;
+	--color-dim: #9ca3af;
+	--color-faint: #6b7280;
+	--color-ghost: #4b5563;
+
+	--color-accent: #2563eb;
+	--color-accent-hover: #3b82f6;
+	--color-accent-soft: #60a5fa;
+	--color-accent-deep: #1e3a8a;
+	--color-on-accent: #ffffff;
+
+	--color-danger: #dc2626;
+	--color-danger-strong: #b91c1c;
+	--color-danger-soft: #f87171;
+	--color-danger-deep: #7f1d1d;
+	--color-danger-faint: #fee2e2;
+
+	--color-ok: #34d399;
+	--color-ok-strong: #059669;
+	--color-ok-deep: #064e3b;
+	--color-ok-faint: #d1fae5;
+
+	--color-warn: #fbbf24;
+	--color-warn-soft: #fcd34d;
+	--color-warn-deep: #78350f;
+
+	--color-tag: #9333ea;
+	--color-tag-soft: #c084fc;
+	--color-tag-faint: #d8b4fe;
+
+	--color-select: #374151;
+	--color-select-text: #f3f4f6;
+
+	--font-ui:
+		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
+}
+
+body {
+	background: var(--color-canvas);
+	color: var(--color-body);
+	font-family: var(--font-ui);
+}
+
+/* ---------------------------------------------------------------------------
+   Swiss / International Typographic theme: white canvas, near-black text,
+   single red accent, hairline borders, no radius, no shadows, Helvetica.
+--------------------------------------------------------------------------- */
+[data-theme="swiss"] {
+	--color-canvas: #ffffff;
+	--color-surface: #ffffff;
+	--color-raised: #f5f5f5;
+	--color-muted: #e5e5e5;
+
+	--color-bright: #111111;
+	--color-body: #222222;
+	--color-dim: #555555;
+	--color-faint: #767676;
+	--color-ghost: #999999;
+
+	--color-accent: #e30613;
+	--color-accent-hover: #c00511;
+	--color-accent-soft: #e30613;
+	--color-accent-deep: #fbd5d9;
+	--color-on-accent: #ffffff;
+
+	--color-danger: #b91c1c;
+	--color-danger-strong: #991b1b;
+	--color-danger-soft: #dc2626;
+	--color-danger-deep: #fecaca;
+	--color-danger-faint: #7f1d1d;
+
+	--color-ok: #166534;
+	--color-ok-strong: #15803d;
+	--color-ok-deep: #dcfce7;
+	--color-ok-faint: #14532d;
+
+	--color-warn: #92400e;
+	--color-warn-soft: #b45309;
+	--color-warn-deep: #fef3c7;
+
+	--color-tag: #b91c1c;
+	--color-tag-soft: #b91c1c;
+	--color-tag-faint: #fbd5d9;
+
+	--color-select: #f5f5f5;
+	--color-select-text: #e30613;
+
+	--font-ui: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+
+	--radius-xs: 0;
+	--radius-sm: 0;
+	--radius-md: 0;
+	--radius-lg: 0;
+	--radius-xl: 0;
+	--radius-2xl: 0;
+	--radius-3xl: 0;
+
+	--shadow-2xs: 0 0 #0000;
+	--shadow-xs: 0 0 #0000;
+	--shadow-sm: 0 0 #0000;
+	--shadow-md: 0 0 #0000;
+	--shadow-lg: 0 0 #0000;
+	--shadow-xl: 0 0 #0000;
+	--shadow-2xl: 0 0 #0000;
+	--inset-shadow-2xs: 0 0 #0000;
+	--inset-shadow-xs: 0 0 #0000;
+	--inset-shadow-sm: 0 0 #0000;
+}
+
+/* Swiss typographic flourish: the toolbar folder name becomes a headline. */
+[data-theme="swiss"] .folder-title {
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   Terminal theme: phosphor green on near-black, monospace, amber accent,
+   inverse-video selection, no radius, no shadows.
+--------------------------------------------------------------------------- */
+[data-theme="terminal"] {
+	--color-canvas: #0a0a0a;
+	--color-surface: #0d120e;
+	--color-raised: #0f1f14;
+	--color-muted: #163a24;
+
+	--color-bright: #7dffa3;
+	--color-body: #33ff66;
+	--color-dim: #2ecc63;
+	--color-faint: #22a04f;
+	--color-ghost: #1d7c3f;
+
+	--color-accent: #ffb000;
+	--color-accent-hover: #ffc94d;
+	--color-accent-soft: #ffd97a;
+	--color-accent-deep: #33260a;
+	--color-on-accent: #0a0a0a;
+
+	--color-danger: #cc3333;
+	--color-danger-strong: #aa2222;
+	--color-danger-soft: #ff5555;
+	--color-danger-deep: #331111;
+	--color-danger-faint: #ffd7d7;
+
+	--color-ok: #33ff66;
+	--color-ok-strong: #29cc52;
+	--color-ok-deep: #0d2f17;
+	--color-ok-faint: #ccffcc;
+
+	--color-warn: #ffb000;
+	--color-warn-soft: #ffc94d;
+	--color-warn-deep: #332200;
+
+	--color-tag: #1d7c3f;
+	--color-tag-soft: #66ff99;
+	--color-tag-faint: #ccffdd;
+
+	--color-select: #33ff66;
+	--color-select-text: #0a0a0a;
+
+	--font-ui: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+
+	--radius-xs: 0;
+	--radius-sm: 0;
+	--radius-md: 0;
+	--radius-lg: 0;
+	--radius-xl: 0;
+	--radius-2xl: 0;
+	--radius-3xl: 0;
+
+	--shadow-2xs: 0 0 #0000;
+	--shadow-xs: 0 0 #0000;
+	--shadow-sm: 0 0 #0000;
+	--shadow-md: 0 0 #0000;
+	--shadow-lg: 0 0 #0000;
+	--shadow-xl: 0 0 #0000;
+	--shadow-2xl: 0 0 #0000;
+	--inset-shadow-2xs: 0 0 #0000;
+	--inset-shadow-xs: 0 0 #0000;
+	--inset-shadow-sm: 0 0 #0000;
+}
+
+/* --------------------------------------------------------------------------- */
+
 .themed-scroll {
 	scrollbar-width: auto;
-	scrollbar-color: rgb(55 65 81) rgb(17 24 39);
+	scrollbar-color: var(--color-muted) var(--color-surface);
 }
 
 .themed-scroll::-webkit-scrollbar {
@@ -11,21 +217,21 @@
 }
 
 .themed-scroll::-webkit-scrollbar-track {
-	background: rgb(17 24 39);
+	background: var(--color-surface);
 }
 
 .themed-scroll::-webkit-scrollbar-thumb {
-	background: rgb(55 65 81);
-	border: 2px solid rgb(17 24 39);
+	background: var(--color-muted);
+	border: 2px solid var(--color-surface);
 	border-radius: 6px;
 }
 
 .themed-scroll::-webkit-scrollbar-thumb:hover {
-	background: rgb(75 85 99);
+	background: var(--color-ghost);
 }
 
 .themed-scroll::-webkit-scrollbar-corner {
-	background: rgb(17 24 39);
+	background: var(--color-surface);
 }
 
 @keyframes thumb-shimmer {
@@ -41,8 +247,12 @@
 	isolation: isolate;
 	overflow: hidden;
 	background:
-		linear-gradient(135deg, rgb(31 41 55 / 0.95) 0%, rgb(15 23 42) 100%),
-		rgb(17 24 39);
+		linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-raised) 95%, transparent) 0%,
+			var(--color-canvas) 100%
+		),
+		var(--color-surface);
 }
 
 .thumb-skeleton::before {
@@ -51,8 +261,16 @@
 	inset: 0;
 	z-index: 0;
 	background:
-		radial-gradient(circle at 30% 35%, rgb(148 163 184 / 0.1), transparent 34%),
-		linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%);
+		radial-gradient(
+			circle at 30% 35%,
+			color-mix(in srgb, var(--color-dim) 10%, transparent),
+			transparent 34%
+		),
+		linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--color-bright) 4%, transparent),
+			transparent 55%
+		);
 }
 
 .thumb-skeleton::after {
@@ -65,11 +283,11 @@
 	width: 42%;
 	background: linear-gradient(
 		100deg,
-		rgb(255 255 255 / 0) 0%,
-		rgb(255 255 255 / 0.1) 28%,
-		rgb(255 255 255 / 0.34) 50%,
-		rgb(255 255 255 / 0.1) 72%,
-		rgb(255 255 255 / 0) 100%
+		transparent 0%,
+		color-mix(in srgb, var(--color-bright) 10%, transparent) 28%,
+		color-mix(in srgb, var(--color-bright) 34%, transparent) 50%,
+		color-mix(in srgb, var(--color-bright) 10%, transparent) 72%,
+		transparent 100%
 	);
 	filter: blur(1px);
 	animation: thumb-shimmer 1.05s ease-in-out infinite;

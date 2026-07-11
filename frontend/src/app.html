@@ -4,6 +4,16 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<script>
+			// Apply the saved theme before first paint to avoid a flash of the
+			// default theme. Kept inline so it runs ahead of the app bundle.
+			try {
+				const t = localStorage.getItem('sampo-theme');
+				if (t === 'swiss' || t === 'terminal') {
+					document.documentElement.dataset.theme = t;
+				}
+			} catch {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

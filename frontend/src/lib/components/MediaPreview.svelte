@@ -72,17 +72,17 @@ $effect(() => {
 });
 </script>
 
-<div class="flex h-full flex-col bg-gray-950">
+<div class="flex h-full flex-col bg-canvas">
 	<!-- Top bar -->
-	<div class="flex items-center justify-between border-b border-gray-800 px-4 py-2">
+	<div class="flex items-center justify-between border-b border-raised px-4 py-2">
 		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm text-gray-200" title={currentEntry.name}>{currentEntry.name}</p>
+			<p class="truncate text-sm text-body" title={currentEntry.name}>{currentEntry.name}</p>
 		</div>
 		<div class="flex items-center gap-3">
-			<span class="text-xs text-gray-500">{currentIndex + 1} / {mediaEntries.length}</span>
+			<span class="text-xs text-faint">{currentIndex + 1} / {mediaEntries.length}</span>
 			<button
 				onclick={onClose}
-				class="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+				class="rounded p-1 text-dim hover:bg-raised hover:text-body"
 				aria-label="Close preview"
 			>
 				<X size={18} />
@@ -95,7 +95,7 @@ $effect(() => {
 		<!-- Prev button -->
 		<button
 			onclick={prev}
-			class="absolute left-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
+			class="absolute left-2 z-10 rounded-full bg-surface/70 p-2 text-body hover:bg-raised hover:text-bright"
 			aria-label="Previous"
 		>
 			<ChevronLeft size={24} />
@@ -117,18 +117,18 @@ $effect(() => {
 					></video>
 
 					{#if videoLoadError}
-						<div class="max-w-lg rounded-xl border border-gray-800 bg-gray-900/80 p-5 text-sm text-gray-300 shadow-lg">
-							<p class="font-medium text-gray-100">Preview unavailable in this browser</p>
-							<p class="mt-2 text-gray-400">
+						<div class="max-w-lg rounded-xl border border-raised bg-surface/80 p-5 text-sm text-body shadow-lg">
+							<p class="font-medium text-bright">Preview unavailable in this browser</p>
+							<p class="mt-2 text-dim">
 								This video file may use an unsupported container or codec.
 								MKV files especially are not playable in all browsers.
 							</p>
-							<p class="mt-3 text-gray-500">You can still open or download the file directly.</p>
+							<p class="mt-3 text-faint">You can still open or download the file directly.</p>
 							<a
 								href={fileUrl(rootId, currentEntry.path)}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="mt-4 inline-flex rounded bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 hover:bg-white"
+								class="mt-4 inline-flex rounded bg-bright px-3 py-2 text-sm font-medium text-canvas hover:bg-bright/90"
 							>
 								Open file
 							</a>
@@ -147,7 +147,7 @@ $effect(() => {
 		<!-- Next button -->
 		<button
 			onclick={next}
-			class="absolute right-2 z-10 rounded-full bg-gray-900/70 p-2 text-gray-300 hover:bg-gray-800 hover:text-white"
+			class="absolute right-2 z-10 rounded-full bg-surface/70 p-2 text-body hover:bg-raised hover:text-bright"
 			aria-label="Next"
 		>
 			<ChevronRight size={24} />
@@ -156,7 +156,7 @@ $effect(() => {
 		<!-- Wrap notification -->
 		{#if wrapNotice}
 			<div
-				class="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-gray-800/90 px-4 py-2 text-sm text-gray-300"
+				class="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-raised/90 px-4 py-2 text-sm text-body"
 				transition:fade={{ duration: 200 }}
 			>
 				{wrapNotice}

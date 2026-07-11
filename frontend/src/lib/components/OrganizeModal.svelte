@@ -269,25 +269,25 @@ function totalCheckedFiles(): number {
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="mx-4 flex w-full max-w-2xl flex-col rounded-xl border border-gray-700 bg-gray-900 shadow-2xl"
+		class="mx-4 flex w-full max-w-2xl flex-col rounded-xl border border-muted bg-surface shadow-2xl"
 		style="max-height: 90vh;"
 		onclick={(e) => e.stopPropagation()}
 	>
 		<!-- Header -->
-		<div class="flex items-center justify-between border-b border-gray-700 px-6 py-4">
+		<div class="flex items-center justify-between border-b border-muted px-6 py-4">
 			<div class="flex items-center gap-3">
-				<div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-900/50">
-					<FolderInput size={18} class="text-blue-400" />
+				<div class="flex h-9 w-9 items-center justify-center rounded-full bg-accent-deep/50">
+					<FolderInput size={18} class="text-accent-soft" />
 				</div>
 				<div>
-					<h2 class="text-base font-semibold text-gray-100">Organize inbox</h2>
-					<p class="text-xs text-gray-500">
+					<h2 class="text-base font-semibold text-bright">Organize inbox</h2>
+					<p class="text-xs text-faint">
 						{localGroups.length} performer group(s) matched — {unmatched.length} unmatched
 					</p>
 				</div>
 			</div>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 				onclick={onClose}
 			>
 				<X size={16} />
@@ -304,16 +304,16 @@ function totalCheckedFiles(): number {
 		<!-- Body -->
 		<div class="flex-1 overflow-y-auto themed-scroll px-6 py-4 space-y-3">
 			{#if localGroups.length === 0 && unmatched.length === 0}
-				<p class="text-sm text-gray-500">No files found in this directory.</p>
+				<p class="text-sm text-faint">No files found in this directory.</p>
 			{/if}
 
 			<!-- Matched groups -->
 			{#each localGroups as group, i}
-				<div class="rounded-lg border border-gray-700 bg-gray-800/50">
+				<div class="rounded-lg border border-muted bg-raised/50">
 					<div class="flex items-center gap-3 px-4 py-3">
 						<input
 							type="checkbox"
-							class="h-4 w-4 rounded accent-blue-500"
+							class="h-4 w-4 rounded accent-accent-hover"
 							bind:checked={checked[i]}
 						/>
 						<button
@@ -321,27 +321,27 @@ function totalCheckedFiles(): number {
 							onclick={() => (expanded[i] = !expanded[i])}
 						>
 							{#if expanded[i]}
-								<ChevronDown size={14} class="shrink-0 text-gray-500" />
+								<ChevronDown size={14} class="shrink-0 text-faint" />
 							{:else}
-								<ChevronRight size={14} class="shrink-0 text-gray-500" />
+								<ChevronRight size={14} class="shrink-0 text-faint" />
 							{/if}
-							<span class="font-medium text-gray-200">{group.performer}</span>
-							<span class="text-xs text-gray-500">→ {group.targetPath}</span>
-							<span class="ml-auto text-xs text-gray-500">{group.files.length} file(s)</span>
+							<span class="font-medium text-body">{group.performer}</span>
+							<span class="text-xs text-faint">→ {group.targetPath}</span>
+							<span class="ml-auto text-xs text-faint">{group.files.length} file(s)</span>
 						</button>
 						<!-- exists badge -->
 						<span
 							class="rounded px-1.5 py-0.5 text-xs font-medium {group.exists
-								? 'bg-emerald-900/50 text-emerald-400'
-								: 'bg-amber-900/50 text-amber-400'}"
+								? 'bg-ok-deep/50 text-ok'
+								: 'bg-warn-deep/50 text-warn'}"
 						>
 							{group.exists ? 'existing' : 'new'}
 						</span>
 						<!-- matchedBy badge -->
 						<span
 							class="rounded px-1.5 py-0.5 text-xs font-medium {group.matchedBy === 'filename'
-								? 'bg-emerald-900/50 text-emerald-400'
-								: 'bg-amber-900/50 text-amber-400'}"
+								? 'bg-ok-deep/50 text-ok'
+								: 'bg-warn-deep/50 text-warn'}"
 						>
 							{group.matchedBy}
 						</span>
@@ -349,20 +349,20 @@ function totalCheckedFiles(): number {
 
 					<!-- Candidate chooser: shown when multiple archive dirs matched the performer -->
 					{#if group.candidates.length > 1}
-						<div class="border-t border-gray-700/50 px-4 py-2">
-							<p class="mb-1.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Select target folder</p>
+						<div class="border-t border-muted/50 px-4 py-2">
+							<p class="mb-1.5 text-xs font-medium text-faint uppercase tracking-wide">Select target folder</p>
 							<div class="space-y-1">
 								{#each group.candidates as candidate}
-									<label class="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-gray-700/40 transition-colors">
+									<label class="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-muted/40 transition-colors">
 										<input
 											type="radio"
 											name="candidate-{i}"
 											value={candidate}
-											class="accent-blue-500"
+											class="accent-accent-hover"
 											checked={group.targetPath === candidate}
 											onchange={() => { localGroups[i].targetPath = candidate; localGroups[i].exists = true; }}
 										/>
-										<span class="text-xs text-gray-300 font-mono">{candidate}</span>
+										<span class="text-xs text-body font-mono">{candidate}</span>
 									</label>
 								{/each}
 							</div>
@@ -370,9 +370,9 @@ function totalCheckedFiles(): number {
 					{/if}
 
 					<!-- Performer override -->
-					<div class="border-t border-gray-700/50 px-4 py-2">
+					<div class="border-t border-muted/50 px-4 py-2">
 						<button
-							class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+							class="flex items-center gap-1 text-xs text-faint hover:text-body transition-colors"
 							onclick={() => togglePerformerOverride(i)}
 						>
 							{#if performerOverrideExpanded[i]}
@@ -387,7 +387,7 @@ function totalCheckedFiles(): number {
 								<input
 									type="text"
 									list="organize-performers"
-									class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-600"
+									class="w-full bg-raised border border-muted text-body text-xs rounded px-2 py-1 focus:outline-none focus:border-accent"
 									placeholder="Type to search performers…"
 									value={group.performer}
 									onchange={(e) => {
@@ -401,9 +401,9 @@ function totalCheckedFiles(): number {
 					</div>
 
 					<!-- Tree picker to override target dir -->
-					<div class="border-t border-gray-700/50 px-4 py-2">
+					<div class="border-t border-muted/50 px-4 py-2">
 						<button
-							class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+							class="flex items-center gap-1 text-xs text-faint hover:text-body transition-colors"
 							onclick={() => togglePicker(i)}
 						>
 							{#if pickerExpanded[i]}
@@ -414,9 +414,9 @@ function totalCheckedFiles(): number {
 							Override target folder
 						</button>
 						{#if pickerExpanded[i]}
-							<div class="mt-2 max-h-36 overflow-y-auto themed-scroll rounded border border-gray-700 bg-gray-900 px-2 py-1">
+							<div class="mt-2 max-h-36 overflow-y-auto themed-scroll rounded border border-muted bg-surface px-2 py-1">
 								{#if archiveDirs.length === 0}
-									<p class="py-1 text-xs text-gray-600">Loading...</p>
+									<p class="py-1 text-xs text-ghost">Loading...</p>
 								{:else}
 									{#each archiveDirs as dir (dir.path)}
 										<TreeNode
@@ -433,9 +433,9 @@ function totalCheckedFiles(): number {
 					</div>
 
 					{#if expanded[i]}
-						<div class="border-t border-gray-700 px-4 py-2">
+						<div class="border-t border-muted px-4 py-2">
 							{#each group.files as file}
-								<p class="truncate py-0.5 text-xs text-gray-400">{file.name}</p>
+								<p class="truncate py-0.5 text-xs text-dim">{file.name}</p>
 							{/each}
 						</div>
 					{/if}
@@ -444,39 +444,39 @@ function totalCheckedFiles(): number {
 
 			<!-- Unmatched section -->
 			{#if unmatched.length > 0}
-				<div class="rounded-lg border border-gray-700/50 bg-gray-800/20 px-4 py-3">
-					<p class="mb-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
+				<div class="rounded-lg border border-muted/50 bg-raised/20 px-4 py-3">
+					<p class="mb-2 text-xs font-medium text-faint uppercase tracking-wide">
 						Unmatched ({unmatched.length})
 					</p>
 					{#each unmatched as file}
-						<p class="truncate py-0.5 text-xs text-gray-600">{file.name}</p>
+						<p class="truncate py-0.5 text-xs text-ghost">{file.name}</p>
 					{/each}
 				</div>
 			{/if}
 		</div>
 
 		<!-- Footer -->
-		<div class="flex flex-col gap-3 border-t border-gray-700 px-6 py-4">
+		<div class="flex flex-col gap-3 border-t border-muted px-6 py-4">
 			{#if applying}
 				<!-- Progress bar -->
 				<div class="flex flex-col gap-1.5">
-					<div class="flex items-center justify-between text-xs text-gray-400">
+					<div class="flex items-center justify-between text-xs text-dim">
 						<span>Moving files…</span>
 						<span class="tabular-nums">{moveDone} / {moveTotal}</span>
 					</div>
-					<div class="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+					<div class="h-2 w-full overflow-hidden rounded-full bg-raised">
 						<div
-							class="h-full rounded-full bg-blue-600 transition-all duration-200"
+							class="h-full rounded-full bg-accent transition-all duration-200"
 							style="width: {moveTotal ? (moveDone / moveTotal) * 100 : 0}%"
 						></div>
 					</div>
 					{#if moveCurrent}
-						<p class="truncate font-mono text-xs text-gray-500">{moveCurrent}</p>
+						<p class="truncate font-mono text-xs text-faint">{moveCurrent}</p>
 					{/if}
 				</div>
 			{/if}
 			<div class="flex items-center justify-between">
-				<p class="text-xs text-gray-500">
+				<p class="text-xs text-faint">
 					{#if applying}
 						{moveDone} of {moveTotal} file(s) moved
 					{:else}
@@ -485,13 +485,13 @@ function totalCheckedFiles(): number {
 				</p>
 				<div class="flex gap-3">
 					<button
-						class="rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800"
+						class="rounded-lg px-4 py-2 text-sm font-medium text-body transition-colors hover:bg-raised"
 						onclick={applying ? () => { aborted = true; } : onClose}
 					>
 						{applying ? 'Stop' : 'Cancel'}
 					</button>
 					<button
-						class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+						class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
 						disabled={applying || totalCheckedFiles() === 0}
 						onclick={handleApply}
 					>

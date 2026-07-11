@@ -7,6 +7,7 @@ import {
 	FolderInput,
 	LayoutGrid,
 	List,
+	Palette,
 	Pencil,
 	RefreshCw,
 	ScanSearch,
@@ -19,6 +20,7 @@ import {
 	UserX,
 	X,
 } from '@lucide/svelte';
+import { cycleTheme, theme } from '$lib/theme.svelte';
 import Loader from './Loader.svelte';
 
 interface Props {
@@ -114,42 +116,42 @@ let {
 }: Props = $props();
 </script>
 
-<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-4 py-2">
+<div class="flex items-center justify-between border-b border-raised bg-surface px-4 py-2">
 	<div class="flex items-center gap-4 min-w-0 flex-1">
 		{#if searchActive}
 			<div class="flex items-center gap-2 flex-1 max-w-md">
-				<Search size={16} class="text-gray-500 shrink-0" />
+				<Search size={16} class="text-faint shrink-0" />
 				<input
 					bind:this={searchInput}
 					type="text"
 					placeholder="Search files and tags..."
-					class="flex-1 bg-transparent border-none text-sm text-gray-200 placeholder-gray-500 focus:outline-none"
+					class="flex-1 bg-transparent border-none text-sm text-body placeholder-faint focus:outline-none"
 					value={searchQuery}
 					oninput={onSearchInput}
 				/>
 				{#if searchLoading}
-					<span class="text-xs text-gray-500">...</span>
+					<span class="text-xs text-faint">...</span>
 				{/if}
 				<button
-					class="rounded p-1 text-gray-500 hover:text-gray-300 transition-colors"
+					class="rounded p-1 text-faint hover:text-body transition-colors"
 					onclick={onCloseSearch}
 				>
 					<X size={14} />
 				</button>
 			</div>
 		{:else}
-			<div class="truncate text-sm font-medium text-gray-300">
+			<div class="folder-title truncate text-sm font-medium text-body">
 				<button
-					class="text-gray-500 hover:text-gray-200 transition-colors"
+					class="text-faint hover:text-body transition-colors"
 					onclick={() => onNavigate('')}
 				>
 					{rootName || rootId}
 				</button>
 				{#each pathSegments as segment, i}
-					<span class="mx-1 text-gray-600">/</span>
+					<span class="mx-1 text-ghost">/</span>
 					{#if i < pathSegments.length - 1}
 						<button
-							class="text-gray-400 hover:text-gray-200 transition-colors"
+							class="text-dim hover:text-body transition-colors"
 							onclick={() => onNavigate(pathSegments.slice(0, i + 1).join('/'))}
 						>
 							{segment}
@@ -159,7 +161,7 @@ let {
 					{/if}
 				{/each}
 				{#if backgroundValidating}
-					<Loader size={14} class="text-gray-500 ml-2 inline-block align-middle" />
+					<Loader size={14} class="text-faint ml-2 inline-block align-middle" />
 				{/if}
 			</div>
 		{/if}
@@ -167,17 +169,17 @@ let {
 		<!-- File operation buttons -->
 		<div class="flex items-center gap-1">
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 				title="Search (Ctrl+F)"
 				onclick={onOpenSearch}
 			>
 				<Search size={16} />
 			</button>
 
-			<div class="mx-1 h-4 w-px bg-gray-700"></div>
+			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Cut (Ctrl+X)"
 				disabled={selectionSize === 0}
 				onclick={onCut}
@@ -185,7 +187,7 @@ let {
 				<Scissors size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Copy (Ctrl+C)"
 				disabled={selectionSize === 0}
 				onclick={onCopy}
@@ -193,7 +195,7 @@ let {
 				<Copy size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Paste (Ctrl+V)"
 				disabled={!hasClipboard}
 				onclick={onPaste}
@@ -201,7 +203,7 @@ let {
 				<ClipboardPaste size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Rename (F2)"
 				disabled={selectionSize !== 1}
 				onclick={onRename}
@@ -209,7 +211,7 @@ let {
 				<Pencil size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-danger-soft disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Delete"
 				disabled={selectionSize === 0}
 				onclick={onDelete}
@@ -217,10 +219,10 @@ let {
 				<Trash2 size={16} />
 			</button>
 
-			<div class="mx-1 h-4 w-px bg-gray-700"></div>
+			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
-				class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {analysisSettings?.autoBrowseEnabled ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
+				class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {analysisSettings?.autoBrowseEnabled ? 'bg-ok-strong text-white' : 'text-dim hover:bg-raised hover:text-body'}"
 				title="Automatically analyze files while browsing"
 				disabled={!analysisSettings || analysisSettingsSaving}
 				onclick={onToggleAutoBrowse}
@@ -229,25 +231,25 @@ let {
 			</button>
 			{#if analysisSettings?.browseStatus.running}
 				<div
-					class="flex items-center gap-1 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-300"
+					class="flex items-center gap-1 rounded bg-warn/15 px-2 py-1 text-xs text-warn-soft"
 					title={`Background analysis running (${analysisSettings.browseStatus.active} active, ${analysisSettings.browseStatus.queued} queued)`}
 				>
 				<Loader size={12} speed="1.2s" />
 					<span>{analysisSettings.browseStatus.active} active</span>
 					{#if analysisSettings.browseStatus.queued > 0}
-						<span class="text-amber-400/80">/ {analysisSettings.browseStatus.queued} queued</span>
+						<span class="text-warn/80">/ {analysisSettings.browseStatus.queued} queued</span>
 					{/if}
 				</div>
 			{/if}
 			<button
-				class="rounded p-1.5 transition-colors {filterPeople ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}"
+				class="rounded p-1.5 transition-colors {filterPeople ? 'bg-accent text-on-accent' : 'text-faint hover:bg-raised hover:text-body'}"
 				title="Hide images with people"
 				onclick={onToggleFilter}
 			>
 				<UserX size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Scan for people"
 				disabled={scanStatus?.running === true}
 				onclick={onScan}
@@ -255,10 +257,10 @@ let {
 				<ScanSearch size={16} />
 			</button>
 
-			<div class="mx-1 h-4 w-px bg-gray-700"></div>
+			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Classify images (CLIP)"
 				disabled={classifyScanStatus?.running === true}
 				onclick={onClassify}
@@ -266,7 +268,7 @@ let {
 				<Sparkles size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Run OCR on this folder (extract text from images)"
 				disabled={ocrScanStatus?.running === true}
 				onclick={onOCR}
@@ -274,7 +276,7 @@ let {
 				<ScanText size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Re-analyze this folder and subfolders from scratch — runs detection, tagging, and OCR in one pass (replaces all results)"
 				disabled={analyzeScanStatus?.running === true}
 				onclick={onReanalyze}
@@ -282,7 +284,7 @@ let {
 				<RefreshCw size={16} />
 			</button>
 			<button
-				class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
+				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 				title="Find duplicates"
 				onclick={onFindDuplicates}
 			>
@@ -290,7 +292,7 @@ let {
 			</button>
 			{#if organizeEnabled}
 				<button
-					class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-blue-400"
+					class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent-soft"
 					title="Suggest performer folders from Stash"
 					onclick={onSuggestOrganize}
 				>
@@ -299,9 +301,9 @@ let {
 			{/if}
 			{#if availableTags.length > 0}
 				<div class="relative flex items-center">
-					<Tag size={14} class="absolute left-1.5 text-gray-500 pointer-events-none" />
+					<Tag size={14} class="absolute left-1.5 text-faint pointer-events-none" />
 					<select
-						class="appearance-none rounded bg-gray-800 py-1 pl-6 pr-6 text-xs text-gray-300 border border-gray-700 focus:border-blue-500 focus:outline-none"
+						class="appearance-none rounded bg-raised py-1 pl-6 pr-6 text-xs text-body border border-muted focus:border-accent-hover focus:outline-none"
 						value={filterTag}
 						onchange={onTagFilter}
 					>
@@ -317,43 +319,43 @@ let {
 
 	<div class="flex items-center gap-2">
 		{#if searchActive && searchQuery && !searchLoading}
-			<span class="text-xs text-gray-500">{searchResultCount} result(s)</span>
+			<span class="text-xs text-faint">{searchResultCount} result(s)</span>
 		{/if}
 		{#if scanStatus?.running}
-			<span class="text-xs text-blue-400">
+			<span class="text-xs text-accent-soft">
 				Scanning {scanStatus.completed}/{scanStatus.total}
 			</span>
 		{/if}
 		{#if classifyScanStatus?.running}
-			<span class="text-xs text-purple-400">
+			<span class="text-xs text-tag-soft">
 				Classifying {classifyScanStatus.completed}/{classifyScanStatus.total}
 			</span>
 		{/if}
 		{#if ocrScanStatus?.running}
-			<span class="text-xs text-amber-400">
+			<span class="text-xs text-warn">
 				OCR {ocrScanStatus.completed}/{ocrScanStatus.total}
 			</span>
 		{/if}
 		{#if analyzeScanStatus?.running}
-			<span class="text-xs text-emerald-400">
+			<span class="text-xs text-ok">
 				Analyzing {analyzeScanStatus.completed}/{analyzeScanStatus.total}
 			</span>
 		{/if}
 		{#if selectionSize > 0}
-			<span class="text-xs text-gray-500">{selectionSize} selected</span>
+			<span class="text-xs text-faint">{selectionSize} selected</span>
 		{/if}
 
 		<!-- View mode toggle -->
-		<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
+		<div class="flex items-center gap-1 rounded-lg bg-raised p-1">
 			<button
-				class="rounded p-1 transition-colors {viewMode === 'grid' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+				class="rounded p-1 transition-colors {viewMode === 'grid' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 				title="Grid view"
 				onclick={() => onViewMode('grid')}
 			>
 				<LayoutGrid size={14} />
 			</button>
 			<button
-				class="rounded p-1 transition-colors {viewMode === 'list' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+				class="rounded p-1 transition-colors {viewMode === 'list' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 				title="List view"
 				onclick={() => onViewMode('list')}
 			>
@@ -362,27 +364,35 @@ let {
 		</div>
 
 		{#if viewMode === 'grid'}
-			<div class="flex items-center gap-1 rounded-lg bg-gray-800 p-1">
+			<div class="flex items-center gap-1 rounded-lg bg-raised p-1">
 				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 					onclick={() => onThumbSize('small')}
 				>
 					S
 				</button>
 				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 					onclick={() => onThumbSize('medium')}
 				>
 					M
 				</button>
 				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 					onclick={() => onThumbSize('large')}
 				>
 					L
 				</button>
 			</div>
 		{/if}
+
+		<button
+			class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
+			title="Theme: {theme.current} (click to switch)"
+			onclick={cycleTheme}
+		>
+			<Palette size={16} />
+		</button>
 	</div>
 </div>
 
