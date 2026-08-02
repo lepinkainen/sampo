@@ -17,7 +17,7 @@ test.describe('Breadcrumb navigation', () => {
 			.first()
 			.waitFor();
 
-		const toolbar = page.locator('.border-b.bg-gray-900');
+		const toolbar = page.locator('.border-b.bg-surface');
 		await expect(toolbar).toContainText('/ grid2x2');
 
 		// Click "Sample" segment to go back to root
@@ -42,7 +42,7 @@ test.describe('Breadcrumb navigation', () => {
 		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 
-		const toolbar = page.locator('.border-b.bg-gray-900');
+		const toolbar = page.locator('.border-b.bg-surface');
 
 		// The last segment "grid2x2" should be a <span>, not a <button>
 		// The breadcrumb renders last segment as plain span

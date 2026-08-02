@@ -8,7 +8,7 @@ test.describe('Toolbar and path display', () => {
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 
 		// Toolbar area (border-b bar) should show root ID and path
-		const toolbar = page.locator('.border-b.bg-gray-900');
+		const toolbar = page.locator('.border-b.bg-surface');
 		await expect(toolbar).toContainText('Sample');
 		await expect(toolbar).toContainText('/ grid2x2');
 	});
@@ -20,7 +20,7 @@ test.describe('Toolbar and path display', () => {
 		// Navigate to grid2x2
 		await page.locator('.select-none button', { hasText: 'grid2x2' }).click();
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
-		const toolbar = page.locator('.border-b.bg-gray-900');
+		const toolbar = page.locator('.border-b.bg-surface');
 		await expect(toolbar).toContainText('/ grid2x2');
 
 		// Navigate to subdir

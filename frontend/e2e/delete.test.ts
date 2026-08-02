@@ -71,7 +71,7 @@ test.describe('Delete files', () => {
 		await expect(dialog.getByText('Delete 1 item(s)?')).toBeVisible();
 
 		// Item name should be listed
-		await expect(dialog.locator('.bg-gray-950')).toBeVisible();
+		await expect(dialog.locator('.bg-canvas')).toBeVisible();
 	});
 
 	test('cancel keeps file intact', async ({ page }) => {
@@ -166,7 +166,7 @@ test.describe('Delete files', () => {
 		).toBeVisible();
 
 		// All item names should be listed
-		const itemList = dialog.locator('.bg-gray-950 p');
+		const itemList = dialog.locator('.bg-canvas p');
 		await expect(itemList).toHaveCount(totalCards);
 	});
 

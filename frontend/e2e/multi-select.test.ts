@@ -20,20 +20,20 @@ test.describe('Multi-selection', () => {
 
 		// Ctrl+click first card
 		await first.click({ modifiers: ['ControlOrMeta'] });
-		await expect(first).toHaveClass(/border-blue-500/);
+		await expect(first).toHaveClass(/border-accent-hover/);
 
 		// Ctrl+click second card — both should be selected
 		await second.click({ modifiers: ['ControlOrMeta'] });
-		await expect(first).toHaveClass(/border-blue-500/);
-		await expect(second).toHaveClass(/border-blue-500/);
+		await expect(first).toHaveClass(/border-accent-hover/);
+		await expect(second).toHaveClass(/border-accent-hover/);
 
 		// Toolbar shows selection count
 		await expect(page.getByText('2 selected')).toBeVisible();
 
 		// Ctrl+click first again — deselects it
 		await first.click({ modifiers: ['ControlOrMeta'] });
-		await expect(first).not.toHaveClass(/border-blue-500/);
-		await expect(second).toHaveClass(/border-blue-500/);
+		await expect(first).not.toHaveClass(/border-accent-hover/);
+		await expect(second).toHaveClass(/border-accent-hover/);
 		await expect(page.getByText('1 selected')).toBeVisible();
 	});
 
@@ -42,13 +42,13 @@ test.describe('Multi-selection', () => {
 
 		// Click first card normally
 		await cards.nth(0).click();
-		await expect(cards.nth(0)).toHaveClass(/border-blue-500/);
+		await expect(cards.nth(0)).toHaveClass(/border-accent-hover/);
 
 		// Shift+click third card — should select range [0, 1, 2]
 		await cards.nth(2).click({ modifiers: ['Shift'] });
-		await expect(cards.nth(0)).toHaveClass(/border-blue-500/);
-		await expect(cards.nth(1)).toHaveClass(/border-blue-500/);
-		await expect(cards.nth(2)).toHaveClass(/border-blue-500/);
+		await expect(cards.nth(0)).toHaveClass(/border-accent-hover/);
+		await expect(cards.nth(1)).toHaveClass(/border-accent-hover/);
+		await expect(cards.nth(2)).toHaveClass(/border-accent-hover/);
 
 		await expect(page.getByText('3 selected')).toBeVisible();
 	});
@@ -63,7 +63,7 @@ test.describe('Multi-selection', () => {
 		// All cards should be selected
 		await expect(page.getByText(`${totalCards} selected`)).toBeVisible();
 		for (let i = 0; i < totalCards; i++) {
-			await expect(cards.nth(i)).toHaveClass(/border-blue-500/);
+			await expect(cards.nth(i)).toHaveClass(/border-accent-hover/);
 		}
 	});
 

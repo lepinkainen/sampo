@@ -41,7 +41,7 @@ test.describe('File selection and details panel', () => {
 		await card.click();
 
 		// Card should have selected styling
-		await expect(card).toHaveClass(/border-blue-500/);
+		await expect(card).toHaveClass(/border-accent-hover/);
 	});
 
 	test('clicking empty area deselects file', async ({ page }) => {

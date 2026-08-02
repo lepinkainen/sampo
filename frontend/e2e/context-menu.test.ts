@@ -106,13 +106,13 @@ test.describe('Context menu', () => {
 
 		// Select first card normally
 		await cards.nth(0).click();
-		await expect(cards.nth(0)).toHaveClass(/border-blue-500/);
+		await expect(cards.nth(0)).toHaveClass(/border-accent-hover/);
 
 		// Right-click second card (unselected)
 		await cards.nth(1).click({ button: 'right' });
 
 		// Second card should now be selected, first deselected
-		await expect(cards.nth(1)).toHaveClass(/border-blue-500/);
-		await expect(cards.nth(0)).not.toHaveClass(/border-blue-500/);
+		await expect(cards.nth(1)).toHaveClass(/border-accent-hover/);
+		await expect(cards.nth(0)).not.toHaveClass(/border-accent-hover/);
 	});
 });
