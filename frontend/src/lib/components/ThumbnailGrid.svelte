@@ -32,6 +32,7 @@ import { createSelection } from '$lib/selection.svelte';
 import { createClipboard } from '$lib/clipboard.svelte';
 import { createScan, makeReloadAfterScan } from '$lib/scans.svelte';
 import { showToast, summarizeItemErrors } from '$lib/toast.svelte';
+import { readPref, writePref } from '$lib/prefs';
 import MediaPreview from './MediaPreview.svelte';
 import ThumbnailCard from './ThumbnailCard.svelte';
 import ListView from './ListView.svelte';
@@ -77,10 +78,14 @@ let backgroundValidating = $state(false);
 let loadingSlow = $state(false);
 let loadingSlowTimer: ReturnType<typeof setTimeout> | null = null;
 let error = $state<string | null>(null);
-let thumbSize = $state<'small' | 'medium' | 'large'>('medium');
+let thumbSize = $state<'small' | 'medium' | 'large'>(
+	readPref('sampo-thumb-size', ['small', 'medium', 'large'] as const, 'medium'),
+);
 let savedScrollTop = $state(0);
 let scrollContainer: HTMLDivElement | undefined = $state();
-let viewMode = $state<'grid' | 'list'>('grid');
+let viewMode = $state<'grid' | 'list'>(
+	readPref('sampo-view-mode', ['grid', 'list'] as const, 'grid'),
+);
 
 const selection = createSelection();
 const clipboard = createClipboard();
@@ -906,8 +911,14 @@ async function handleSuggestOrganize() {
 			onSuggestOrganize={handleSuggestOrganize}
 			{organizeEnabled}
 			onTagFilter={handleTagFilter}
-			onViewMode={(m) => (viewMode = m)}
-			onThumbSize={(s) => (thumbSize = s)}
+			onViewMode={(m) => {
+				viewMode = m;
+				writePref('sampo-view-mode', m);
+			}}
+			onThumbSize={(s) => {
+				thumbSize = s;
+				writePref('sampo-thumb-size', s);
+			}}
 		/>
 
 		<div class="flex flex-1 overflow-hidden">
