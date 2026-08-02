@@ -92,4 +92,26 @@ describe('GridToolbar', () => {
 		expect(screen.getByTitle('Scan for people')).toBeDisabled();
 		expect(screen.getByText('Scanning 1/5')).toBeInTheDocument();
 	});
+
+	it('shows the S/M/L size selector enabled in grid view', () => {
+		const onThumbSize = vi.fn();
+		render(GridToolbar, makeProps({ viewMode: 'grid', onThumbSize }));
+		for (const label of ['S', 'M', 'L']) {
+			expect(screen.getByRole('button', { name: label })).toBeEnabled();
+		}
+		screen.getByRole('button', { name: 'L' }).click();
+		expect(onThumbSize).toHaveBeenCalledWith('large');
+	});
+
+	it('keeps the size selector visible but disabled in list view', () => {
+		const onThumbSize = vi.fn();
+		render(GridToolbar, makeProps({ viewMode: 'list', onThumbSize }));
+		for (const label of ['S', 'M', 'L']) {
+			const btn = screen.getByRole('button', { name: label });
+			expect(btn).toBeInTheDocument();
+			expect(btn).toBeDisabled();
+			btn.click();
+		}
+		expect(onThumbSize).not.toHaveBeenCalled();
+	});
 });

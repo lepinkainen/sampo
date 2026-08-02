@@ -363,28 +363,32 @@ let {
 			</button>
 		</div>
 
-		{#if viewMode === 'grid'}
-			<div class="flex items-center gap-1 rounded-lg bg-raised p-1">
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
-					onclick={() => onThumbSize('small')}
-				>
-					S
-				</button>
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
-					onclick={() => onThumbSize('medium')}
-				>
-					M
-				</button>
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
-					onclick={() => onThumbSize('large')}
-				>
-					L
-				</button>
-			</div>
-		{/if}
+		<div
+			class="flex items-center gap-1 rounded-lg bg-raised p-1 transition-opacity {viewMode === 'grid' ? '' : 'opacity-40'}"
+			title={viewMode === 'grid' ? undefined : 'Thumbnail size (grid view only)'}
+		>
+			<button
+				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				disabled={viewMode !== 'grid'}
+				onclick={() => onThumbSize('small')}
+			>
+				S
+			</button>
+			<button
+				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				disabled={viewMode !== 'grid'}
+				onclick={() => onThumbSize('medium')}
+			>
+				M
+			</button>
+			<button
+				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				disabled={viewMode !== 'grid'}
+				onclick={() => onThumbSize('large')}
+			>
+				L
+			</button>
+		</div>
 
 		<button
 			class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"

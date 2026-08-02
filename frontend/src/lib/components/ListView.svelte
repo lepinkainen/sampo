@@ -85,7 +85,7 @@ function sortIndicator(key: SortKey): string {
 				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-24 text-right" onclick={() => handleSort('size')}>
 					Size{sortIndicator('size')}
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-44" onclick={() => handleSort('modTime')}>
+				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-48 whitespace-nowrap" onclick={() => handleSort('modTime')}>
 					Modified{sortIndicator('modTime')}
 				</th>
 				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-20" onclick={() => handleSort('mediaType')}>
@@ -117,7 +117,16 @@ function sortIndicator(key: SortKey): string {
 					}}
 				>
 					<td class="px-2 py-1.5 text-faint">
-						<FileIcon {entry} size={16} />
+						{#if !entry.isDir && entry.hasThumb && (entry.mediaType === 'image' || entry.mediaType === 'video')}
+							<img
+								src={thumbnailUrl(rootId, entry.path)}
+								alt={entry.name}
+								loading="lazy"
+								class="h-8 w-8 rounded object-cover bg-raised"
+							/>
+						{:else}
+							<FileIcon {entry} size={16} />
+						{/if}
 					</td>
 					<td class="px-2 py-1.5 text-body">
 						<div class="flex items-center gap-2">
@@ -133,7 +142,7 @@ function sortIndicator(key: SortKey): string {
 					<td class="px-2 py-1.5 text-dim text-right tabular-nums">
 						{entry.isDir ? '\u2014' : formatSize(entry.size)}
 					</td>
-					<td class="px-2 py-1.5 text-dim tabular-nums">
+					<td class="px-2 py-1.5 text-dim tabular-nums whitespace-nowrap">
 						{formatDate(entry.modTime)}
 					</td>
 					<td class="px-2 py-1.5 text-dim">
