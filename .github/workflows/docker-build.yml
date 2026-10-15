@@ -25,7 +25,7 @@ jobs:
       # be present on disk before the Docker build copies them into the image.
       - name: Cache ML models
         id: models-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: models
           key: models-${{ hashFiles('scripts/export-clip.py', 'scripts/clip-labels.yaml', 'Taskfile.yml') }}
