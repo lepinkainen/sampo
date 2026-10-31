@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/corona10/goimagehash v1.1.0
 	github.com/disintegration/imaging v1.6.2
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/lepinkainen/humanlog v0.2.1
 	github.com/nwaples/rardecode/v2 v2.2.5
 	github.com/spf13/viper v1.21.0
