@@ -19,9 +19,11 @@ export function showToast(
 ): void {
 	const id = nextId++;
 	toasts = [...toasts, { id, message, type }];
-	setTimeout(() => {
-		toasts = toasts.filter((t) => t.id !== id);
-	}, 3000);
+	// Errors stay until dismissed so they can't be missed; only success
+	// confirmations time out.
+	if (type === 'success') {
+		setTimeout(() => dismissToast(id), 3000);
+	}
 }
 
 export function dismissToast(id: number): void {
