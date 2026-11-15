@@ -42,12 +42,12 @@ test.describe('View mode (grid/detail)', () => {
 	}) => {
 		// Visible + enabled in grid.
 		await expect(
-			page.getByRole('button', { name: 'M', exact: true }),
+			page.getByRole('button', { name: 'Medium thumbnails' }),
 		).toBeEnabled();
 		await page.getByRole('button', { name: 'List view' }).click();
 		// Still present, now disabled.
 		await expect(
-			page.getByRole('button', { name: 'M', exact: true }),
+			page.getByRole('button', { name: 'Medium thumbnails' }),
 		).toBeDisabled();
 	});
 
@@ -67,7 +67,7 @@ test.describe('View mode (grid/detail)', () => {
 	});
 
 	test('thumb size persists across a page reload', async ({ page }) => {
-		await page.getByRole('button', { name: 'L', exact: true }).click();
+		await page.getByRole('button', { name: 'Large thumbnails' }).click();
 		await expect(page.locator('[class*="grid-cols-[repeat"]')).toHaveClass(
 			/280px/,
 		);
@@ -81,7 +81,7 @@ test.describe('View mode (grid/detail)', () => {
 			/280px/,
 		);
 		await expect(
-			page.getByRole('button', { name: 'L', exact: true }),
+			page.getByRole('button', { name: 'Large thumbnails' }),
 		).toHaveClass(/bg-select/);
 	});
 });

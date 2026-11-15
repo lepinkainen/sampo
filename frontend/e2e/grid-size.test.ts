@@ -10,7 +10,7 @@ test.describe('Grid size selector', () => {
 
 	test('default grid size is medium', async ({ page }) => {
 		// M button should have active styling
-		const mediumBtn = page.getByRole('button', { name: 'M', exact: true });
+		const mediumBtn = page.getByRole('button', { name: 'Medium thumbnails' });
 		await expect(mediumBtn).toHaveClass(/bg-select/);
 
 		// Grid should use 180px columns
@@ -19,7 +19,7 @@ test.describe('Grid size selector', () => {
 	});
 
 	test('clicking S changes grid to small columns', async ({ page }) => {
-		await page.getByRole('button', { name: 'S', exact: true }).click();
+		await page.getByRole('button', { name: 'Small thumbnails' }).click();
 
 		// Grid should use 120px columns
 		const grid = page.locator('[class*="grid-cols-[repeat"]');
@@ -27,12 +27,12 @@ test.describe('Grid size selector', () => {
 
 		// S button should now be active
 		await expect(
-			page.getByRole('button', { name: 'S', exact: true }),
+			page.getByRole('button', { name: 'Small thumbnails' }),
 		).toHaveClass(/bg-select/);
 	});
 
 	test('clicking L changes grid to large columns', async ({ page }) => {
-		await page.getByRole('button', { name: 'L', exact: true }).click();
+		await page.getByRole('button', { name: 'Large thumbnails' }).click();
 
 		// Grid should use 280px columns
 		const grid = page.locator('[class*="grid-cols-[repeat"]');
@@ -40,7 +40,7 @@ test.describe('Grid size selector', () => {
 
 		// L button should now be active
 		await expect(
-			page.getByRole('button', { name: 'L', exact: true }),
+			page.getByRole('button', { name: 'Large thumbnails' }),
 		).toHaveClass(/bg-select/);
 	});
 });

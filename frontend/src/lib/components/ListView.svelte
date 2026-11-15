@@ -72,26 +72,55 @@ function sortIndicator(key: SortKey): string {
 	if (sortKey !== key) return '';
 	return sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
 }
+
+function ariaSort(key: SortKey): 'ascending' | 'descending' | undefined {
+	if (sortKey !== key) return undefined;
+	return sortDir === 'asc' ? 'ascending' : 'descending';
+}
 </script>
 
 <div class="w-full">
 	<table class="w-full text-sm text-left">
 		<thead class="text-xs text-dim uppercase border-b border-muted sticky top-0 bg-canvas z-10">
 			<tr>
-				<th class="w-10 px-2 py-2"></th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-body" onclick={() => handleSort('name')}>
-					Name{sortIndicator('name')}
+				<th scope="col" class="w-10 px-2 py-2"><span class="sr-only">Preview</span></th>
+				<th scope="col" class="p-0" aria-sort={ariaSort('name')}>
+					<button
+						type="button"
+						class="w-full px-2 py-2 text-left uppercase cursor-pointer select-none hover:text-body"
+						onclick={() => handleSort('name')}
+					>
+						Name{sortIndicator('name')}
+					</button>
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-24 text-right" onclick={() => handleSort('size')}>
-					Size{sortIndicator('size')}
+				<th scope="col" class="p-0 w-24" aria-sort={ariaSort('size')}>
+					<button
+						type="button"
+						class="w-full px-2 py-2 text-right uppercase cursor-pointer select-none hover:text-body"
+						onclick={() => handleSort('size')}
+					>
+						Size{sortIndicator('size')}
+					</button>
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-48 whitespace-nowrap" onclick={() => handleSort('modTime')}>
-					Modified{sortIndicator('modTime')}
+				<th scope="col" class="p-0 w-48 whitespace-nowrap" aria-sort={ariaSort('modTime')}>
+					<button
+						type="button"
+						class="w-full px-2 py-2 text-left uppercase cursor-pointer select-none hover:text-body"
+						onclick={() => handleSort('modTime')}
+					>
+						Modified{sortIndicator('modTime')}
+					</button>
 				</th>
-				<th class="px-2 py-2 cursor-pointer select-none hover:text-body w-20" onclick={() => handleSort('mediaType')}>
-					Type{sortIndicator('mediaType')}
+				<th scope="col" class="p-0 w-20" aria-sort={ariaSort('mediaType')}>
+					<button
+						type="button"
+						class="w-full px-2 py-2 text-left uppercase cursor-pointer select-none hover:text-body"
+						onclick={() => handleSort('mediaType')}
+					>
+						Type{sortIndicator('mediaType')}
+					</button>
 				</th>
-				<th class="px-2 py-2 w-32">Tags</th>
+				<th scope="col" class="px-2 py-2 w-32">Tags</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -104,6 +133,7 @@ function sortIndicator(key: SortKey): string {
 						: 'hover:bg-raised/50'}
 					{isCut(entry.path) ? ' opacity-50' : ''}"
 					tabindex={0}
+					aria-selected={isSelected(entry.path)}
 					draggable={true}
 					onclick={(e) => { e.stopPropagation(); onclick(entry, e); }}
 					ondblclick={() => ondblclick(entry)}
@@ -113,6 +143,10 @@ function sortIndicator(key: SortKey): string {
 						if (e.key === 'Enter') {
 							e.preventDefault();
 							ondblclick(entry);
+						} else if (e.key === ' ') {
+							// Space selects; preventDefault stops the page scrolling.
+							e.preventDefault();
+							onclick(entry, new MouseEvent('click'));
 						}
 					}}
 				>
@@ -120,7 +154,9 @@ function sortIndicator(key: SortKey): string {
 						{#if !entry.isDir && entry.hasThumb && (entry.mediaType === 'image' || entry.mediaType === 'video')}
 							<img
 								src={thumbnailUrl(rootId, entry.path)}
-								alt={entry.name}
+								alt=""
+								width="32"
+								height="32"
 								loading="lazy"
 								class="h-8 w-8 rounded object-cover bg-raised"
 							/>
@@ -132,10 +168,10 @@ function sortIndicator(key: SortKey): string {
 						<div class="flex items-center gap-2">
 							<span class="truncate" title={entry.name}>{entry.name}</span>
 							{#if entry.ocrText}
-								<span class="text-warn shrink-0" title="Contains text (OCR)"><ScanText size={12} /></span>
+								<span class="text-warn shrink-0" role="img" aria-label="Contains text" title="Contains text (OCR)"><ScanText size={12} aria-hidden="true" /></span>
 							{/if}
 							{#if entry.hasPerson === true}
-								<span class="text-warn shrink-0"><User size={12} /></span>
+								<span class="text-warn shrink-0" role="img" aria-label="Contains a person" title="Contains a person"><User size={12} aria-hidden="true" /></span>
 							{/if}
 						</div>
 					</td>

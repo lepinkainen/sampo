@@ -119,13 +119,16 @@ let {
 <div class="flex items-center justify-between border-b border-raised bg-surface px-4 py-2">
 	<div class="flex items-center gap-4 min-w-0 flex-1">
 		{#if searchActive}
-			<div class="flex items-center gap-2 flex-1 max-w-md">
-				<Search size={16} class="text-faint shrink-0" />
+			<search
+				class="flex items-center gap-2 flex-1 max-w-md rounded has-[input:focus-visible]:ring-1 has-[input:focus-visible]:ring-accent-hover"
+			>
+				<Search size={16} class="text-faint shrink-0" aria-hidden="true" />
 				<input
 					bind:this={searchInput}
-					type="text"
+					type="search"
+					aria-label="Search files and tags"
 					placeholder="Search files and tags..."
-					class="flex-1 bg-transparent border-none text-sm text-body placeholder-faint focus:outline-none"
+					class="flex-1 bg-transparent border-none text-sm text-body placeholder-faint focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
 					value={searchQuery}
 					oninput={onSearchInput}
 				/>
@@ -133,97 +136,116 @@ let {
 					<span class="text-xs text-faint">...</span>
 				{/if}
 				<button
+					type="button"
 					class="rounded p-1 text-faint hover:text-body transition-colors"
+					aria-label="Close search"
 					onclick={onCloseSearch}
 				>
-					<X size={14} />
+					<X size={14} aria-hidden="true" />
 				</button>
-			</div>
+			</search>
 		{:else}
-			<div class="folder-title truncate text-sm font-medium text-body">
+			<nav aria-label="Breadcrumbs" class="folder-title truncate text-sm font-medium text-body">
 				<button
+					type="button"
 					class="text-faint hover:text-body transition-colors"
+					aria-current={pathSegments.length === 0 ? 'page' : undefined}
 					onclick={() => onNavigate('')}
 				>
 					{rootName || rootId}
 				</button>
 				{#each pathSegments as segment, i}
-					<span class="mx-1 text-ghost">/</span>
+					<span class="mx-1 text-ghost" aria-hidden="true">/</span>
 					{#if i < pathSegments.length - 1}
 						<button
+							type="button"
 							class="text-dim hover:text-body transition-colors"
 							onclick={() => onNavigate(pathSegments.slice(0, i + 1).join('/'))}
 						>
 							{segment}
 						</button>
 					{:else}
-						<span>{segment}</span>
+						<span aria-current="page">{segment}</span>
 					{/if}
 				{/each}
 				{#if backgroundValidating}
 					<Loader size={14} class="text-faint ml-2 inline-block align-middle" />
 				{/if}
-			</div>
+			</nav>
 		{/if}
 
 		<!-- File operation buttons -->
-		<div class="flex items-center gap-1">
+		<div class="flex items-center gap-1" role="toolbar" aria-label="File actions">
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 				title="Search (Ctrl+F)"
+				aria-label="Search"
 				onclick={onOpenSearch}
 			>
-				<Search size={16} />
+				<Search size={16} aria-hidden="true" />
 			</button>
 
 			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Cut (Ctrl+X)"
+				aria-label="Cut"
 				disabled={selectionSize === 0}
 				onclick={onCut}
 			>
-				<Scissors size={16} />
+				<Scissors size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Copy (Ctrl+C)"
+				aria-label="Copy"
 				disabled={selectionSize === 0}
 				onclick={onCopy}
 			>
-				<Copy size={16} />
+				<Copy size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Paste (Ctrl+V)"
+				aria-label="Paste"
 				disabled={!hasClipboard}
 				onclick={onPaste}
 			>
-				<ClipboardPaste size={16} />
+				<ClipboardPaste size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Rename (F2)"
+				aria-label="Rename"
 				disabled={selectionSize !== 1}
 				onclick={onRename}
 			>
-				<Pencil size={16} />
+				<Pencil size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-danger-soft disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Delete"
+				aria-label="Delete"
 				disabled={selectionSize === 0}
 				onclick={onDelete}
 			>
-				<Trash2 size={16} />
+				<Trash2 size={16} aria-hidden="true" />
 			</button>
 
 			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
+				type="button"
 				class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {analysisSettings?.autoBrowseEnabled ? 'bg-ok-strong text-white' : 'text-dim hover:bg-raised hover:text-body'}"
 				title="Automatically analyze files while browsing"
+				aria-pressed={analysisSettings?.autoBrowseEnabled ?? false}
 				disabled={!analysisSettings || analysisSettingsSaving}
 				onclick={onToggleAutoBrowse}
 			>
@@ -242,67 +264,83 @@ let {
 				</div>
 			{/if}
 			<button
+				type="button"
 				class="rounded p-1.5 transition-colors {filterPeople ? 'bg-accent text-on-accent' : 'text-faint hover:bg-raised hover:text-body'}"
 				title="Hide images with people"
+				aria-label="Hide images with people"
+				aria-pressed={filterPeople}
 				onclick={onToggleFilter}
 			>
-				<UserX size={16} />
+				<UserX size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Scan for people"
+				aria-label="Scan for people"
 				disabled={scanStatus?.running === true}
 				onclick={onScan}
 			>
-				<ScanSearch size={16} />
+				<ScanSearch size={16} aria-hidden="true" />
 			</button>
 
 			<div class="mx-1 h-4 w-px bg-muted"></div>
 
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Classify images (CLIP)"
+				aria-label="Classify images"
 				disabled={classifyScanStatus?.running === true}
 				onclick={onClassify}
 			>
-				<Sparkles size={16} />
+				<Sparkles size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Run OCR on this folder (extract text from images)"
+				aria-label="Run OCR"
 				disabled={ocrScanStatus?.running === true}
 				onclick={onOCR}
 			>
-				<ScanText size={16} />
+				<ScanText size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body disabled:opacity-30 disabled:cursor-not-allowed"
 				title="Re-analyze this folder and subfolders from scratch — runs detection, tagging, and OCR in one pass (replaces all results)"
+				aria-label="Re-analyze folder"
 				disabled={analyzeScanStatus?.running === true}
 				onclick={onReanalyze}
 			>
-				<RefreshCw size={16} />
+				<RefreshCw size={16} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 				title="Find duplicates"
+				aria-label="Find duplicates"
 				onclick={onFindDuplicates}
 			>
-				<Files size={16} />
+				<Files size={16} aria-hidden="true" />
 			</button>
 			{#if organizeEnabled}
 				<button
+					type="button"
 					class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent-soft"
 					title="Suggest performer folders from Stash"
+					aria-label="Suggest performer folders"
 					onclick={onSuggestOrganize}
 				>
-					<FolderInput size={16} />
+					<FolderInput size={16} aria-hidden="true" />
 				</button>
 			{/if}
 			{#if availableTags.length > 0}
 				<div class="relative flex items-center">
-					<Tag size={14} class="absolute left-1.5 text-faint pointer-events-none" />
+					<Tag size={14} class="absolute left-1.5 text-faint pointer-events-none" aria-hidden="true" />
 					<select
+						aria-label="Filter by tag"
 						class="appearance-none rounded bg-raised py-1 pl-6 pr-6 text-xs text-body border border-muted focus:border-accent-hover focus:outline-none"
 						value={filterTag}
 						onchange={onTagFilter}
@@ -348,18 +386,24 @@ let {
 		<!-- View mode toggle -->
 		<div class="flex items-center gap-1 rounded-lg bg-raised p-1">
 			<button
+				type="button"
 				class="rounded p-1 transition-colors {viewMode === 'grid' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 				title="Grid view"
+				aria-label="Grid view"
+				aria-pressed={viewMode === 'grid'}
 				onclick={() => onViewMode('grid')}
 			>
-				<LayoutGrid size={14} />
+				<LayoutGrid size={14} aria-hidden="true" />
 			</button>
 			<button
+				type="button"
 				class="rounded p-1 transition-colors {viewMode === 'list' ? 'bg-select text-select-text' : 'text-dim hover:text-body'}"
 				title="List view"
+				aria-label="List view"
+				aria-pressed={viewMode === 'list'}
 				onclick={() => onViewMode('list')}
 			>
-				<List size={14} />
+				<List size={14} aria-hidden="true" />
 			</button>
 		</div>
 
@@ -368,21 +412,30 @@ let {
 			title={viewMode === 'grid' ? undefined : 'Thumbnail size (grid view only)'}
 		>
 			<button
+				type="button"
 				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'small' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				aria-label="Small thumbnails"
+				aria-pressed={thumbSize === 'small'}
 				disabled={viewMode !== 'grid'}
 				onclick={() => onThumbSize('small')}
 			>
 				S
 			</button>
 			<button
+				type="button"
 				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'medium' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				aria-label="Medium thumbnails"
+				aria-pressed={thumbSize === 'medium'}
 				disabled={viewMode !== 'grid'}
 				onclick={() => onThumbSize('medium')}
 			>
 				M
 			</button>
 			<button
+				type="button"
 				class="rounded px-2 py-1 text-xs font-medium transition-colors {thumbSize === 'large' ? 'bg-select text-select-text' : 'text-dim hover:text-body'} disabled:cursor-not-allowed disabled:hover:text-dim"
+				aria-label="Large thumbnails"
+				aria-pressed={thumbSize === 'large'}
 				disabled={viewMode !== 'grid'}
 				onclick={() => onThumbSize('large')}
 			>
@@ -391,11 +444,13 @@ let {
 		</div>
 
 		<button
+			type="button"
 			class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
 			title="Theme: {theme.current} (click to switch)"
+			aria-label="Switch theme"
 			onclick={cycleTheme}
 		>
-			<Palette size={16} />
+			<Palette size={16} aria-hidden="true" />
 		</button>
 	</div>
 </div>

@@ -32,23 +32,28 @@ function makeProps(entries: FileEntry[]) {
 
 describe('ListView', () => {
 	it('renders a thumbnail image for an image entry that has a thumb', () => {
-		render(ListView, makeProps([entry({ name: 'photo.jpg' })]));
-		const img = screen.getByRole('img', { name: 'photo.jpg' });
+		const { container } = render(
+			ListView,
+			makeProps([entry({ name: 'photo.jpg' })]),
+		);
+		// Decorative (alt=""): the file name is in the adjacent cell.
+		const img = container.querySelector('img');
 		expect(img).toBeInTheDocument();
-		expect(img.getAttribute('src')).toContain('/api/thumb/root-0/');
-		expect(img.getAttribute('loading')).toBe('lazy');
+		expect(img?.getAttribute('alt')).toBe('');
+		expect(img?.getAttribute('src')).toContain('/api/thumb/root-0/');
+		expect(img?.getAttribute('loading')).toBe('lazy');
 	});
 
 	it('renders a thumbnail for videos with a thumb', () => {
-		render(
+		const { container } = render(
 			ListView,
 			makeProps([entry({ name: 'clip.mp4', mediaType: 'video' })]),
 		);
-		expect(screen.getByRole('img', { name: 'clip.mp4' })).toBeInTheDocument();
+		expect(container.querySelector('img')).toBeInTheDocument();
 	});
 
 	it('falls back to an icon (no thumbnail img) for directories', () => {
-		render(
+		const { container } = render(
 			ListView,
 			makeProps([
 				entry({
@@ -59,12 +64,15 @@ describe('ListView', () => {
 				}),
 			]),
 		);
-		expect(screen.queryByRole('img')).not.toBeInTheDocument();
+		expect(container.querySelector('img')).not.toBeInTheDocument();
 	});
 
 	it('falls back to an icon when an image has no thumbnail yet', () => {
-		render(ListView, makeProps([entry({ name: 'raw.png', hasThumb: false })]));
-		expect(screen.queryByRole('img')).not.toBeInTheDocument();
+		const { container } = render(
+			ListView,
+			makeProps([entry({ name: 'raw.png', hasThumb: false })]),
+		);
+		expect(container.querySelector('img')).not.toBeInTheDocument();
 	});
 
 	it('keeps the modified timestamp on a single line (compact rows)', () => {

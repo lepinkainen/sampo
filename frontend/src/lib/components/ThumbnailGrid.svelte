@@ -474,6 +474,9 @@ async function loadDirectory(
 function handleSearchInput(e: Event) {
 	const value = (e.target as HTMLInputElement).value;
 	searchQuery = value;
+	// The result set is about to change; don't keep acting on items the
+	// user can no longer see.
+	selection.clear();
 
 	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
 
@@ -495,6 +498,7 @@ function handleSearchInput(e: Event) {
 }
 
 function openSearch() {
+	selection.clear();
 	searchActive = true;
 	requestAnimationFrame(() => searchInput?.focus());
 }
@@ -542,6 +546,11 @@ function handleContextMenu(e: MouseEvent, entry: FileEntry) {
 function handleKeydown(e: KeyboardEvent) {
 	if (showDeleteConfirm || showRenameDialog || previewFile) return;
 
+	// Keys pressed inside a dialog or menu belong to that overlay, not the
+	// file grid behind it.
+	const target = e.target instanceof Element ? e.target : null;
+	if (target?.closest('dialog, [role="menu"]')) return;
+
 	const mod = e.metaKey || e.ctrlKey;
 
 	if (mod && e.key === 'f') {
@@ -558,6 +567,10 @@ function handleKeydown(e: KeyboardEvent) {
 		closeSearch();
 		return;
 	}
+
+	// While the user is typing (search box, tag filter), Delete, Backspace
+	// and the clipboard shortcuts edit text — they must not act on files.
+	if (target?.closest('input, textarea, select, [contenteditable]')) return;
 
 	if (e.key === 'Delete' || (e.key === 'Backspace' && mod)) {
 		if (selection.size > 0) {
@@ -594,8 +607,11 @@ function handleKeydown(e: KeyboardEvent) {
 
 async function handleDelete() {
 	showDeleteConfirm = false;
-	const paths = selection.paths;
+	// Delete exactly what the dialog listed: the selection can hold paths
+	// that are no longer displayed (e.g. hidden by a search).
+	const paths = selectedEntries.map((e) => e.path);
 	const hasDirectories = selectedEntries.some((e) => e.isDir);
+	if (paths.length === 0) return;
 
 	try {
 		await deleteFiles(rootId, paths, hasDirectories);

@@ -337,6 +337,9 @@ function getContextMenuItems() {
 
 <div class="select-none">
 	<button
+		type="button"
+		aria-expanded={entry.isDir ? expanded : undefined}
+		aria-current={isSelected ? 'true' : undefined}
 		class="flex min-w-0 w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm hover:bg-muted
 		{isSelected ? 'bg-select text-select-text' : 'text-body'}
 		{dragOver ? 'ring-2 ring-accent-hover bg-accent-deep/20' : ''}"

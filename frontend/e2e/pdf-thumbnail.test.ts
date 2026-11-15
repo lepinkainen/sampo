@@ -9,7 +9,11 @@ test.describe('PDF thumbnails', () => {
 
 		// The PDF card should render an <img> thumbnail (not the file-type icon),
 		// which means hasThumb was true and the backend produced a thumbnail.
-		const thumb = page.locator('img[alt="sample.pdf"]');
+		// The img is decorative (alt=""), so find it through its card.
+		const thumb = page
+			.getByTestId('thumbnail-card')
+			.filter({ hasText: 'sample.pdf' })
+			.locator('img');
 		await expect(thumb).toBeVisible();
 		await expect(thumb).toHaveJSProperty('naturalWidth', 300);
 	});

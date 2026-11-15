@@ -48,6 +48,12 @@ function makeProps(over: Record<string, unknown> = {}) {
 	};
 }
 
+const SIZE_LABELS = [
+	'Small thumbnails',
+	'Medium thumbnails',
+	'Large thumbnails',
+];
+
 describe('GridToolbar', () => {
 	it('renders breadcrumb segments', () => {
 		render(GridToolbar, makeProps({ pathSegments: ['photos', '2024'] }));
@@ -96,17 +102,17 @@ describe('GridToolbar', () => {
 	it('shows the S/M/L size selector enabled in grid view', () => {
 		const onThumbSize = vi.fn();
 		render(GridToolbar, makeProps({ viewMode: 'grid', onThumbSize }));
-		for (const label of ['S', 'M', 'L']) {
+		for (const label of SIZE_LABELS) {
 			expect(screen.getByRole('button', { name: label })).toBeEnabled();
 		}
-		screen.getByRole('button', { name: 'L' }).click();
+		screen.getByRole('button', { name: 'Large thumbnails' }).click();
 		expect(onThumbSize).toHaveBeenCalledWith('large');
 	});
 
 	it('keeps the size selector visible but disabled in list view', () => {
 		const onThumbSize = vi.fn();
 		render(GridToolbar, makeProps({ viewMode: 'list', onThumbSize }));
-		for (const label of ['S', 'M', 'L']) {
+		for (const label of SIZE_LABELS) {
 			const btn = screen.getByRole('button', { name: label });
 			expect(btn).toBeInTheDocument();
 			expect(btn).toBeDisabled();

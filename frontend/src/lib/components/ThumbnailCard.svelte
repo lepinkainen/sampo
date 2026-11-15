@@ -33,7 +33,7 @@ let {
 
 const loader = new ThumbnailLoader();
 
-let thumbBox: HTMLDivElement | undefined = $state();
+let cardEl: HTMLDivElement | undefined = $state();
 let lastThumbKey = $state('');
 let thumbVisible = $state(false);
 // Cancels the pending (not-yet-started) queue entry. Nulled when the entry
@@ -51,7 +51,7 @@ let showThumbImage = $derived(
 let showThumbError = $derived(entry.hasThumb && loader.state === 'error');
 
 onMount(() => {
-	if (!thumbBox || typeof IntersectionObserver === 'undefined') {
+	if (!cardEl || typeof IntersectionObserver === 'undefined') {
 		thumbVisible = true;
 		return () => {
 			cancelEnqueue?.();
@@ -68,7 +68,10 @@ onMount(() => {
 		},
 		{ rootMargin: '500px' },
 	);
-	observer.observe(thumbBox);
+	// Observe the card root, not the thumbnail box: with content-visibility
+	// (.defer-offscreen) the contents of an off-screen card are skipped and
+	// never report an intersection, while the card's own box always does.
+	observer.observe(cardEl);
 
 	return () => {
 		observer.disconnect();
@@ -104,8 +107,9 @@ $effect(() => {
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
+	bind:this={cardEl}
 	data-testid="thumbnail-card"
-	class="group flex flex-col overflow-hidden rounded-lg border transition-colors
+	class="defer-offscreen group flex flex-col overflow-hidden rounded-lg border transition-colors
 	{selected
 		? 'border-accent-hover bg-accent-deep/30'
 		: 'border-muted bg-raised hover:border-faint'}
@@ -120,7 +124,11 @@ $effect(() => {
 	{ondragstart}
 	onkeydown={onclick
 		? (e) => {
-				if (e.key === 'Enter' || e.key === ' ') {
+				// Enter opens (like a double-click), Space selects.
+				if (e.key === 'Enter' && ondblclick) {
+					e.preventDefault();
+					ondblclick();
+				} else if (e.key === 'Enter' || e.key === ' ') {
 					e.preventDefault();
 					onclick(new MouseEvent('click'));
 				}
@@ -128,13 +136,12 @@ $effect(() => {
 		: undefined}
 >
 	<div
-		bind:this={thumbBox}
 		class="relative flex aspect-square items-center justify-center bg-surface"
 	>
 		{#if showThumbImage && loader.objectUrl}
 			<img
 				src={loader.objectUrl}
-				alt={entry.name}
+				alt=""
 				class="relative z-0 h-full w-full object-cover"
 				onerror={() => loader.fail()}
 			/>
@@ -165,17 +172,26 @@ $effect(() => {
 		{/if}
 		<div class="absolute bottom-1 right-1 flex items-center gap-0.5">
 			{#if entry.ocrText}
-				<span class="rounded bg-black/60 p-0.5 text-white" title="Contains text (OCR)">
-					<ScanText size={14} />
+				<span
+					class="rounded bg-black/60 p-0.5 text-white"
+					role="img"
+					aria-label="Contains text"
+					title="Contains text (OCR)"
+				>
+					<ScanText size={14} aria-hidden="true" />
 				</span>
 			{/if}
 			{#if entry.isDir && entry.hasThumb && !showThumbError}
-				<span class="rounded bg-black/60 p-0.5 text-white">
-					<Folder size={14} />
+				<span class="rounded bg-black/60 p-0.5 text-white" role="img" aria-label="Folder">
+					<Folder size={14} aria-hidden="true" />
 				</span>
 			{:else if entry.hasPerson === true}
-				<span class="rounded bg-black/60 p-0.5 text-white">
-					<User size={14} />
+				<span
+					class="rounded bg-black/60 p-0.5 text-white"
+					role="img"
+					aria-label="Contains a person"
+				>
+					<User size={14} aria-hidden="true" />
 				</span>
 			{/if}
 		</div>

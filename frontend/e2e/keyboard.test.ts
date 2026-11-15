@@ -8,17 +8,27 @@ test.describe('Keyboard navigation', () => {
 		await page.waitForSelector('[class*="grid-cols-[repeat"]');
 	});
 
-	test('Enter key on focused card selects it', async ({ page }) => {
+	test('Space key on focused card selects it', async ({ page }) => {
 		const card = page.locator('[class*="grid-cols"] > [role="button"]').first();
-		await card.click();
+		await card.focus();
 
-		// Press Enter to trigger click handler
-		await page.keyboard.press('Enter');
+		// Press Space to trigger click handler
+		await page.keyboard.press('Space');
 
 		// Card should be selected — details panel shows info
 		await expect(
 			page.getByText('Select a file to view details'),
 		).not.toBeVisible();
 		await expect(page.locator('.grid-cols-2').getByText('Size')).toBeVisible();
+	});
+
+	test('Enter key on focused card opens it', async ({ page }) => {
+		const card = page.locator('[class*="grid-cols"] > [role="button"]').first();
+		await card.focus();
+
+		await page.keyboard.press('Enter');
+
+		await expect(page.getByLabel('Close preview')).toBeVisible();
+		expect(new URL(page.url()).searchParams.has('preview')).toBe(true);
 	});
 });

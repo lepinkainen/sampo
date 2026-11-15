@@ -85,24 +85,24 @@ function handlePathChanged(
 }
 </script>
 
-<div class="flex h-screen bg-canvas text-bright">
+<div class="flex h-dvh bg-canvas text-bright">
 	<!-- Tree sidebar -->
 	<div class="w-72 flex-shrink-0 border-r border-raised">
-		<div class="flex h-12 items-center border-b border-raised px-3">
+		<h1 class="flex h-12 items-center border-b border-raised px-3">
 			<img src="/sampo-banner.svg" alt="Sampo" class="h-7 w-auto" />
-		</div>
-		<div class="h-[calc(100vh-3rem)]">
+		</h1>
+		<nav aria-label="Folders" class="h-[calc(100dvh-3rem)]">
 			<TreeView
 				selectedPath={selectedKey}
 				onSelect={handleSelect}
 				onRefresh={handleRefresh}
 				onPathChanged={handlePathChanged}
 			/>
-		</div>
+		</nav>
 	</div>
 
 	<!-- Content area -->
-	<div class="flex-1">
+	<main class="flex-1">
 		{#if selectedRootId && selectedPath != null}
 			{#key refreshKey}
 				<ThumbnailGrid
@@ -119,7 +119,7 @@ function handlePathChanged(
 				<p class="text-ghost">Select a directory to browse</p>
 			</div>
 		{/if}
-	</div>
+	</main>
 </div>
 
 <Toast />
