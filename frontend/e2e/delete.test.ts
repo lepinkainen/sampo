@@ -66,7 +66,7 @@ test.describe('Delete files', () => {
 		await page.locator('button[title="Delete"]').click();
 
 		// Confirm dialog should appear
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByText('Delete 1 item(s)?')).toBeVisible();
 
@@ -83,12 +83,12 @@ test.describe('Delete files', () => {
 
 		// Click Cancel
 		await page
-			.locator('.fixed.inset-0.z-50')
+			.locator('dialog[open]')
 			.locator('button', { hasText: 'Cancel' })
 			.click();
 
 		// Dialog should close
-		await expect(page.locator('.fixed.inset-0.z-50')).not.toBeVisible();
+		await expect(page.locator('dialog[open]')).not.toBeVisible();
 
 		// File count should be unchanged
 		expect(await cards.count()).toBe(countBefore);
@@ -102,7 +102,7 @@ test.describe('Delete files', () => {
 		await page.locator('button[title="Delete"]').click();
 
 		// Click Delete to confirm
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await dialog.locator('button', { hasText: 'Delete' }).click();
 
 		// Dialog should close
@@ -128,7 +128,7 @@ test.describe('Delete files', () => {
 
 		await cards.nth(12).click();
 		await page.locator('button[title="Delete"]').click();
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 		const savedScrollTop = await scroller.evaluate((el) => el.scrollTop);
 		expect(savedScrollTop).toBeGreaterThan(0);
@@ -146,7 +146,7 @@ test.describe('Delete files', () => {
 
 		await page.keyboard.press('Delete');
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByText('Delete 1 item(s)?')).toBeVisible();
 	});
@@ -160,7 +160,7 @@ test.describe('Delete files', () => {
 
 		await page.keyboard.press('Delete');
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(
 			dialog.getByText(`Delete ${totalCards} item(s)?`),
 		).toBeVisible();
@@ -177,7 +177,7 @@ test.describe('Delete files', () => {
 		await page.keyboard.press('Delete');
 
 		// Confirm
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await dialog.locator('button', { hasText: 'Delete' }).click();
 
 		// Toast
@@ -187,18 +187,56 @@ test.describe('Delete files', () => {
 		await expect(page.getByText('Empty directory')).toBeVisible();
 	});
 
-	test('Enter key confirms delete dialog', async ({ page }) => {
+	test('Enter on the delete dialog cancels (focus starts on Cancel)', async ({
+		page,
+	}) => {
 		const cards = page.locator('[class*="grid-cols"] > [role="button"]');
 		const countBefore = await cards.count();
 
 		await cards.first().click();
 		await page.locator('button[title="Delete"]').click();
 
-		// Press Enter to confirm
+		const dialog = page.locator('dialog[open]');
+		await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+		// A stray Enter must take the safe action, not delete.
+		await page.keyboard.press('Enter');
+		await expect(dialog).not.toBeVisible();
+		await expect(cards).toHaveCount(countBefore);
+	});
+
+	test('keyboard can confirm delete via the Delete button', async ({
+		page,
+	}) => {
+		const cards = page.locator('[class*="grid-cols"] > [role="button"]');
+		const countBefore = await cards.count();
+
+		await cards.first().click();
+		await page.locator('button[title="Delete"]').click();
+
+		const dialog = page.locator('dialog[open]');
+		await expect(dialog).toBeVisible();
+		await page.keyboard.press('Tab');
+		await expect(dialog.getByRole('button', { name: 'Delete' })).toBeFocused();
 		await page.keyboard.press('Enter');
 
-		// File should be deleted
 		await expect(page.getByText('Deleted 1 item(s)')).toBeVisible();
 		await expect(cards).toHaveCount(countBefore - 1);
+	});
+
+	test('Delete key while typing in search does not open the dialog', async ({
+		page,
+	}) => {
+		const cards = page.locator('[class*="grid-cols"] > [role="button"]');
+		await cards.first().click();
+
+		await page.locator('button[title="Search (Ctrl+F)"]').click();
+		const search = page.getByPlaceholder('Search files and tags...');
+		await expect(search).toBeFocused();
+		await search.pressSequentially('a');
+		await page.keyboard.press('Delete');
+		await page.keyboard.press('ControlOrMeta+Backspace');
+
+		await expect(page.locator('dialog[open]')).toHaveCount(0);
 	});
 });

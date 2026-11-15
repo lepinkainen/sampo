@@ -1,6 +1,7 @@
 <script lang="ts">
 import { tick } from 'svelte';
 import { Pencil } from '@lucide/svelte';
+import Modal from './Modal.svelte';
 
 interface Props {
 	currentName: string;
@@ -49,59 +50,56 @@ $effect(() => {
 	});
 });
 
-function handleKeydown(e: KeyboardEvent) {
-	if (e.key === 'Escape') {
-		e.stopPropagation();
-		onCancel();
-	}
-	if (e.key === 'Enter' && !isDisabled) {
-		e.stopPropagation();
-		onConfirm(newName.trim());
-	}
+const titleId = $props.id();
+
+// Enter submits through the form's native implicit submission, which
+// browsers suppress while an IME composition is confirming a candidate —
+// a custom keydown handler would rename mid-composition.
+function handleSubmit(e: SubmitEvent) {
+	e.preventDefault();
+	if (!isDisabled) onConfirm(newName.trim());
 }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-	onclick={onCancel}
+<Modal
+	labelledby={titleId}
+	class="w-[calc(100%-2rem)] max-w-md p-6"
+	testid="rename-dialog"
+	onClose={onCancel}
 >
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="mx-4 w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-muted"
-		onclick={(e) => e.stopPropagation()}
-		onkeydown={handleKeydown}
-	>
+	<form onsubmit={handleSubmit}>
 		<div class="flex items-center gap-3 mb-4">
 			<div class="flex h-10 w-10 items-center justify-center rounded-full bg-accent-deep/50">
-				<Pencil size={20} class="text-accent-soft" />
+				<Pencil size={20} class="text-accent-soft" aria-hidden="true" />
 			</div>
-			<h2 class="text-lg font-semibold text-bright">Rename</h2>
+			<h2 id={titleId} class="text-lg font-semibold text-bright">Rename</h2>
 		</div>
 
 		<input
 			bind:this={inputEl}
 			bind:value={newName}
-			class="mb-4 w-full rounded-lg bg-canvas border border-muted px-3 py-2 text-sm text-body focus:outline-none focus:border-accent-hover"
+			aria-label="New name"
+			autocomplete="off"
+			spellcheck="false"
+			class="mb-4 w-full rounded-lg bg-canvas border border-muted px-3 py-2 text-sm text-body focus:outline-none focus:border-accent-hover focus-visible:ring-1 focus-visible:ring-accent-hover"
 			type="text"
 		/>
 
 		<div class="flex justify-end gap-3">
 			<button
+				type="button"
 				class="rounded-lg px-4 py-2 text-sm font-medium text-body hover:bg-raised transition-colors"
 				onclick={onCancel}
 			>
 				Cancel
 			</button>
 			<button
+				type="submit"
 				class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 				disabled={isDisabled}
-				onclick={() => onConfirm(newName.trim())}
 			>
 				Rename
 			</button>
 		</div>
-	</div>
-</div>
+	</form>
+</Modal>

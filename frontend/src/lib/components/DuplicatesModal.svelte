@@ -4,6 +4,7 @@ import type { DuplicateFile, DuplicateGroup } from '$lib/types';
 import { formatSize } from '$lib/utils';
 import { ImageOff, RotateCw, X } from '@lucide/svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
+import Modal from './Modal.svelte';
 
 interface Props {
 	rootId: string;
@@ -13,6 +14,8 @@ interface Props {
 }
 
 let { rootId, path, onClose, onDeleted }: Props = $props();
+
+const titleId = $props.id();
 
 type Tab = 'all' | 'sha256' | 'phash';
 
@@ -185,21 +188,14 @@ async function handleDelete() {
 }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-	onclick={onClose}
+<Modal
+	labelledby={titleId}
+	class="max-h-[88vh] w-[860px] max-w-[calc(100%-2rem)] flex-col overflow-hidden open:flex"
+	testid="duplicates-modal"
+	{onClose}
 >
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		class="flex max-h-[88vh] w-[860px] max-w-full flex-col rounded-xl border border-muted bg-surface shadow-2xl"
-		data-testid="duplicates-modal"
-		onclick={(e) => e.stopPropagation()}
-	>
 		<div class="flex items-center gap-3 border-b border-raised px-5 py-4">
-			<h2 class="text-base font-semibold text-bright">Duplicates</h2>
+			<h2 id={titleId} class="text-base font-semibold text-bright">Duplicates</h2>
 			<span
 				class="rounded-md border border-raised bg-raised/70 px-2 py-0.5 font-mono text-xs text-dim"
 			>
@@ -208,13 +204,21 @@ async function handleDelete() {
 			<span class="text-xs text-ghost">files in this folder that also exist elsewhere</span>
 			<div class="flex-1"></div>
 			<button
+				type="button"
 				class="text-faint hover:text-body"
 				title="Rescan"
+				aria-label="Rescan"
 				onclick={load}
 			>
 				<RotateCw size={16} />
 			</button>
-			<button class="text-faint hover:text-body" title="Close" onclick={onClose}>
+			<button
+				type="button"
+				class="text-faint hover:text-body"
+				title="Close"
+				aria-label="Close"
+				onclick={onClose}
+			>
 				<X size={18} />
 			</button>
 		</div>
@@ -459,8 +463,7 @@ async function handleDelete() {
 				</button>
 			</div>
 		</div>
-	</div>
-</div>
+</Modal>
 
 {#if showConfirm}
 	<ConfirmDialog

@@ -4,6 +4,7 @@ import type { OrganizeGroup, OrganizeFile, ItemResult } from '$lib/api';
 import type { FileEntry } from '$lib/types';
 import { sortEntries } from '$lib/utils';
 import TreeNode from './TreeNode.svelte';
+import Modal from './Modal.svelte';
 import { ChevronDown, ChevronRight, FolderInput, X } from '@lucide/svelte';
 
 interface Props {
@@ -245,9 +246,7 @@ async function handleApply() {
 	}
 }
 
-function handleKeydown(e: KeyboardEvent) {
-	if (e.key === 'Escape') onClose();
-}
+const titleId = $props.id();
 
 function totalCheckedFiles(): number {
 	let count = 0;
@@ -258,21 +257,12 @@ function totalCheckedFiles(): number {
 }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-	onclick={onClose}
+<Modal
+	labelledby={titleId}
+	class="max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl flex-col overflow-hidden open:flex"
+	testid="organize-modal"
+	{onClose}
 >
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="mx-4 flex w-full max-w-2xl flex-col rounded-xl border border-muted bg-surface shadow-2xl"
-		style="max-height: 90vh;"
-		onclick={(e) => e.stopPropagation()}
-	>
 		<!-- Header -->
 		<div class="flex items-center justify-between border-b border-muted px-6 py-4">
 			<div class="flex items-center gap-3">
@@ -280,14 +270,16 @@ function totalCheckedFiles(): number {
 					<FolderInput size={18} class="text-accent-soft" />
 				</div>
 				<div>
-					<h2 class="text-base font-semibold text-bright">Organize inbox</h2>
+					<h2 id={titleId} class="text-base font-semibold text-bright">Organize inbox</h2>
 					<p class="text-xs text-faint">
 						{localGroups.length} performer group(s) matched — {unmatched.length} unmatched
 					</p>
 				</div>
 			</div>
 			<button
+				type="button"
 				class="rounded p-1.5 text-faint transition-colors hover:bg-raised hover:text-body"
+				aria-label="Close"
 				onclick={onClose}
 			>
 				<X size={16} />
@@ -500,5 +492,4 @@ function totalCheckedFiles(): number {
 				</div>
 			</div>
 		</div>
-	</div>
-</div>
+</Modal>

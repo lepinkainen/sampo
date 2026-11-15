@@ -45,7 +45,7 @@ test.describe('Rename files', () => {
 		await page.keyboard.press('F2');
 
 		// Rename dialog should appear
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByRole('heading', { name: 'Rename' })).toBeVisible();
 
@@ -60,7 +60,7 @@ test.describe('Rename files', () => {
 		await card.click();
 		await page.keyboard.press('F2');
 
-		const input = page.locator('.fixed.inset-0.z-50 input[type="text"]');
+		const input = page.locator('dialog[open] input[type="text"]');
 		const value = await input.inputValue();
 
 		// Check selection range excludes extension
@@ -82,7 +82,7 @@ test.describe('Rename files', () => {
 		await card.click();
 		await page.keyboard.press('F2');
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		const renameBtn = dialog.locator('button', { hasText: 'Rename' });
 
 		// Button should be disabled (name unchanged)
@@ -103,7 +103,7 @@ test.describe('Rename files', () => {
 		await card.click();
 		await page.keyboard.press('F2');
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 
 		await page.keyboard.press('Escape');
@@ -115,7 +115,7 @@ test.describe('Rename files', () => {
 		await card.click();
 		await page.keyboard.press('F2');
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		const input = dialog.locator('input[type="text"]');
 
 		await input.fill('renamed_file.png');
@@ -140,7 +140,7 @@ test.describe('Rename files', () => {
 		await card.click();
 		await page.keyboard.press('F2');
 
-		const input = page.locator('.fixed.inset-0.z-50 input[type="text"]');
+		const input = page.locator('dialog[open] input[type="text"]');
 		await input.fill('enter_rename.png');
 		await page.keyboard.press('Enter');
 
@@ -155,7 +155,7 @@ test.describe('Rename files', () => {
 		// Click the rename toolbar button (Pencil icon, title="Rename (F2)")
 		await page.locator('button[title="Rename (F2)"]').click();
 
-		const dialog = page.locator('.fixed.inset-0.z-50');
+		const dialog = page.locator('dialog[open]');
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByRole('heading', { name: 'Rename' })).toBeVisible();
 	});
